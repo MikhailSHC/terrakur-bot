@@ -10,6 +10,20 @@ const MessageHandler = require('./handlers/messageHandler');
 const keyboards = require('./keyboards/buttons');
 const { formatRouteList, formatRouteDetails } = require('./utils/helpers');
 
+// Отлавливаем все ошибки
+process.on('uncaughtException', (err) => {
+  console.error('='.repeat(50));
+  console.error('💥 НЕ ПЕРЕХВАЧЕННАЯ ОШИБКА:');
+  console.error(err.stack);
+  console.error('='.repeat(50));
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('='.repeat(50));
+  console.error('💥 НЕ ОБРАБОТАННЫЙ ПРОМИС:');
+  console.error(reason);
+  console.error('='.repeat(50));
+});
 // ==================== EXPRESS / MINI-APP / API ====================
 
 const app = express();
