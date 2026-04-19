@@ -1,0 +1,14 @@
+{
+  "name": "max-terrakur-bot",
+  "version": "1.0.0",
+  "description": "TerraKur bot for MAX messenger",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@maxhub/max-bot-api": "^0.2.0",
+    "dotenv": "^16.0.3",
+    "express": "^5.2.1"
+  }
+}

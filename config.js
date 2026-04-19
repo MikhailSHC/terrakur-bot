@@ -1,0 +1,10 @@
+// config.js
+
+require('dotenv').config();
+
+module.exports = {
+  BOT_TOKEN: process.env.BOT_TOKEN,
+  USER_DATA_FILE: 'data/user_data.json',
+  MAX_HISTORY: 50,
+  MINI_APP_URL: 'https://shcmikhael.fvds.ru/mini-app/index.html'
+};
