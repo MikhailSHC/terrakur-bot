@@ -18,6 +18,9 @@ const mainMenuKeyboard = {
         { type: 'callback', text: '📊 Моя история', payload: 'my_history' }
       ],
       [
+        { type: 'callback', text: '🧾 Мои маршруты', payload: 'my_routes' }
+      ],
+      [
         { type: 'callback', text: '⚙️ Настройки', payload: 'settings' }
       ],
       [

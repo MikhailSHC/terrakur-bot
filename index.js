@@ -108,27 +108,72 @@ app.get('/api/routes/:id/geojson', (req, res) => {
 });
 
 // Сохранение тренировочной сессии
+// В index.js, в разделе API / scripts/api/sessions.js — куда у тебя сейчас это подключено
+
 app.post('/api/sessions', (req, res) => {
   const { chatId, session } = req.body;
-  if (!chatId || !session) return res.status(400).json({ ok: false, error: 'Missing data' });
+  if (!chatId || !session) {
+    return res.status(400).json({ ok: false, error: 'Missing data' });
+  }
+
   try {
     const userDataPath = path.join(__dirname, config.USER_DATA_FILE);
     let allUsers = {};
     if (fs.existsSync(userDataPath)) {
       allUsers = JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
     }
-    if (!allUsers[chatId]) allUsers[chatId] = { sessions: [], userRoutes: [] };
+
+    if (!allUsers[chatId]) {
+      allUsers[chatId] = { sessions: [], userRoutes: [] };
+    }
     if (!allUsers[chatId].sessions) allUsers[chatId].sessions = [];
-    allUsers[chatId].sessions.push({
-      id: Date.now().toString(),
+    if (!allUsers[chatId].userRoutes) allUsers[chatId].userRoutes = [];
+
+    // ---- Сохраняем саму тренировочную сессию ----
+    const sessionId = session.sessionId || Date.now().toString();
+
+    const sessionRecord = {
+      id: sessionId,
       startedAt: session.startedAt,
       finishedAt: session.finishedAt,
       durationSec: session.durationSec,
       distanceM: session.distanceM,
       avgPaceSecPerKm: session.avgPaceSecPerKm,
       geojson: session.geojson,
-      mode: session.mode
-    });
+      mode: session.mode,
+      plannedRouteId: session.plannedRouteId || null
+    };
+
+    allUsers[chatId].sessions.push(sessionRecord);
+
+    // ---- Если это free_run — создаём пользовательский маршрут ----
+    if (session.mode === 'free_run' && session.geojson && session.geojson.features?.length) {
+      const line = session.geojson.features[0];
+      if (line.geometry && Array.isArray(line.geometry.coordinates)) {
+        const coords = line.geometry.coordinates;
+        if (coords.length > 1) {
+          const start = coords[0];                       // [lon, lat]
+          const end   = coords[coords.length - 1];
+          const center = coords[Math.floor(coords.length / 2)];
+
+          const userRoute = {
+            id: `user_${sessionId}`,
+            name: session.name || `Мой маршрут ${new Date(session.startedAt).toLocaleString()}`,
+            createdAt: session.startedAt,
+            distanceM: session.distanceM,
+            durationSec: session.durationSec,
+            avgPaceSecPerKm: session.avgPaceSecPerKm,
+            start: { lon: start[0], lat: start[1] },
+            end:   { lon: end[0],   lat: end[1] },
+            center: { lon: center[0], lat: center[1] },
+            geojson: session.geojson
+          };
+
+          allUsers[chatId].userRoutes.push(userRoute);
+        }
+      }
+    }
+
     fs.writeFileSync(userDataPath, JSON.stringify(allUsers, null, 2));
     res.json({ ok: true });
   } catch (err) {
