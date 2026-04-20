@@ -4,7 +4,12 @@
   "description": "TerraKur bot for MAX messenger",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js",
+    "lint": "eslint index.js config.js app bot handlers keyboards middleware routes services utils tests public/mini-app/app.js",
+    "format": "prettier --write .",
+    "test": "jest --runInBand",
+    "build-data": "node scripts/convertRoutesToGeoJSON.js"
   },
   "dependencies": {
     "@maxhub/max-bot-api": "^0.2.0",
@@ -12,5 +17,13 @@
     "dotenv": "^16.0.3",
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.2.0",
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4"
   }
 }

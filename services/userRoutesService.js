@@ -1,8 +1,4 @@
 // services/userRoutesService.js
-const fs = require('fs');
-const path = require('path');
-const config = require('../config');
-
 class UserRoutesService {
   constructor(userService) {
     this.userService = userService;
