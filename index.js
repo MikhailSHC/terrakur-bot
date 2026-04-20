@@ -42,6 +42,9 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const app = express();
 
+// Настройка для работы за прокси
+app.set('trust proxy', 1);
+
 // Настройка безопасности
 app.use(cors());
 app.use(rateLimit({
