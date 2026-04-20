@@ -31,6 +31,7 @@ let pauseStart = null;
 let lastSavedPoint = null;
 
 let startMarker = null;    // маркер точки старта маршрута
+let finishMarker = null;   // маркер точки финиша маршрута
 
 
 
@@ -39,10 +40,13 @@ let startMarker = null;    // маркер точки старта маршру�
 let plannedRoute = null;
 
 let plannedStart = null;      // точка старта готового маршрута [lon, lat]
+let plannedFinish = null;     // точка финиша готового маршрута [lon, lat]
 
 let hasReachedStart = false;  // достиг ли пользователь старта
+let hasReachedFinish = false; // достиг ли пользователь финиша
 
 const START_RADIUS_M = 20;    // радиус в метрах для старта
+const FINISH_RADIUS_M = 20;   // радиус в метрах для финиша
 
 
 
@@ -66,9 +70,6 @@ const OFF_ROUTE_RADIUS_M = 35;
 const OFF_ROUTE_GRACE_MS = 12000;
 const PROGRESS_UPDATE_INTERVAL_MS = 2000;
 
-const AUTO_PAUSE_SPEED_M_S = 0.45;
-const AUTO_PAUSE_IDLE_MS = 10000;
-const AUTO_RESUME_SPEED_M_S = 1.1;
 
 const CAMERA_UPDATE_INTERVAL_MS = 2500;
 const CAMERA_MIN_MOVE_M = 8;
@@ -507,11 +508,11 @@ async function loadPlannedRoute(id) {
         
 
         plannedStart = nearestPoint;
+        plannedFinish = coords[coords.length - 1]; // Последняя точка - финиш
 
         setStartMarker([plannedStart[0], plannedStart[1]]);
-
+        setFinishMarker([plannedFinish[0], plannedFinish[1]]);
         
-
         // Центрируем карту между пользователем и ближайшей точкой
 
         const mapCenter = [(userLng + plannedStart[0]) / 2, (userLat + plannedStart[1]) / 2];
@@ -825,6 +826,28 @@ function removeStartMarker() {
   if (startMarker) {
     startMarker.remove();
     startMarker = null;
+  }
+}
+
+function setFinishMarker(lngLat) {
+  if (finishMarker) {
+    finishMarker.setLngLat(lngLat);
+    return;
+  }
+  
+  const el = document.createElement('div');
+  el.style.cssText =
+    'width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(220,38,38,0.35);border:1px solid rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.45);';
+  el.innerText = '🏁';
+  el.title = 'Точка финиша';
+  
+  finishMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
+}
+
+function removeFinishMarker() {
+  if (finishMarker) {
+    finishMarker.remove();
+    finishMarker = null;
   }
 }
 
@@ -1356,34 +1379,29 @@ function onGPSPosition(pos) {
     }
   }
 
-  if (lastRawPoint) {
-    const dt = now - lastRawPoint.timestamp;
-    const rawDist = haversineDistance(lastRawPoint.lat, lastRawPoint.lng, latitude, longitude);
-    const rawSpeed = dt > 0 ? rawDist / (dt / 1000) : 0;
+  // Check finish point for planned routes
+  if (sessionMode === 'planned_route' && plannedFinish && !hasReachedFinish) {
+    const distToFinish = haversineDistance(
+      plannedFinish[1], plannedFinish[0],
+      longitude, latitude
+    );
 
-    if (!isPaused && rawSpeed < AUTO_PAUSE_SPEED_M_S) {
-      if (!idleStartedAt) idleStartedAt = now;
-      if (now - idleStartedAt > AUTO_PAUSE_IDLE_MS) {
-        isPaused = true;
-        autoPausedBySystem = true;
-        pauseStart = now;
-        startBtn.textContent = '▶️ Старт';
-        statusDiv.innerText = '⏸ Автопауза';
-      }
-    } else if (isPaused && autoPausedBySystem && rawSpeed > AUTO_RESUME_SPEED_M_S) {
-      isPaused = false;
-      autoPausedBySystem = false;
-      if (pauseStart) {
-        pausedDuration += now - pauseStart;
-        pauseStart = null;
-      }
-      startBtn.textContent = '⏸ Пауза';
-      statusDiv.innerText = '▶️ Автопродолжение';
-      idleStartedAt = null;
-    } else if (rawSpeed >= AUTO_PAUSE_SPEED_M_S) {
-      idleStartedAt = null;
+    if (distToFinish <= FINISH_RADIUS_M) {
+      hasReachedFinish = true;
+      statusDiv.innerText = '🏁 Финиш! Маршрут завершен!';
+      setTimeout(() => {
+        if (statusDiv.innerText.includes('Финиш')) {
+          statusDiv.innerText = '';
+        }
+      }, 3000);
+      
+      // Auto stop training when finish reached
+      setTimeout(() => {
+        stopAndSave();
+      }, 1000);
     }
   }
+
   lastRawPoint = { lat: latitude, lng: longitude, timestamp: now };
 
   if (isPaused && !autoPausedBySystem) return;
@@ -1530,6 +1548,7 @@ function startRun() {
     // Первый запуск тренировки
 
     isTracking     = true;
+    hasReachedFinish = false; // Сбрасываем состояние финиша
 
     isPaused       = false;
 
