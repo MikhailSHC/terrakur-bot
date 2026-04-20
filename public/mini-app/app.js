@@ -5,6 +5,7 @@
 let map;
 
 let userMarker;
+let userMarkerEl = null;
 
 let watchId = null;
 let passiveWatchId = null;
@@ -103,8 +104,6 @@ const urlParams   = new URLSearchParams(window.location.search);
 
 const routeId     = urlParams.get('routeId');       // системный маршрут
 
-const userRouteId = urlParams.get('userRouteId');   // личный маршрут
-
 const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
 
@@ -112,9 +111,9 @@ const authToken   = urlParams.get('authToken') || '';
 
 let sessionMode;
 
-if (routeId || userRouteId) {
+if (routeId) {
 
-  sessionMode = 'planned_route'; // и системный, и личный – "готовые" маршруты
+  sessionMode = 'planned_route';
 
 } else {
 
@@ -173,6 +172,11 @@ let lastKnownPosition = null;
 let autoPausedBySystem = false;
 let lastRawPoint = null;
 let idleStartedAt = null;
+let lastHeadingDeg = null;
+let replayPanelEl = null;
+
+const REPLAY_SOURCE_ID = 'run-replay-source';
+const REPLAY_LAYER_ID = 'run-replay-line';
 
 
 
@@ -271,12 +275,6 @@ function initMap() {
 
       loadPlannedRoute(routeId);
 
-    } else if (userRouteId) {
-
-      // личный маршрут из user_data.json
-
-      loadUserRoute(userRouteId, chatId);
-
     } else {
 
       // свободный трек
@@ -321,6 +319,14 @@ function ensureUiEnhancements() {
       }
     };
     document.body.appendChild(recenterBtn);
+  }
+
+  if (!replayPanelEl) {
+    replayPanelEl = document.createElement('div');
+    replayPanelEl.id = 'replayPanel';
+    replayPanelEl.style.cssText =
+      'position:fixed;left:16px;right:16px;bottom:150px;z-index:4;background:rgba(0,0,0,0.78);color:#fff;border-radius:16px;padding:12px 14px;display:none;';
+    document.body.appendChild(replayPanelEl);
   }
 }
 
@@ -614,150 +620,6 @@ async function loadPlannedRoute(id) {
 
 
 
-// === ЗАГРУЗКА ПОЛЬЗОВАТЕЛЬСКОГО МАРШРУТА (userRoutes) ===
-
-
-
-async function loadUserRoute(id, chatId) {
-
-  try {
-
-    statusDiv.innerText = 'Загрузка вашего маршрута...';
-
-    const res  = await fetch(
-      `/api/user-routes/${encodeURIComponent(id)}?chatId=${encodeURIComponent(chatId)}`,
-      { headers: getAuthHeaders() }
-    );
-
-    const data = await res.json();
-
-    if (!data.ok) throw new Error(data.error || 'Unknown error');
-
-
-
-    const userRoute = data.route;
-
-    // userRoute.geojson — FeatureCollection с LineString
-
-    plannedRoute = userRoute.geojson;
-
-
-
-    const lineFeature = plannedRoute.features[0];
-
-    const coords = lineFeature.geometry.coordinates;
-
-
-
-    // Находим ближайшую точку маршрута к пользователю
-
-    let nearestPoint = coords[0];
-
-    let minDistance = Infinity;
-
-    
-
-    // Получаем текущее местоположение пользователя для определения ближайшей точки
-
-    navigator.geolocation.getCurrentPosition(
-
-      (pos) => {
-
-        const userLat = pos.coords.latitude;
-
-        const userLng = pos.coords.longitude;
-        const accuracy = pos.coords.accuracy;
-        lastKnownPosition = { latitude: userLat, longitude: userLng, accuracy };
-        updateGPSQuality(accuracy);
-
-        
-
-        // Ищем ближайшую точку маршрута к пользователю
-
-        for (let i = 0; i < coords.length; i++) {
-
-          const dist = haversineDistance(userLat, userLng, coords[i][1], coords[i][0]);
-
-          if (dist < minDistance) {
-
-            minDistance = dist;
-
-            nearestPoint = coords[i];
-
-          }
-
-        }
-
-        
-
-        plannedStart = nearestPoint;
-
-        setStartMarker([plannedStart[0], plannedStart[1]]);
-
-        
-
-        // Центрируем карту между пользователем и ближайшей точкой
-
-        const mapCenter = [(userLng + plannedStart[0]) / 2, (userLat + plannedStart[1]) / 2];
-
-        map.flyTo({ center: mapCenter, zoom: 14 });
-
-        
-
-        const distanceToStart = Math.round(minDistance);
-
-        statusDiv.innerText = `✅ Ваш маршрут загружен. Ближайшая точка старта в ${distanceToStart}м. Подойдите и нажмите "Старт"`;
-
-        setTimeout(() => {
-
-          if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
-
-        }, 4000);
-
-      },
-
-      (err) => {
-
-        console.error('Ошибка получения местоположения:', err);
-
-        // Если не удалось получить местоположение, используем первую точку
-
-        plannedStart = coords[0];
-
-        setStartMarker([plannedStart[0], plannedStart[1]]);
-
-        map.flyTo({ center: [coords[Math.floor(coords.length / 2)][0], coords[Math.floor(coords.length / 2)][1]], zoom: 14 });
-
-        statusDiv.innerText = '✅ Ваш маршрут загружен. Подойдите к точке старта и нажмите "Старт"';
-
-        setTimeout(() => {
-
-          if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
-
-        }, 3000);
-
-      },
-
-      { enableHighAccuracy: true, timeout: 5000 }
-
-    );
-
-
-
-    getUserLocation();
-
-  } catch (err) {
-
-    console.error(err);
-
-    statusDiv.innerText = '❌ Ошибка загрузки вашего маршрута';
-
-  }
-
-}
-
-
-
 // === ГЕОЛОКАЦИЯ ===
 
 
@@ -926,8 +788,14 @@ function addUserMarker(lngLat) {
   const el = document.createElement('div');
 
   el.style.cssText =
+    'width:28px;height:28px;background:rgba(0,0,0,0.45);border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(0,0,0,0.5);';
 
-    'width:24px;height:24px;background:#2ecc71;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(0,0,0,0.5);';
+  const arrowEl = document.createElement('div');
+  arrowEl.innerText = '▲';
+  arrowEl.style.cssText =
+    'color:#2ecc71;font-size:16px;line-height:1;transform:rotate(0deg);transform-origin:center center;text-shadow:0 0 4px rgba(0,0,0,0.6);';
+  el.appendChild(arrowEl);
+  userMarkerEl = arrowEl;
 
   userMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
 
@@ -935,11 +803,21 @@ function addUserMarker(lngLat) {
 
 
 
-function updateUserMarker(lngLat) {
+function updateUserMarker(lngLat, headingDeg = null) {
 
   if (userMarker) userMarker.setLngLat(lngLat);
 
   else addUserMarker(lngLat);
+
+  if (typeof headingDeg === 'number' && userMarkerEl) {
+    lastHeadingDeg = headingDeg;
+    userMarkerEl.style.transform = `rotate(${headingDeg}deg)`;
+    return;
+  }
+
+  if (typeof lastHeadingDeg === 'number' && userMarkerEl) {
+    userMarkerEl.style.transform = `rotate(${lastHeadingDeg}deg)`;
+  }
 
 }
 
@@ -993,6 +871,23 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
+}
+
+function calculateBearingDeg(lat1, lon1, lat2, lon2) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const toDeg = (v) => (v * 180) / Math.PI;
+
+  const phi1 = toRad(lat1);
+  const phi2 = toRad(lat2);
+  const dLambda = toRad(lon2 - lon1);
+
+  const y = Math.sin(dLambda) * Math.cos(phi2);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+
+  const heading = toDeg(Math.atan2(y, x));
+  return (heading + 360) % 360;
 }
 
 
@@ -1306,6 +1201,96 @@ function redrawTrack() {
 
 }
 
+function ensureReplayLayer() {
+  if (!map) return;
+  if (!map.getSource(REPLAY_SOURCE_ID)) {
+    map.addSource(REPLAY_SOURCE_ID, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+  }
+  if (!map.getLayer(REPLAY_LAYER_ID)) {
+    map.addLayer({
+      id: REPLAY_LAYER_ID,
+      type: 'line',
+      source: REPLAY_SOURCE_ID,
+      paint: {
+        'line-color': '#22c55e',
+        'line-width': 6,
+        'line-opacity': 0.95
+      }
+    });
+  }
+}
+
+function setReplayCoordinates(coords) {
+  if (!map?.getSource(REPLAY_SOURCE_ID)) return;
+  map.getSource(REPLAY_SOURCE_ID).setData({
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: coords },
+        properties: {}
+      }
+    ]
+  });
+}
+
+function animateCompletedPath(trackCoords) {
+  if (!Array.isArray(trackCoords) || trackCoords.length < 2 || !map) return;
+  ensureReplayLayer();
+
+  const totalPoints = trackCoords.length;
+  const totalDurationMs = 12000;
+  const frameMs = 60;
+  const steps = Math.max(1, Math.round(totalDurationMs / frameMs));
+  let step = 1;
+
+  setReplayCoordinates([trackCoords[0]]);
+  map.fitBounds(
+    trackCoords.reduce(
+      (acc, c) => {
+        acc[0][0] = Math.min(acc[0][0], c[0]);
+        acc[0][1] = Math.min(acc[0][1], c[1]);
+        acc[1][0] = Math.max(acc[1][0], c[0]);
+        acc[1][1] = Math.max(acc[1][1], c[1]);
+        return acc;
+      },
+      [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
+    ),
+    { padding: 40, duration: 700 }
+  );
+
+  const timer = setInterval(() => {
+    const progress = step / steps;
+    const sliceEnd = Math.max(2, Math.floor(progress * totalPoints));
+    setReplayCoordinates(trackCoords.slice(0, sliceEnd));
+    step += 1;
+    if (step > steps) {
+      clearInterval(timer);
+      setReplayCoordinates(trackCoords);
+    }
+  }, frameMs);
+}
+
+function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, trackCoords }) {
+  if (!replayPanelEl) return;
+  const km = (distanceM / 1000).toFixed(2);
+  const mins = Math.floor(elapsedSec / 60);
+  const secs = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
+  const paceMin = Math.floor(avgPaceSecPerKm / 60);
+  const paceSec = Math.floor(avgPaceSecPerKm % 60).toString().padStart(2, '0');
+
+  replayPanelEl.innerHTML =
+    `<div style="font-size:14px;font-weight:700;margin-bottom:6px;">Итог тренировки</div>` +
+    `<div style="font-size:12px;opacity:0.95;">Дистанция: <b>${km} км</b> | Время: <b>${mins}:${secs}</b> | Темп: <b>${paceMin}'${paceSec}"</b></div>` +
+    `<div style="font-size:11px;opacity:0.75;margin-top:6px;">Показываю ускоренное воспроизведение маршрута...</div>`;
+  replayPanelEl.style.display = 'block';
+
+  animateCompletedPath(trackCoords);
+}
+
 
 
 // Сглаживание позиции по последним N точкам
@@ -1356,6 +1341,13 @@ function onGPSPosition(pos) {
   updateGPSQuality(accuracy);
 
   const now = Date.now();
+  let headingDeg = null;
+  if (lastRawPoint) {
+    const headingDistanceM = haversineDistance(lastRawPoint.lat, lastRawPoint.lng, latitude, longitude);
+    if (headingDistanceM >= 2) {
+      headingDeg = calculateBearingDeg(lastRawPoint.lat, lastRawPoint.lng, latitude, longitude);
+    }
+  }
 
   if (lastRawPoint) {
     const dt = now - lastRawPoint.timestamp;
@@ -1389,7 +1381,7 @@ function onGPSPosition(pos) {
 
   if (isPaused && !autoPausedBySystem) return;
   if (isPaused && autoPausedBySystem) {
-    updateUserMarker([longitude, latitude]);
+    updateUserMarker([longitude, latitude], headingDeg);
     return;
   }
 
@@ -1409,7 +1401,7 @@ function onGPSPosition(pos) {
 
 
 
-  updateUserMarker(center);
+  updateUserMarker(center, headingDeg);
 
 
 
@@ -1549,6 +1541,10 @@ function startRun() {
     lastRawPoint = null;
     idleStartedAt = null;
     autoPausedBySystem = false;
+    if (replayPanelEl) replayPanelEl.style.display = 'none';
+    if (map?.getSource(REPLAY_SOURCE_ID)) {
+      setReplayCoordinates([]);
+    }
 
 
 
@@ -1832,12 +1828,6 @@ async function stopAndSave() {
 
       }
 
-    } else if (userRouteId) {
-
-      // личный маршрут
-
-      session.userRouteId = userRouteId;
-
     }
 
   }
@@ -1909,6 +1899,14 @@ async function stopAndSave() {
   if (routeProgressEl) {
     routeProgressEl.style.display = 'none';
   }
+
+  const replayCoordinates = trackPoints.map((p) => [p.lng, p.lat]);
+  showWorkoutSummaryAndReplay({
+    distanceM,
+    elapsedSec,
+    avgPaceSecPerKm,
+    trackCoords: replayCoordinates
+  });
 
   ensurePassiveLocationWatch();
 

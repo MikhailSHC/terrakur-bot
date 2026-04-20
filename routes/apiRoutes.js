@@ -12,7 +12,7 @@ function readGeoJsonRoutes(projectRoot) {
   return JSON.parse(data);
 }
 
-function createApiRouter({ userService, routeService, userRoutesService, miniAppAuth }) {
+function createApiRouter({ userService, routeService, miniAppAuth }) {
   const router = express.Router();
 
   router.get('/health', (req, res) => {
@@ -89,38 +89,10 @@ function createApiRouter({ userService, routeService, userRoutesService, miniApp
         avgPaceSecPerKm: session.avgPaceSecPerKm,
         geojson: session.geojson,
         mode: session.mode,
-        plannedRouteId: session.plannedRouteId || null,
-        userRouteId: session.userRouteId || null
+        plannedRouteId: session.plannedRouteId || null
       };
 
       userService.addSession(chatId, sessionRecord);
-
-      if (session.mode === 'free_run' && session.geojson && session.geojson.features?.length) {
-        const line = session.geojson.features[0];
-        if (line.geometry && Array.isArray(line.geometry.coordinates)) {
-          const coords = line.geometry.coordinates;
-          if (coords.length > 1) {
-            const start = coords[0];
-            const end = coords[coords.length - 1];
-            const center = coords[Math.floor(coords.length / 2)];
-            const userRoute = {
-              id: `user_${sessionId}`,
-              name: session.name || `Мой маршрут ${new Date(session.startedAt).toLocaleString()}`,
-              createdAt: session.startedAt,
-              distanceM: session.distanceM,
-              durationSec: session.durationSec,
-              avgPaceSecPerKm: session.avgPaceSecPerKm,
-              start: { lon: start[0], lat: start[1] },
-              end: { lon: end[0], lat: end[1] },
-              center: { lon: center[0], lat: center[1] },
-              geojson: session.geojson
-            };
-
-            userService.addUserRoute(chatId, userRoute);
-            userService.addRouteToHistory(chatId, userRoute.name, userRoute.id);
-          }
-        }
-      }
 
       if (session.mode === 'planned_route' && session.plannedRouteId) {
         const route = routeService.findRouteById(session.plannedRouteId);
@@ -140,24 +112,6 @@ function createApiRouter({ userService, routeService, userRoutesService, miniApp
       const sessions = userService.getSessions(req.chatId);
       return res.json({ ok: true, sessions });
     } catch (err) {
-      return res.status(500).json({ ok: false, error: err.message });
-    }
-  });
-
-  router.get('/user-routes/:id', miniAppAuth, (req, res) => {
-    try {
-      const routeId = req.params.id;
-      if (!routeId || typeof routeId !== 'string') {
-        return res.status(400).json({ ok: false, error: 'Invalid routeId' });
-      }
-
-      const route = userRoutesService.getUserRouteById(req.chatId, routeId);
-      if (!route) {
-        return res.status(404).json({ ok: false, error: 'User route not found' });
-      }
-      return res.json({ ok: true, route });
-    } catch (err) {
-      console.error(err);
       return res.status(500).json({ ok: false, error: err.message });
     }
   });

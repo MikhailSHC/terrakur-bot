@@ -5,7 +5,6 @@ const { createMiniAppToken } = require('../utils/miniAppAuth');
 
 function createMockDeps() {
   const sessionsByChatId = new Map();
-  const userRoutesByChatId = new Map();
 
   return {
     userService: {
@@ -13,19 +12,12 @@ function createMockDeps() {
         const existing = sessionsByChatId.get(chatId) || [];
         sessionsByChatId.set(chatId, [...existing, session]);
       }),
-      addUserRoute: jest.fn(),
       addRouteToHistory: jest.fn(),
       getSessions: jest.fn((chatId) => sessionsByChatId.get(chatId) || [])
     },
     routeService: {
       findRouteById: jest.fn(() => null),
       getRouteByIdForApi: jest.fn(() => null)
-    },
-    userRoutesService: {
-      getUserRouteById: jest.fn((chatId, routeId) => {
-        const routes = userRoutesByChatId.get(chatId) || [];
-        return routes.find((route) => route.id === routeId) || null;
-      })
     }
   };
 }

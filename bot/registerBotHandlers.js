@@ -21,7 +21,6 @@ function registerBotHandlers(bot, deps) {
     config,
     userService,
     routeService,
-    userRoutesService,
     commandHandler,
     messageHandler
   } = deps;
@@ -77,45 +76,6 @@ function registerBotHandlers(bot, deps) {
     if (callbackData === 'main_menu') return commandHandler.handleStart(chatId);
     if (callbackData === 'help') return commandHandler.handleHelp(chatId);
     if (callbackData === 'my_history') return commandHandler.handleProfile(chatId);
-
-    if (callbackData === 'my_routes') {
-      const routes = userRoutesService.getUserRoutes(chatId);
-      if (!routes.length) {
-        await bot.api.sendMessageToChat(
-          chatId,
-          '🧾 У вас пока нет собственных маршрутов.\nНажмите «🧭 Начать свой трек», чтобы записать первый маршрут.'
-        );
-        return;
-      }
-
-      const lastRoutes = routes.slice(-5).reverse();
-      let text = '🧾 *Ваши маршруты (free-run):*\n\n';
-      lastRoutes.forEach((route, index) => {
-        const km = route.distanceM ? (route.distanceM / 1000).toFixed(2) : '0.00';
-        const durMin = route.durationSec ? Math.round(route.durationSec / 60) : 0;
-        text += `${index + 1}. ${route.name}\n   📏 ${km} км, ⏱ ${durMin} мин\n\n`;
-      });
-
-      const buttons = [];
-      const row = [];
-      for (let i = 0; i < lastRoutes.length; i += 1) {
-        row.push({ type: 'callback', text: String(i + 1), payload: `myroute_${i}` });
-        if (row.length === 3) {
-          buttons.push([...row]);
-          row.length = 0;
-        }
-      }
-      if (row.length) buttons.push([...row]);
-      buttons.push([{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]);
-
-      await bot.api.sendMessageToChat(chatId, text, {
-        parse_mode: 'Markdown',
-        attachments: [{ type: 'inline_keyboard', payload: { buttons } }]
-      });
-
-      userService.setUserState(chatId, 'my_routes_shown', { myRoutesList: lastRoutes });
-      return;
-    }
 
     if (callbackData === 'start_free_track') {
       const navUrl = buildMiniAppUrl(config, chatId);
@@ -215,24 +175,6 @@ function registerBotHandlers(bot, deps) {
           attachments: [keyboards.getRouteDetailKeyboard(route.id)]
         });
       }
-      return;
-    }
-
-    if (callbackData.startsWith('myroute_')) {
-      const idx = Number.parseInt(callbackData.replace('myroute_', ''), 10);
-      const session = userService.getUserSession(chatId);
-      const myRoutesList = session.myRoutesList || [];
-      if (Number.isNaN(idx) || idx < 0 || idx >= myRoutesList.length) {
-        await bot.api.sendMessageToChat(chatId, '❌ Неверный номер маршрута. Пожалуйста, выберите из списка.');
-        return;
-      }
-      const route = myRoutesList[idx];
-      const navUrl = buildMiniAppUrl(config, chatId, { userRouteId: route.id });
-      await bot.api.sendMessageToChat(
-        chatId,
-        `✅ Личный маршрут *${route.name}* выбран!\n\nОткройте навигатор по ссылке:\n${navUrl}`,
-        { parse_mode: 'Markdown' }
-      );
       return;
     }
 

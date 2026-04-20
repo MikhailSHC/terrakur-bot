@@ -4,7 +4,7 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const { createApiRouter } = require('../routes/apiRoutes');
 
-function createApp({ userService, routeService, userRoutesService, miniAppAuth }) {
+function createApp({ userService, routeService, miniAppAuth }) {
   const app = express();
 
   app.set('trust proxy', 1);
@@ -24,7 +24,6 @@ function createApp({ userService, routeService, userRoutesService, miniAppAuth }
     createApiRouter({
       userService,
       routeService,
-      userRoutesService,
       miniAppAuth
     })
   );

@@ -2,7 +2,6 @@ const { Bot } = require('@maxhub/max-bot-api');
 const config = require('./config');
 const UserService = require('./services/userService');
 const RouteService = require('./services/routeService');
-const UserRoutesService = require('./services/userRoutesService');
 const CommandHandler = require('./handlers/commandHandler');
 const MessageHandler = require('./handlers/messageHandler');
 const { createMiniAppAuthMiddleware } = require('./middleware/miniAppAuth');
@@ -30,13 +29,11 @@ process.on('unhandledRejection', (reason) => {
 
 const userService = new UserService();
 const routeService = new RouteService();
-const userRoutesService = new UserRoutesService(userService);
 const miniAppAuth = createMiniAppAuthMiddleware(config.MINI_APP_AUTH_SECRET);
 
 const app = createApp({
   userService,
   routeService,
-  userRoutesService,
   miniAppAuth
 });
 
@@ -53,7 +50,6 @@ registerBotHandlers(bot, {
   config,
   userService,
   routeService,
-  userRoutesService,
   commandHandler,
   messageHandler
 });

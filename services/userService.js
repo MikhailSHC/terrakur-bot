@@ -49,7 +49,6 @@ class UserService {
         availableRoutes: [],
         history: [],
         sessions: [],
-        userRoutes: [],
         lastLocation: null,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
@@ -64,7 +63,6 @@ class UserService {
     // Миграция/инициализация недостающих полей
     if (!Array.isArray(u.history)) u.history = [];
     if (!Array.isArray(u.sessions)) u.sessions = [];
-    if (!Array.isArray(u.userRoutes)) u.userRoutes = [];
     if (!('lastLocation' in u)) u.lastLocation = null;
     if (!u.createdAt) u.createdAt = new Date().toISOString();
     if (!u.lastUpdated) u.lastUpdated = new Date().toISOString();
@@ -213,25 +211,6 @@ class UserService {
     return sessions;
   }
 
-  // === Новое: личные маршруты (free-run) ===
-  addUserRoute(chatId, userRoute) {
-    const session = this.getUserSession(chatId);
-    if (!Array.isArray(session.userRoutes)) session.userRoutes = [];
-
-    session.userRoutes.push(userRoute);
-    session.lastUpdated = new Date().toISOString();
-    this.saveData();
-  }
-
-  getUserRoutes(chatId) {
-    const session = this.getUserSession(chatId);
-    return Array.isArray(session.userRoutes) ? session.userRoutes : [];
-  }
-
-  getUserRouteById(chatId, routeId) {
-    const routes = this.getUserRoutes(chatId);
-    return routes.find(r => r.id === routeId) || null;
-  }
 }
 
 module.exports = UserService;
