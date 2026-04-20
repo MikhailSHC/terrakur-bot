@@ -772,12 +772,26 @@ function addUserMarker(lngLat) {
   el.style.cssText =
     'width:28px;height:28px;background:rgba(0,0,0,0.45);border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(0,0,0,0.5);';
 
-  const arrowEl = document.createElement('div');
-  arrowEl.innerText = '▲';
-  arrowEl.style.cssText =
-    'color:#2ecc71;font-size:16px;line-height:1;transform:rotate(0deg);transform-origin:center center;text-shadow:0 0 4px rgba(0,0,0,0.6);';
-  el.appendChild(arrowEl);
-  userMarkerEl = arrowEl;
+  const arrowWrapEl = document.createElement('div');
+  arrowWrapEl.style.cssText =
+    'width:16px;height:16px;display:flex;align-items:center;justify-content:center;transform:rotate(0deg);transform-origin:center center;';
+
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const arrowSvg = document.createElementNS(svgNs, 'svg');
+  arrowSvg.setAttribute('viewBox', '0 0 24 24');
+  arrowSvg.setAttribute('width', '16');
+  arrowSvg.setAttribute('height', '16');
+
+  const arrowPath = document.createElementNS(svgNs, 'path');
+  arrowPath.setAttribute('d', 'M12 2 L20 20 L12 15 L4 20 Z');
+  arrowPath.setAttribute('fill', '#2ecc71');
+  arrowPath.setAttribute('stroke', '#ffffff');
+  arrowPath.setAttribute('stroke-width', '1.3');
+  arrowSvg.appendChild(arrowPath);
+  arrowWrapEl.appendChild(arrowSvg);
+
+  el.appendChild(arrowWrapEl);
+  userMarkerEl = arrowWrapEl;
 
   userMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
 
@@ -1233,25 +1247,34 @@ function animateCompletedPath(trackCoords) {
   ensureReplayLayer();
 
   const totalPoints = trackCoords.length;
-  const totalDurationMs = 12000;
+  const totalDurationMs = 6000;
   const frameMs = 60;
   const steps = Math.max(1, Math.round(totalDurationMs / frameMs));
   let step = 1;
 
   setReplayCoordinates([trackCoords[0]]);
-  map.fitBounds(
-    trackCoords.reduce(
-      (acc, c) => {
-        acc[0][0] = Math.min(acc[0][0], c[0]);
-        acc[0][1] = Math.min(acc[0][1], c[1]);
-        acc[1][0] = Math.max(acc[1][0], c[0]);
-        acc[1][1] = Math.max(acc[1][1], c[1]);
-        return acc;
-      },
-      [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
-    ),
-    { padding: 40, duration: 700 }
+  const rawBounds = trackCoords.reduce(
+    (acc, c) => {
+      acc[0][0] = Math.min(acc[0][0], c[0]);
+      acc[0][1] = Math.min(acc[0][1], c[1]);
+      acc[1][0] = Math.max(acc[1][0], c[0]);
+      acc[1][1] = Math.max(acc[1][1], c[1]);
+      return acc;
+    },
+    [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
   );
+
+  // Expand viewport by x2 so the full route is visible comfortably.
+  const centerLon = (rawBounds[0][0] + rawBounds[1][0]) / 2;
+  const centerLat = (rawBounds[0][1] + rawBounds[1][1]) / 2;
+  const halfSpanLon = Math.max((rawBounds[1][0] - rawBounds[0][0]) / 2, 0.0005) * 2;
+  const halfSpanLat = Math.max((rawBounds[1][1] - rawBounds[0][1]) / 2, 0.0005) * 2;
+  const expandedBounds = [
+    [centerLon - halfSpanLon, centerLat - halfSpanLat],
+    [centerLon + halfSpanLon, centerLat + halfSpanLat]
+  ];
+
+  map.fitBounds(expandedBounds, { padding: 24, duration: 550 });
 
   const timer = setInterval(() => {
     const progress = step / steps;
