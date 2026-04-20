@@ -197,6 +197,28 @@ app.get('/api/sessions', (req, res) => {
   }
 });
 
+// Получение пользовательских маршрутов
+app.get('/api/user-routes', (req, res) => {
+  const chatId = req.query.chatId;
+  if (!chatId) {
+    return res.status(400).json({ ok: false, error: 'chatId required' });
+  }
+
+  try {
+    const userDataPath = path.join(__dirname, config.USER_DATA_FILE);
+    if (!fs.existsSync(userDataPath)) {
+      return res.json({ ok: true, routes: [] });
+    }
+    const allUsers = JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
+    const user = allUsers[chatId] || {};
+    const routes = user.userRoutes || [];
+    res.json({ ok: true, routes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Запуск HTTP-сервера
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
@@ -320,6 +342,17 @@ bot.on('message_callback', async (ctx) => {
     return;
   }
 
+  if (callbackData === 'my_routes') {
+  // пока простая заглушка, потом сделаем нормальный вывод
+  await bot.api.sendMessageToChat(
+    chatId,
+    '🧾 Ваши маршруты (free-run):\n\n' +
+    'Скоро здесь появится список ваших собственных маршрутов, ' +
+    'построенных через "Начать свой трек".'
+  );
+  return;
+}
+
   // ===== НОВОЕ: НАЧАТЬ СВОЙ ТРЕК (free_run) =====
   if (callbackData === 'start_free_track') {
     const navUrl = `${config.MINI_APP_URL}?chatId=${encodeURIComponent(chatId)}`;
@@ -365,6 +398,8 @@ bot.on('message_callback', async (ctx) => {
     await showNearbyRoutesForUser(chatId, latitude, longitude);
     return;
   }
+
+  
 
   if (callbackData === 'settings') {
     await bot.api.sendMessageToChat(

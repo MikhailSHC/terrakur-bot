@@ -27,8 +27,8 @@ const distanceEl   = document.getElementById('distance');
 const paceEl       = document.getElementById('pace');
 const statusDiv    = document.getElementById('status');
 const startBtn     = document.getElementById('startBtn');
-const routesBtn    = document.getElementById('routesBtn');
-const historyBtn   = document.getElementById('historyBtn');
+// const routesBtn    = document.getElementById('routesBtn');
+// const historyBtn   = document.getElementById('historyBtn');
 
 // Параметры из URL
 const urlParams   = new URLSearchParams(window.location.search);
@@ -384,8 +384,8 @@ function startRun() {
 
   statsPanel.classList.remove('hidden');
   startBtn.textContent = '⏸ Пауза';
-  routesBtn.disabled   = true;
-  historyBtn.disabled  = true;
+  // routesBtn.disabled   = true;
+  // historyBtn.disabled  = true;
 
   statusDiv.innerText = '🏃 Тренировка началась...';
 
@@ -511,8 +511,8 @@ async function stopAndSave() {
 
   statsPanel.classList.add('hidden');
   startBtn.textContent   = '▶️ Старт';
-  routesBtn.disabled     = false;
-  historyBtn.disabled    = false;
+  // routesBtn.disabled     = false;
+  // historyBtn.disabled    = false;
 
   setTimeout(() => {
     if (!statusDiv.innerText.includes('Тренировка сохранена')) {
@@ -532,8 +532,8 @@ async function stopAndSave() {
 // === КНОПКИ ===
 
 startBtn.onclick   = () => (isTracking ? pauseResume() : startRun());
-routesBtn.onclick  = () => { statusDiv.innerText = 'Выберите маршрут в боте'; };
-historyBtn.onclick = () => { statusDiv.innerText = 'История тренировок (скоро)'; };
+// routesBtn.onclick  = () => { statusDiv.innerText = 'Выберите маршрут в боте'; };
+// historyBtn.onclick = () => { statusDiv.innerText = 'История тренировок (скоро)'; };
 
 // Дополнительная кнопка "Стоп"
 function showStopButton() {
