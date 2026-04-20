@@ -770,7 +770,7 @@ function addUserMarker(lngLat) {
   const el = document.createElement('div');
 
   el.style.cssText =
-    'width:28px;height:28px;background:rgba(0,0,0,0.45);border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(0,0,0,0.5);';
+    'width:40px;height:40px;background:rgba(0,0,0,0.2);border:2px solid rgba(255,255,255,0.85);border-radius:50%;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);';
 
   const arrowWrapEl = document.createElement('div');
   arrowWrapEl.style.cssText =
@@ -779,21 +779,27 @@ function addUserMarker(lngLat) {
   const svgNs = 'http://www.w3.org/2000/svg';
   const arrowSvg = document.createElementNS(svgNs, 'svg');
   arrowSvg.setAttribute('viewBox', '0 0 24 24');
-  arrowSvg.setAttribute('width', '16');
-  arrowSvg.setAttribute('height', '16');
+  arrowSvg.setAttribute('width', '28');
+  arrowSvg.setAttribute('height', '28');
+  arrowSvg.style.filter = 'drop-shadow(0 0 5px rgba(0,0,0,0.9))';
 
   const arrowPath = document.createElementNS(svgNs, 'path');
-  arrowPath.setAttribute('d', 'M12 2 L20 20 L12 15 L4 20 Z');
-  arrowPath.setAttribute('fill', '#2ecc71');
+  arrowPath.setAttribute('d', 'M12 1.5 L22 22 L12 17 L2 22 Z');
+  arrowPath.setAttribute('fill', '#22c55e');
   arrowPath.setAttribute('stroke', '#ffffff');
-  arrowPath.setAttribute('stroke-width', '1.3');
+  arrowPath.setAttribute('stroke-width', '2.4');
   arrowSvg.appendChild(arrowPath);
   arrowWrapEl.appendChild(arrowSvg);
 
   el.appendChild(arrowWrapEl);
   userMarkerEl = arrowWrapEl;
 
-  userMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
+  userMarker = new maplibregl.Marker(el)
+    .setLngLat(lngLat)
+    .setRotation(0)
+    .setRotationAlignment('map')
+    .setPitchAlignment('map')
+    .addTo(map);
 
 }
 
@@ -808,6 +814,7 @@ function updateUserMarker(lngLat, headingDeg = null) {
   if (typeof headingDeg === 'number' && userMarkerEl) {
     lastHeadingDeg = headingDeg;
     userMarkerEl.style.transform = `rotate(${headingDeg}deg)`;
+    if (userMarker) userMarker.setRotation(headingDeg);
     return;
   }
 
@@ -1264,17 +1271,7 @@ function animateCompletedPath(trackCoords) {
     [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
   );
 
-  // Expand viewport by x2 so the full route is visible comfortably.
-  const centerLon = (rawBounds[0][0] + rawBounds[1][0]) / 2;
-  const centerLat = (rawBounds[0][1] + rawBounds[1][1]) / 2;
-  const halfSpanLon = Math.max((rawBounds[1][0] - rawBounds[0][0]) / 2, 0.0005) * 2;
-  const halfSpanLat = Math.max((rawBounds[1][1] - rawBounds[0][1]) / 2, 0.0005) * 2;
-  const expandedBounds = [
-    [centerLon - halfSpanLon, centerLat - halfSpanLat],
-    [centerLon + halfSpanLon, centerLat + halfSpanLat]
-  ];
-
-  map.fitBounds(expandedBounds, { padding: 24, duration: 550 });
+  map.fitBounds(rawBounds, { padding: 28, duration: 550 });
 
   const timer = setInterval(() => {
     const progress = step / steps;
