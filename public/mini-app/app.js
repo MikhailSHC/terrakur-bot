@@ -153,10 +153,38 @@ async function loadPlannedRoute(id) {
       map.getSource('planned-route').setData(plannedRoute);
     }
 
-    const coords = plannedRoute.geometry.coordinates;
-    const center = coords[Math.floor(coords.length / 2)];
+    let coords, center;
     
-    // Находим ближайшую точку маршрута к пользователю
+    if (plannedRoute.geometry.type === 'LineString') {
+      coords = plannedRoute.geometry.coordinates;
+      center = coords[Math.floor(coords.length / 2)];
+    } else if (plannedRoute.geometry.type === 'Point') {
+      // For routes without track, create a simple circle route around the center point
+      const centerPoint = plannedRoute.geometry.coordinates;
+      const radius = 0.001; // ~100m radius
+      coords = [
+        [centerPoint[0] - radius, centerPoint[1]],
+        [centerPoint[0] - radius, centerPoint[1] + radius],
+        [centerPoint[0], centerPoint[1] + radius],
+        [centerPoint[0] + radius, centerPoint[1] + radius],
+        [centerPoint[0] + radius, centerPoint[1]],
+        [centerPoint[0] + radius, centerPoint[1] - radius],
+        [centerPoint[0], centerPoint[1] - radius],
+        [centerPoint[0] - radius, centerPoint[1] - radius],
+        [centerPoint[0] - radius, centerPoint[1]]
+      ];
+      center = centerPoint;
+      
+      // Update the plannedRoute with the generated LineString
+      plannedRoute.geometry = {
+        type: "LineString",
+        coordinates: coords
+      };
+    } else {
+      throw new Error('Unsupported geometry type');
+    }
+    
+    // Find nearest point to user
     let nearestPoint = coords[0];
     let minDistance = Infinity;
     
@@ -307,6 +335,28 @@ function getUserLocation() {
     },
     { enableHighAccuracy: true }
   );
+}
+
+// === ПРОГРЕСС ПО МАРШРУТУ ===
+
+function initializeRouteProgress() {
+  if (!plannedRoute || !plannedRoute.geometry) return;
+  
+  const coords = plannedRoute.geometry.coordinates;
+  routeProgress.currentIndex = 0;
+  routeProgress.completedSegments = 0;
+  routeProgress.totalSegments = coords.length - 1;
+  routeProgress.isOnRoute = true;
+  routeProgress.lastProgressUpdate = Date.now();
+  
+  console.log('Route progress initialized:', routeProgress);
+}
+
+function updateRouteProgress(lat, lng) {
+  if (!plannedRoute || !routeProgress.isOnRoute) return;
+  
+  // TODO: реализовать логику отслеживания прогресса
+  console.log('Updating route progress for:', lat, lng);
 }
 
 // === МАРКЕРЫ ===

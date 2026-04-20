@@ -6,8 +6,12 @@ const path = require('path');
 const routesPath = path.join(__dirname, '../data/routesData.js');
 // Читаем файл как текст, чтобы извлечь массив
 const routesContent = fs.readFileSync(routesPath, 'utf8');
-// Убираем module.exports = и выполняем eval (осторожно, но для своего скрипта ок)
-const routes = eval(routesContent.match(/module\.exports = (\[[\s\S]*\]);/)[1]);
+// Extract routes array from the file
+const match = routesContent.match(/const routes = (\[[\s\S]*\]);/);
+if (!match) {
+  throw new Error('Could not extract routes array from routesData.js');
+}
+const routes = eval(match[1]);
 
 const geojsonRoutes = routes.map(route => {
   // Преобразуем трек в GeoJSON LineString, если есть точки

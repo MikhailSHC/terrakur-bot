@@ -1,0 +1,173 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          41.98,
+          39.05
+        ]
+      },
+      "properties": {
+        "id": "tamanskiy-les",
+        "name": "Таманский лес",
+        "noTrack": true
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          41.98,
+          40.05
+        ]
+      },
+      "properties": {
+        "id": "tatarskoe-gorodische",
+        "name": "Татарское городище",
+        "noTrack": true
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          41.98,
+          41.05
+        ]
+      },
+      "properties": {
+        "id": "kholodnye-rodniki",
+        "name": "Холодные родники",
+        "noTrack": true
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            43.1234,
+            44.1111
+          ],
+          [
+            43.1244,
+            44.1122
+          ]
+        ]
+      },
+      "properties": {
+        "id": "gora-strizhament",
+        "name": "Гора Стрижамент",
+        "description": "Экологическая тропа на горе Стрижамент",
+        "distanceKm": 10,
+        "duration": "3-4 часа",
+        "difficulty": 3,
+        "locationId": "kavminvody",
+        "activities": [
+          "walking",
+          "running",
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          41.98,
+          43.05
+        ]
+      },
+      "properties": {
+        "id": "safonova-dacha",
+        "name": "Сафонова дача",
+        "noTrack": true
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            42.7165,
+            43.9071
+          ],
+          [
+            42.718,
+            43.908
+          ],
+          [
+            42.7203,
+            43.9092
+          ]
+        ]
+      },
+      "properties": {
+        "id": "kislovodsk-park-3",
+        "name": "Кисловодский парк Терренкур #3",
+        "description": "Оздоровительная тропа в Кисловодском парке",
+        "distanceKm": 3,
+        "duration": "1-2 часа",
+        "difficulty": 1,
+        "locationId": "kislovodsk",
+        "activities": [
+          "walking",
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          41.98,
+          46.05
+        ]
+      },
+      "properties": {
+        "id": "olka-mountain",
+        "name": "Гора Олка",
+        "noTrack": true
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          41.98,
+          47.05
+        ]
+      },
+      "properties": {
+        "id": "proval-lake",
+        "name": "Озеро Провал и гора Машук",
+        "noTrack": true
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          41.98,
+          48.05
+        ]
+      },
+      "properties": {
+        "id": "gorsky-park",
+        "name": "Горский парк тропы",
+        "noTrack": true
+      }
+    }
+  ]
+}

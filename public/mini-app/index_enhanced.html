@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TerraKur - Беговой трекер</title>
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    
+    #statsPanel {
+      position: fixed;
+      bottom: 20px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 16px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      z-index: 10;
+      min-width: 200px;
+    }
+    
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 4px 0;
+      font-size: 14px;
+    }
+    
+    .stat-label {
+      opacity: 0.8;
+      margin-right: 8px;
+    }
+    
+    .stat-value {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    #status {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 20px;
+      z-index: 1000;
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+    }
+    
+    #startBtn {
+      position: fixed;
+      bottom: 20px;
+      right: 16px;
+      background: #22c55e;
+      border: none;
+      border-radius: 40px;
+      padding: 14px 24px;
+      font-weight: 600;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.2s ease;
+    }
+    
+    #startBtn:hover {
+      background: #16a34a;
+      transform: scale(1.05);
+    }
+    
+    #startBtn:active {
+      transform: scale(0.95);
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+    
+    /* Новые стили для улучшений */
+    .current-pace {
+      color: #22c55e;
+      font-size: 14px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .remaining-distance {
+      color: #3b82f6;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  
+  <div id="statsPanel" class="hidden">
+    <div class="stat-row">
+      <span class="stat-label">Время:</span>
+      <span class="stat-value" id="time">00:00</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Дистанция:</span>
+      <span class="stat-value" id="distance">0.00</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Темп:</span>
+      <span class="stat-value" id="pace">--"--</span>
+    </div>
+    <div class="current-pace">
+      <span class="stat-value" id="currentPace">Темп сейчас: --"--</span>
+    </div>
+    <div class="remaining-distance">
+      <span class="stat-value" id="remainingDistance">Осталось: -- км</span>
+    </div>
+  </div>
+  
+  <button id="startBtn">▶️ Старт</button>
+  <div id="status"></div>
+  
+  <script src="app_enhanced.js"></script>
+</body>
+</html>
