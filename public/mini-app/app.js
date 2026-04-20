@@ -1,14 +1,18 @@
-// app.js – TerraKur беговой трекер MVP (свободная пробежка)
+// app.js – TerraKur беговой трекер MVP (свободная + маршрут из URL)
 let map;
 let userMarker;
 let watchId = null;
 let isTracking = false;
 let isPaused = false;
-let trackPoints = [];       // массив {lat, lng, timestamp}
+let trackPoints = [];
 let startTime = null;
 let pausedDuration = 0;
 let pauseStart = null;
 let currentPolyline = null;
+
+// Данные маршрута (если передан routeId)
+let plannedRoute = null;        // GeoJSON Feature
+let plannedRouteLayerId = 'planned-route';
 
 // DOM элементы
 const statsPanel = document.getElementById('statsPanel');
@@ -20,21 +24,23 @@ const freeRunBtn = document.getElementById('freeRunBtn');
 const routesBtn = document.getElementById('routesBtn');
 const historyBtn = document.getElementById('historyBtn');
 
-// Параметры
-const CHAT_ID = new URLSearchParams(window.location.search).get('chatId') || 'test_user';
+// Получение параметров из URL
+const urlParams = new URLSearchParams(window.location.search);
+const routeId = urlParams.get('routeId');
+const chatId = urlParams.get('chatId') || 'test_user';
 
 // Инициализация карты (MapLibre)
 function initMap() {
   map = new maplibregl.Map({
     container: 'map',
-    style: 'https://tiles.stadiamaps.com/styles/alidade_smooth.json', // бесплатный стиль без токена
-    center: [42.7165, 43.9071], // Kislovodsk
+    style: 'https://tiles.stadiamaps.com/styles/alidade_smooth.json',
+    center: [42.7165, 43.9071],
     zoom: 14
   });
   map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
   map.on('load', () => {
-    // Источник для отрисовки записанного трека
+    // Источник для отрисовки записанного трека (красная линия)
     map.addSource('run-track', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] }
@@ -43,14 +49,62 @@ function initMap() {
       id: 'run-line',
       type: 'line',
       source: 'run-track',
+      paint: { 'line-color': '#ff4d4d', 'line-width': 5, 'line-opacity': 0.9 }
+    });
+
+    // Если передан routeId – загружаем маршрут
+    if (routeId) {
+      loadPlannedRoute(routeId);
+    } else {
+      getUserLocation();
+    }
+  });
+}
+
+// Загрузка маршрута по ID
+async function loadPlannedRoute(id) {
+  try {
+    statusDiv.innerText = 'Загрузка маршрута...';
+    const response = await fetch(`/api/routes/${id}/geojson`);
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error);
+    plannedRoute = data.route;
+    // Отображаем маршрут на карте
+    addPlannedRouteToMap(plannedRoute);
+    // Центрируем карту на маршруте
+    const coords = plannedRoute.geometry.coordinates;
+    const center = coords[Math.floor(coords.length / 2)];
+    map.flyTo({ center: [center[0], center[1]], zoom: 14 });
+    statusDiv.innerText = `✅ Маршрут "${plannedRoute.properties.name}" загружен. Нажмите "Старт"`;
+    setTimeout(() => { if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = ''; }, 3000);
+    getUserLocation();
+  } catch (err) {
+    console.error(err);
+    statusDiv.innerText = '❌ Ошибка загрузки маршрута';
+  }
+}
+
+// Добавление планового маршрута на карту (синяя линия)
+function addPlannedRouteToMap(route) {
+  if (!map.getSource('planned-route')) {
+    map.addSource('planned-route', {
+      type: 'geojson',
+      data: route
+    });
+    map.addLayer({
+      id: 'planned-route-line',
+      type: 'line',
+      source: 'planned-route',
       paint: {
-        'line-color': '#ff4d4d',
-        'line-width': 5,
-        'line-opacity': 0.9
+        'line-color': '#3b82f6',
+        'line-width': 4,
+        'line-opacity': 0.8,
+        'line-dasharray': [2, 2]  // пунктир для отличия
       }
     });
-    getUserLocation();
-  });
+  } else {
+    map.getSource('planned-route').setData(route);
+  }
 }
 
 // Запрос геолокации и центрирование
@@ -63,7 +117,6 @@ function getUserLocation() {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const { latitude, longitude } = pos.coords;
-      map.flyTo({ center: [longitude, latitude], zoom: 15 });
       addUserMarker([longitude, latitude]);
       statusDiv.innerText = '✅ Готов к тренировке';
       setTimeout(() => { if (statusDiv.innerText === '✅ Готов к тренировке') statusDiv.innerText = ''; }, 2000);
@@ -88,13 +141,12 @@ function addUserMarker(lngLat) {
   userMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
 }
 
-// Обновление маркера пользователя
 function updateUserMarker(lngLat) {
   if (userMarker) userMarker.setLngLat(lngLat);
   else addUserMarker(lngLat);
 }
 
-// Рассчёт дистанции (гаверсинус) между двумя точками в метрах
+// Расчёт дистанции (метры)
 function haversineDistance(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const φ1 = lat1 * Math.PI / 180;
@@ -108,7 +160,7 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Обновление UI метрик
+// Обновление UI статистики
 function updateStatsUI() {
   if (!startTime || isPaused || !isTracking) return;
   const now = Date.now();
@@ -135,7 +187,7 @@ function updateStatsUI() {
   paceEl.textContent = `${paceMin}'${paceSec.toString().padStart(2,'0')}"`;
 }
 
-// Отрисовка трека на карте
+// Отрисовка реального трека
 function redrawTrack() {
   if (!map.getSource('run-track')) return;
   const geojson = {
@@ -152,21 +204,19 @@ function redrawTrack() {
   map.getSource('run-track').setData(geojson);
 }
 
-// Добавление новой GPS точки
 function addTrackPoint(lat, lng, timestamp) {
   trackPoints.push({ lat, lng, timestamp });
   redrawTrack();
   updateStatsUI();
 }
 
-// Старт тренировки (свободная пробежка)
-function startFreeRun() {
+// Старт тренировки (общий для свободной и по маршруту)
+function startRun() {
   if (isTracking) return;
   if (!navigator.geolocation) {
     statusDiv.innerText = '❌ Геолокация недоступна';
     return;
   }
-  // Сброс состояния
   isTracking = true;
   isPaused = false;
   trackPoints = [];
@@ -174,7 +224,6 @@ function startFreeRun() {
   pausedDuration = 0;
   pauseStart = null;
 
-  // Показать панель статистики, изменить кнопки
   statsPanel.classList.remove('hidden');
   freeRunBtn.textContent = '⏸ Пауза';
   routesBtn.disabled = true;
@@ -182,10 +231,8 @@ function startFreeRun() {
 
   statusDiv.innerText = '🏃 Тренировка началась...';
 
-  // Очистить старый трек на карте
   redrawTrack();
 
-  // Запуск watchPosition
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
@@ -195,10 +242,7 @@ function startFreeRun() {
       addTrackPoint(latitude, longitude, Date.now());
       map.flyTo({ center: [longitude, latitude], zoom: 16, duration: 500 });
     },
-    (err) => {
-      console.error(err);
-      statusDiv.innerText = '⚠️ Ошибка GPS';
-    },
+    (err) => console.error(err),
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
   );
 }
@@ -207,7 +251,6 @@ function startFreeRun() {
 function pauseResume() {
   if (!isTracking) return;
   if (isPaused) {
-    // Возобновить
     isPaused = false;
     if (pauseStart) {
       pausedDuration += (Date.now() - pauseStart);
@@ -216,21 +259,29 @@ function pauseResume() {
     freeRunBtn.textContent = '⏸ Пауза';
     statusDiv.innerText = '▶️ Продолжаем...';
     setTimeout(() => { if (statusDiv.innerText === '▶️ Продолжаем...') statusDiv.innerText = ''; }, 1500);
+    // Возобновляем watchPosition
+    if (watchId === null) {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => { /* та же логика */ },
+        (err) => console.error(err),
+        { enableHighAccuracy: true }
+      );
+    }
   } else {
-    // Пауза
     isPaused = true;
     pauseStart = Date.now();
     freeRunBtn.textContent = '▶️ Старт';
     statusDiv.innerText = '⏸ Тренировка на паузе';
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    watchId = null;
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
   }
 }
 
-// Остановка тренировки и сохранение
+// Остановка и сохранение сессии
 async function stopAndSave() {
   if (!isTracking) return;
-  // Остановить слежение
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
@@ -238,7 +289,6 @@ async function stopAndSave() {
   isTracking = false;
   isPaused = false;
 
-  // Вычисляем финальную статистику
   const endTime = Date.now();
   let elapsedSec = (endTime - startTime - pausedDuration) / 1000;
   if (elapsedSec < 0) elapsedSec = 0;
@@ -249,7 +299,6 @@ async function stopAndSave() {
   const distanceM = totalDistance;
   const avgPaceSecPerKm = (distanceM > 0) ? (elapsedSec / (distanceM / 1000)) : 0;
 
-  // Подготовка GeoJSON трека
   const geojsonTrack = {
     type: 'FeatureCollection',
     features: [{
@@ -262,23 +311,24 @@ async function stopAndSave() {
     }]
   };
 
-  // Отправить сессию на сервер
+  const session = {
+    startedAt: new Date(startTime).toISOString(),
+    finishedAt: new Date(endTime).toISOString(),
+    durationSec: elapsedSec,
+    distanceM: distanceM,
+    avgPaceSecPerKm: avgPaceSecPerKm,
+    geojson: geojsonTrack,
+    mode: plannedRoute ? 'planned_route' : 'free_run'
+  };
+  if (plannedRoute) {
+    session.plannedRouteId = plannedRoute.properties.id;
+  }
+
   try {
     const response = await fetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chatId: CHAT_ID,
-        session: {
-          startedAt: new Date(startTime).toISOString(),
-          finishedAt: new Date(endTime).toISOString(),
-          durationSec: elapsedSec,
-          distanceM: distanceM,
-          avgPaceSecPerKm: avgPaceSecPerKm,
-          geojson: geojsonTrack,
-          mode: 'free_run'
-        }
-      })
+      body: JSON.stringify({ chatId, session })
     });
     const data = await response.json();
     if (data.ok) {
@@ -291,7 +341,6 @@ async function stopAndSave() {
     statusDiv.innerText = '❌ Не удалось сохранить';
   }
 
-  // Сброс UI
   statsPanel.classList.add('hidden');
   freeRunBtn.textContent = '🏃 Свободная';
   routesBtn.disabled = false;
@@ -299,22 +348,28 @@ async function stopAndSave() {
   setTimeout(() => { statusDiv.innerText = ''; }, 3000);
 }
 
-// Обработчики кнопок (динамические)
+// Кнопка "Свободная" – начинает свободную пробежку (без маршрута)
 freeRunBtn.onclick = () => {
-  if (!isTracking) {
-    startFreeRun();
+  if (isTracking) {
+    // Если уже идёт тренировка – пауза/возобновление
+    pauseResume();
   } else {
-    if (isPaused) {
-      pauseResume(); // возобновить
-    } else {
-      // Если тренировка активна – либо пауза, либо стоп? У нас отдельной кнопки стоп нет. Добавим двойное действие?
-      // По ТЗ нужны кнопки Пауза и Стоп. Для простоты: при активной тренировке кнопка "Пауза", при паузе – "Старт" и дополнительная кнопка "Стоп".
-      // Но у нас только три кнопки снизу. Сделаем так: при активной тренировке показываем дополнительную плавающую кнопку "Стоп".
-    }
+    // Если нет активной тренировки – начинаем свободную
+    // Если был выбран маршрут, можно его сбросить? Пока просто начинаем.
+    startRun();
   }
 };
 
-// Добавим отдельную кнопку "Стоп" во время тренировки (создадим динамически)
+// Кнопка "Маршруты" – заглушка (т.к. выбор в боте)
+routesBtn.onclick = () => {
+  statusDiv.innerText = 'Выбор маршрута осуществляется в боте';
+};
+
+historyBtn.onclick = () => {
+  statusDiv.innerText = 'История тренировок (скоро)';
+};
+
+// Кнопка Стоп (динамическая)
 function showStopButton() {
   let stopBtn = document.getElementById('dynamicStopBtn');
   if (!stopBtn) {
@@ -334,32 +389,13 @@ function showStopButton() {
   }
 }
 
-function removeStopButton() {
-  const btn = document.getElementById('dynamicStopBtn');
-  if (btn) btn.remove();
-}
-
-// Переопределим startFreeRun, чтобы добавлять кнопку Стоп
-const originalStart = startFreeRun;
-startFreeRun = function() {
-  originalStart();
+// Переопределим startRun, чтобы добавлять кнопку Стоп
+const originalStartRun = startRun;
+window.startRun = function() {
+  originalStartRun();
   showStopButton();
 };
-
-// При паузе/возобновлении кнопку Стоп оставляем
-// При остановке она удаляется в stopAndSave
-
-// Для совместимости с паузой – при возобновлении кнопка уже есть
-// Также при остановке через стоп – кнопка удаляется
-
-// Экспорт для глобального использования (не обязательно)
-window.startFreeRun = startFreeRun;
-window.pauseResume = pauseResume;
-window.stopAndSave = stopAndSave;
-
-// Заглушки для других кнопок
-routesBtn.onclick = () => { statusDiv.innerText = 'Список маршрутов (скоро)'; };
-historyBtn.onclick = () => { statusDiv.innerText = 'История (скоро)'; };
+startRun = window.startRun;
 
 // Инициализация
 initMap();
