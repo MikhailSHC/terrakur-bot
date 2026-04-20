@@ -9,6 +9,7 @@ const CommandHandler = require('./handlers/commandHandler');
 const MessageHandler = require('./handlers/messageHandler');
 const keyboards = require('./keyboards/buttons');
 const { formatRouteList, formatRouteDetails } = require('./utils/helpers');
+const fs = require('fs');
 
 // Отлавливаем все ошибки
 process.on('uncaughtException', (err) => {
@@ -62,6 +63,92 @@ app.get('/api/routes/:id', (req, res) => {
       ok: false,
       error: 'Internal server error'
     });
+  }
+});
+
+// ==================== НОВЫЕ API ДЛЯ MINI-APP ====================
+
+// Получение списка маршрутов (системные + пользовательские)
+app.get('/api/routes', (req, res) => {
+  try {
+    const geojsonPath = path.join(__dirname, 'public/mini-app/routes.geojson');
+    let systemRoutes = [];
+    if (fs.existsSync(geojsonPath)) {
+      const data = fs.readFileSync(geojsonPath, 'utf8');
+      const geojson = JSON.parse(data);
+      systemRoutes = geojson.features.map(f => ({
+        id: f.properties.id,
+        name: f.properties.name,
+        type: 'system',
+        geojson: f
+      }));
+    }
+    // Пользовательские маршруты (пока пусто, потом добавим)
+    const userRoutes = [];
+    res.json({ ok: true, routes: [...systemRoutes, ...userRoutes] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Получение одного маршрута по ID (в GeoJSON)
+app.get('/api/routes/:id/geojson', (req, res) => {
+  const id = req.params.id;
+  try {
+    const geojsonPath = path.join(__dirname, 'public/mini-app/routes.geojson');
+    const data = fs.readFileSync(geojsonPath, 'utf8');
+    const geojson = JSON.parse(data);
+    const feature = geojson.features.find(f => f.properties.id === id);
+    if (!feature) return res.status(404).json({ ok: false, error: 'Route not found' });
+    res.json({ ok: true, route: feature });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Сохранение тренировочной сессии
+app.post('/api/sessions', (req, res) => {
+  const { chatId, session } = req.body;
+  if (!chatId || !session) return res.status(400).json({ ok: false, error: 'Missing data' });
+  try {
+    const userDataPath = path.join(__dirname, config.USER_DATA_FILE);
+    let allUsers = {};
+    if (fs.existsSync(userDataPath)) {
+      allUsers = JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
+    }
+    if (!allUsers[chatId]) allUsers[chatId] = { sessions: [], userRoutes: [] };
+    if (!allUsers[chatId].sessions) allUsers[chatId].sessions = [];
+    allUsers[chatId].sessions.push({
+      id: Date.now().toString(),
+      startedAt: session.startedAt,
+      finishedAt: session.finishedAt,
+      durationSec: session.durationSec,
+      distanceM: session.distanceM,
+      avgPaceSecPerKm: session.avgPaceSecPerKm,
+      geojson: session.geojson,
+      mode: session.mode
+    });
+    fs.writeFileSync(userDataPath, JSON.stringify(allUsers, null, 2));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Получение истории тренировок пользователя
+app.get('/api/sessions', (req, res) => {
+  const chatId = req.query.chatId;
+  if (!chatId) return res.status(400).json({ ok: false, error: 'chatId required' });
+  try {
+    const userDataPath = path.join(__dirname, config.USER_DATA_FILE);
+    if (!fs.existsSync(userDataPath)) return res.json({ ok: true, sessions: [] });
+    const allUsers = JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
+    const sessions = allUsers[chatId]?.sessions || [];
+    res.json({ ok: true, sessions });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
