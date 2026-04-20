@@ -152,8 +152,8 @@ app.post('/api/sessions', (req, res) => {
       if (line.geometry && Array.isArray(line.geometry.coordinates)) {
         const coords = line.geometry.coordinates;
         if (coords.length > 1) {
-          const start = coords[0];                       // [lon, lat]
-          const end   = coords[coords.length - 1];
+          const start  = coords[0];                     // [lon, lat]
+          const end    = coords[coords.length - 1];
           const center = coords[Math.floor(coords.length / 2)];
 
           const userRoute = {
@@ -163,15 +163,25 @@ app.post('/api/sessions', (req, res) => {
             distanceM: session.distanceM,
             durationSec: session.durationSec,
             avgPaceSecPerKm: session.avgPaceSecPerKm,
-            start: { lon: start[0], lat: start[1] },
-            end:   { lon: end[0],   lat: end[1] },
+            start:  { lon: start[0],  lat: start[1] },
+            end:    { lon: end[0],    lat: end[1] },
             center: { lon: center[0], lat: center[1] },
             geojson: session.geojson
           };
 
           allUsers[chatId].userRoutes.push(userRoute);
+
+          // === Записываем free-run в историю бота ===
+          userService.addRouteToHistory(chatId, userRoute.name, userRoute.id);
         }
       }
+    }
+
+    // ---- Если это planned_route — пишем в историю тоже, по имени системного маршрута ----
+    if (session.mode === 'planned_route' && session.plannedRouteId) {
+      const route = routeService.findRouteById(session.plannedRouteId);
+      const historyRouteName = route ? route.name : `Маршрут ${session.plannedRouteId}`;
+      userService.addRouteToHistory(chatId, historyRouteName, session.plannedRouteId);
     }
 
     fs.writeFileSync(userDataPath, JSON.stringify(allUsers, null, 2));
