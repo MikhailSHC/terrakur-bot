@@ -13,7 +13,15 @@ function createMockDeps() {
         sessionsByChatId.set(chatId, [...existing, session]);
       }),
       addRouteToHistory: jest.fn(),
-      getSessions: jest.fn((chatId) => sessionsByChatId.get(chatId) || [])
+      getSessions: jest.fn((chatId) => sessionsByChatId.get(chatId) || []),
+      getLifetimeStats: jest.fn((chatId) => {
+        const sessions = sessionsByChatId.get(chatId) || [];
+        return {
+          totalDistanceM: sessions.reduce((sum, s) => sum + (Number(s.distanceM) || 0), 0),
+          totalDurationSec: sessions.reduce((sum, s) => sum + (Number(s.durationSec) || 0), 0),
+          totalSessions: sessions.length
+        };
+      })
     },
     routeService: {
       findRouteById: jest.fn(() => null),

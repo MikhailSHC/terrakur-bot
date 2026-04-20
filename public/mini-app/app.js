@@ -70,9 +70,6 @@ const AUTO_PAUSE_SPEED_M_S = 0.45;
 const AUTO_PAUSE_IDLE_MS = 10000;
 const AUTO_RESUME_SPEED_M_S = 1.1;
 
-const WARMUP_REQUIRED_FIXES = 3;
-const WARMUP_MAX_ACCURACY_M = 20;
-
 const CAMERA_UPDATE_INTERVAL_MS = 2500;
 const CAMERA_MIN_MOVE_M = 8;
 
@@ -165,8 +162,6 @@ let gpsQualityEl = null;
 let routeProgressEl = null;
 let recenterBtn = null;
 
-let gpsWarmupGoodFixes = 0;
-let gpsWarmupReady = false;
 let lastKnownPosition = null;
 
 let autoPausedBySystem = false;
@@ -391,16 +386,7 @@ function smoothCameraFollow(center, now) {
   lastFlyTime = now;
 }
 
-function processWarmupAndStartProximity(latitude, longitude, accuracy) {
-  if (typeof accuracy === 'number') {
-    if (accuracy <= WARMUP_MAX_ACCURACY_M) {
-      gpsWarmupGoodFixes += 1;
-    } else {
-      gpsWarmupGoodFixes = Math.max(0, gpsWarmupGoodFixes - 1);
-    }
-    gpsWarmupReady = gpsWarmupGoodFixes >= WARMUP_REQUIRED_FIXES;
-  }
-
+function processStartProximity(latitude, longitude) {
   if (sessionMode === 'planned_route' && plannedStart && !isTracking) {
     const distToStart = haversineDistance(
       plannedStart[1],
@@ -434,7 +420,7 @@ function ensurePassiveLocationWatch() {
       const now = Date.now();
       lastKnownPosition = { latitude, longitude, accuracy };
       updateGPSQuality(accuracy);
-      processWarmupAndStartProximity(latitude, longitude, accuracy);
+      processStartProximity(latitude, longitude);
       updateUserMarker([longitude, latitude]);
 
       if (!isTracking && isFollowingUser) {
@@ -647,17 +633,13 @@ function getUserLocation() {
       const { latitude, longitude, accuracy } = pos.coords;
       lastKnownPosition = { latitude, longitude, accuracy };
       updateGPSQuality(accuracy);
-      processWarmupAndStartProximity(latitude, longitude, accuracy);
+      processStartProximity(latitude, longitude);
 
       addUserMarker([longitude, latitude]);
 
       map.flyTo({ center: [longitude, latitude], zoom: 15 });
 
-      if (gpsWarmupReady) {
-        statusDiv.innerText = '✅ GPS готов, можно стартовать';
-      } else {
-        statusDiv.innerText = `📡 Стабилизация GPS (${gpsWarmupGoodFixes}/${WARMUP_REQUIRED_FIXES})...`;
-      }
+      statusDiv.innerText = '✅ GPS готов, можно стартовать';
 
       setTimeout(() => {
 
@@ -1239,6 +1221,15 @@ function setReplayCoordinates(coords) {
 
 function animateCompletedPath(trackCoords) {
   if (!Array.isArray(trackCoords) || trackCoords.length < 2 || !map) return;
+
+  // Hide live red track so replay animation is clearly visible.
+  if (map.getSource('run-track')) {
+    map.getSource('run-track').setData({
+      type: 'FeatureCollection',
+      features: []
+    });
+  }
+
   ensureReplayLayer();
 
   const totalPoints = trackCoords.length;
@@ -1493,21 +1484,13 @@ function startRun() {
 
   }
 
-  if (!gpsWarmupReady) {
-    statusDiv.innerText = `📡 Подождите стабилизацию GPS (${gpsWarmupGoodFixes}/${WARMUP_REQUIRED_FIXES})`;
-    return;
-  }
-
-
-
   // Для готового маршрута: требуем дойти до старта
 
   if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart) {
     if (lastKnownPosition) {
-      processWarmupAndStartProximity(
+      processStartProximity(
         lastKnownPosition.latitude,
-        lastKnownPosition.longitude,
-        lastKnownPosition.accuracy
+        lastKnownPosition.longitude
       );
     }
     if (hasReachedStart) {

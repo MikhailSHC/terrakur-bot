@@ -110,7 +110,8 @@ function createApiRouter({ userService, routeService, miniAppAuth }) {
   router.get('/sessions', miniAppAuth, (req, res) => {
     try {
       const sessions = userService.getSessions(req.chatId);
-      return res.json({ ok: true, sessions });
+      const lifetime = userService.getLifetimeStats(req.chatId);
+      return res.json({ ok: true, sessions, lifetime });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }

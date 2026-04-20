@@ -49,6 +49,9 @@ class UserService {
         availableRoutes: [],
         history: [],
         sessions: [],
+        totalDistanceM: 0,
+        totalDurationSec: 0,
+        totalSessions: 0,
         lastLocation: null,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
@@ -63,6 +66,9 @@ class UserService {
     // Миграция/инициализация недостающих полей
     if (!Array.isArray(u.history)) u.history = [];
     if (!Array.isArray(u.sessions)) u.sessions = [];
+    if (typeof u.totalDistanceM !== 'number') u.totalDistanceM = 0;
+    if (typeof u.totalDurationSec !== 'number') u.totalDurationSec = 0;
+    if (typeof u.totalSessions !== 'number') u.totalSessions = 0;
     if (!('lastLocation' in u)) u.lastLocation = null;
     if (!u.createdAt) u.createdAt = new Date().toISOString();
     if (!u.lastUpdated) u.lastUpdated = new Date().toISOString();
@@ -191,6 +197,9 @@ class UserService {
     const record = { id: sessionId, ...sessionData };
 
     session.sessions.push(record);
+    session.totalDistanceM += Number(record.distanceM) || 0;
+    session.totalDurationSec += Number(record.durationSec) || 0;
+    session.totalSessions += 1;
 
     if (session.sessions.length > 500) {
       session.sessions = session.sessions.slice(-500);
@@ -200,6 +209,15 @@ class UserService {
     this.saveData();
 
     return record;
+  }
+
+  getLifetimeStats(chatId) {
+    const session = this.getUserSession(chatId);
+    return {
+      totalDistanceM: Number(session.totalDistanceM) || 0,
+      totalDurationSec: Number(session.totalDurationSec) || 0,
+      totalSessions: Number(session.totalSessions) || 0
+    };
   }
 
   getSessions(chatId, limit = null) {
