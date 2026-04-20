@@ -15,8 +15,7 @@ if (!config.BOT_TOKEN) {
 }
 
 if (!config.MINI_APP_AUTH_SECRET) {
-  console.error('❌ MINI_APP_AUTH_SECRET не найден в переменных окружения');
-  process.exit(1);
+  console.warn('⚠️ MINI_APP_AUTH_SECRET не задан, mini-app auth отключен');
 }
 
 process.on('uncaughtException', (err) => {

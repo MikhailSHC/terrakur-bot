@@ -23,6 +23,11 @@ function createMiniAppAuthMiddleware(secret) {
       return res.status(400).json({ ok: false, error: 'Invalid chatId' });
     }
 
+    if (!secret) {
+      req.chatId = String(chatId);
+      return next();
+    }
+
     const token = getToken(req);
     const verification = verifyMiniAppToken(chatId, token, secret);
     if (!verification.ok) {

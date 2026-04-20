@@ -3,12 +3,16 @@ const { formatRouteList, formatRouteDetails } = require('../utils/helpers');
 const { createMiniAppToken } = require('../utils/miniAppAuth');
 
 function buildMiniAppUrl(config, chatId, extraParams = {}) {
-  const token = createMiniAppToken(chatId, config.MINI_APP_AUTH_SECRET);
-  const params = new URLSearchParams({
+  const paramsObject = {
     chatId: String(chatId),
-    authToken: token,
     ...extraParams
-  });
+  };
+
+  if (config.MINI_APP_AUTH_SECRET) {
+    paramsObject.authToken = createMiniAppToken(chatId, config.MINI_APP_AUTH_SECRET);
+  }
+
+  const params = new URLSearchParams(paramsObject);
   return `${config.MINI_APP_URL}?${params.toString()}`;
 }
 
