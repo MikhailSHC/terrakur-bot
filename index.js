@@ -275,6 +275,28 @@ bot.on('message_callback', async (ctx) => {
     return;
   }
 
+  // ===== НОВОЕ: НАЧАТЬ СВОЙ ТРЕК (free_run) =====
+  if (callbackData === 'start_free_track') {
+    const navUrl = `${config.MINI_APP_URL}?chatId=${encodeURIComponent(chatId)}`;
+
+    await bot.api.sendMessageToChat(
+      chatId,
+      '🧭 Начинаем ваш личный трек!\n\n' +
+      'Откройте трекер по ссылке:\n' +
+      `${navUrl}\n\n` +
+      'Нажмите "Старт" в мини-приложении, чтобы начать запись маршрута.',
+      { parse_mode: 'Markdown' }
+    );
+
+    userService.setUserState(chatId, 'free_run_started', {
+      lastFreeRun: {
+        startedAt: new Date().toISOString()
+      }
+    });
+
+    return;
+  }
+
   if (callbackData === 'find_routes') {
     await bot.api.sendMessageToChat(chatId, 'Выберите город:', {
       attachments: [keyboards.locationKeyboard]
@@ -415,9 +437,7 @@ bot.on('message_callback', async (ctx) => {
     console.log('Найден маршрут:', route ? route.name : 'НЕ НАЙДЕН');
 
     if (route) {
-      console.log('Добавляем маршрут в историю для', chatId);
       userService.addRouteToHistory(chatId, route.name, routeId);
-      console.log('История после добавления:', userService.getUserSession(chatId).history);
 
       const navUrl = `${config.MINI_APP_URL}?routeId=${encodeURIComponent(route.id)}&chatId=${encodeURIComponent(chatId)}`;
       console.log('navUrl =', navUrl);

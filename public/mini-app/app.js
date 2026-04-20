@@ -16,6 +16,9 @@ let lastSavedPoint = null;
 
 // (опционально) запланированный маршрут
 let plannedRoute = null;
+let plannedStart = null;      // точка старта готового маршрута [lon, lat]
+let hasReachedStart = false;  // достиг ли пользователь старта
+const START_RADIUS_M = 50;    // радиус в метрах для старта
 
 // DOM-элементы
 const statsPanel   = document.getElementById('statsPanel');
@@ -28,9 +31,10 @@ const routesBtn    = document.getElementById('routesBtn');
 const historyBtn   = document.getElementById('historyBtn');
 
 // Параметры из URL
-const urlParams = new URLSearchParams(window.location.search);
-const routeId   = urlParams.get('routeId');
-const chatId    = urlParams.get('chatId') || 'test_user';
+const urlParams   = new URLSearchParams(window.location.search);
+const routeId     = urlParams.get('routeId');
+const chatId      = urlParams.get('chatId') || 'test_user';
+const sessionMode = routeId ? 'planned_route' : 'free_run';
 
 // Параметры фильтрации GPS
 const MIN_DISTANCE_METERS   = 8;    // минимальное смещение, чтобы считать движение (≈8 м)
@@ -119,11 +123,13 @@ async function loadPlannedRoute(id) {
       });
     }
 
-    const coords  = plannedRoute.geometry.coordinates;
-    const center  = coords[Math.floor(coords.length / 2)];
+    const coords = plannedRoute.geometry.coordinates;
+    const center = coords[Math.floor(coords.length / 2)];
+    plannedStart = coords[0];
+
     map.flyTo({ center: [center[0], center[1]], zoom: 14 });
 
-    statusDiv.innerText = `✅ Маршрут "${plannedRoute.properties.name}" загружен. Нажмите "Старт"`;
+    statusDiv.innerText = `✅ Маршрут "${plannedRoute.properties.name}" загружен. Подойдите к точке старта и нажмите "Старт"`;
     setTimeout(() => {
       if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
     }, 3000);
@@ -196,7 +202,6 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 // === ЛОГИКА ФИЛЬТРАЦИИ GPS ===
 
 function shouldSavePoint(lat, lng, now, accuracy) {
-  // 1. Слишком неточная точка
   if (typeof accuracy === 'number' && accuracy > MAX_ACCURACY_METERS) {
     console.warn(`Точка отброшена по accuracy = ${accuracy.toFixed(1)} м`);
     return false;
@@ -204,29 +209,31 @@ function shouldSavePoint(lat, lng, now, accuracy) {
 
   if (!lastSavedPoint) return true;
 
-  const dist    = haversineDistance(lastSavedPoint.lat, lastSavedPoint.lng, lat, lng);
+  const dist     = haversineDistance(lastSavedPoint.lat, lastSavedPoint.lng, lat, lng);
   const timeDiff = now - lastSavedPoint.timestamp;
 
-  // 2. Выброс по "нереальной" скорости
   if (timeDiff > 0) {
-    const speed = dist / (timeDiff / 1000); // м/с
+    const speed = dist / (timeDiff / 1000);
     if (speed > MAX_SPEED_M_S && dist > MIN_DISTANCE_METERS) {
       console.warn(`Выброс по скорости: ${speed.toFixed(1)} м/с (dist=${dist.toFixed(1)} м, dt=${timeDiff} мс, acc=${accuracy})`);
       return false;
     }
   }
 
-  // 3. Слишком быстрый скачок на коротком интервале
   if (dist > MAX_JUMP_METERS && timeDiff < MIN_TIME_MS) {
     console.warn(`Выброс GPS: ${dist.toFixed(1)} м за ${timeDiff} мс (acc=${accuracy})`);
     return false;
   }
 
-  // 4. Либо прошло достаточно времени, либо реально сдвинулись
   return dist >= MIN_DISTANCE_METERS || timeDiff >= MIN_TIME_MS;
 }
 
 function addFilteredPoint(lat, lng, timestamp, accuracy) {
+  // Для готового маршрута – не пишем трек, пока не достигнут старт
+  if (sessionMode === 'planned_route' && plannedRoute && !hasReachedStart) {
+    return false;
+  }
+
   if (!shouldSavePoint(lat, lng, timestamp, accuracy)) return false;
 
   const point = { lat, lng, timestamp, accuracy };
@@ -323,6 +330,25 @@ function onGPSPosition(pos) {
 
   updateUserMarker(center);
 
+  if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart) {
+    const distToStart = haversineDistance(
+      plannedStart[1], plannedStart[0],
+      center[1], center[0]
+    );
+
+    if (distToStart <= START_RADIUS_M) {
+      hasReachedStart = true;
+      statusDiv.innerText = '✅ Вы на старте маршрута, можно бежать!';
+      setTimeout(() => {
+        if (statusDiv.innerText.includes('старте маршрута')) {
+          statusDiv.innerText = '';
+        }
+      }, 3000);
+    } else {
+      statusDiv.innerText = `🏁 Подойдите к точке старта (≈ ${distToStart.toFixed(0)} м)`;
+    }
+  }
+
   if (now - lastFlyTime > FLY_INTERVAL_MS) {
     map.flyTo({ center, zoom: 16, duration: 500 });
     lastFlyTime = now;
@@ -338,6 +364,11 @@ function startRun() {
 
   if (!navigator.geolocation) {
     statusDiv.innerText = '❌ Геолокация недоступна';
+    return;
+  }
+
+  if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart) {
+    statusDiv.innerText = '🏁 Сначала подойдите к точке старта маршрута (синяя линия на карте)';
     return;
   }
 
@@ -397,8 +428,8 @@ function pauseResume() {
       );
     }
   } else {
-    isPaused    = true;
-    pauseStart  = Date.now();
+    isPaused   = true;
+    pauseStart = Date.now();
     startBtn.textContent = '▶️ Старт';
     statusDiv.innerText  = '⏸ Тренировка на паузе';
 
@@ -420,8 +451,8 @@ async function stopAndSave() {
   isTracking = false;
   isPaused   = false;
 
-  const endTime   = Date.now();
-  let elapsedSec  = (endTime - startTime - pausedDuration) / 1000;
+  const endTime  = Date.now();
+  let elapsedSec = (endTime - startTime - pausedDuration) / 1000;
   if (elapsedSec < 0) elapsedSec = 0;
 
   const distanceM       = totalDistanceM;
@@ -452,13 +483,15 @@ async function stopAndSave() {
     distanceM,
     avgPaceSecPerKm,
     geojson: geojsonTrack,
-    mode: plannedRoute ? 'planned_route' : 'free_run'
+    mode: sessionMode
   };
 
-  if (plannedRoute && plannedRoute.properties && plannedRoute.properties.id) {
-    session.plannedRouteId = plannedRoute.properties.id;
-  } else if (routeId) {
-    session.plannedRouteId = routeId;
+  if (sessionMode === 'planned_route') {
+    if (plannedRoute && plannedRoute.properties && plannedRoute.properties.id) {
+      session.plannedRouteId = plannedRoute.properties.id;
+    } else if (routeId) {
+      session.plannedRouteId = routeId;
+    }
   }
 
   try {
