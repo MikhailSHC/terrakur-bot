@@ -6,21 +6,21 @@ const routes = [
     id: 'tamanskiy-les',
     locationId: 'stavropol',
 
-    name: 'Tamanskiy Les',
-    description: 'Beautiful forest trail with diverse flora and fauna',
+    name: 'Таманский лес',
+    description: 'Красивая лесная тропа с разнообразной флорой и фауной',
 
     activities: ['walking', 'running', 'nordic_walking'],
 
     difficulty: 1,
-    duration: '1-2 hours',
+    duration: '1-2 часа',
 
-    distanceKm: 4,             // условный mid-point из "3-5 km"
-    distanceText: '3-5 km',
+    distanceKm: 4,             // условный mid-point из "3-5 км"
+    distanceText: '3-5 км',
 
     poi: [
-      'Forest entrance',
-      'Observation deck',
-      'Lake viewpoint'
+      'Вход в лес',
+      'Смотровая площадка',
+      'Вид на озеро'
     ],
 
     targetAudience: ['beginners', 'families', 'elderly'],
@@ -39,20 +39,21 @@ const routes = [
     id: 'tatarskoe-gorodische',
     locationId: 'stavropol',
 
-    name: 'Tatarskoe Gorodische',
-    description: 'Historical archaeological site with panoramic views',
+    name: 'Татарское городище',
+    description: 'Исторический археологический памятник с панорамными видами',
 
     activities: ['walking', 'running', 'nordic_walking'],
 
     difficulty: 2,
-    duration: '2-3 hours',
+    duration: '2-3 часа',
 
-    distanceKm: 5,           // из "4-6 km"
-    distanceText: '4-6 km',
+    distanceKm: 5,           // из "4-6 км"
+    distanceText: '4-6 км',
 
     poi: [
-      'Archaeological site',
-      'Viewing platform',
+      'Археологический памятник',
+      'Смотровая площадка',
+      'Исторические маркеры',
       'Historical markers'
     ],
 
@@ -71,21 +72,21 @@ const routes = [
     id: 'kholodnye-rodniki',
     locationId: 'stavropol',
 
-    name: 'Kholodnye Rodniki',
-    description: 'Cold springs area with pools and waterfalls',
+    name: 'Холодные родники',
+    description: 'Зона холодных родников с бассейнами и водопадами',
 
     activities: ['walking', 'nordic_walking'],
 
     difficulty: 1,
-    duration: '1-1.5 hours',
+    duration: '1-1.5 часа',
 
-    distanceKm: 2.5,        // из "2-3 km"
-    distanceText: '2-3 km',
+    distanceKm: 2.5,        // из "2-3 км"
+    distanceText: '2-3 км',
 
     poi: [
-      'Upper pools',
-      'Rotonda',
-      'Crystal streams waterfall'
+      'Верхние бассейны',
+      'Ротонда',
+      'Водопад Хрустальные ручьи'
     ],
 
     targetAudience: ['beginners', 'families', 'elderly'],
@@ -105,21 +106,21 @@ const routes = [
     id: 'gora-strizhament',
     locationId: 'kavminvody',
 
-    name: 'Gora Strizhament',
-    description: 'Ecological trail on Strizhament mountain',
+    name: 'Гора Стрижамент',
+    description: 'Экологическая тропа на горе Стрижамент',
 
     activities: ['walking', 'running', 'nordic_walking'],
 
     difficulty: 3,
-    duration: '3-4 hours',
+    duration: '3-4 часа',
 
-    distanceKm: 10,          // из "8-12 km"
-    distanceText: '8-12 km',
+    distanceKm: 10,          // из "8-12 км"
+    distanceText: '8-12 км',
 
     poi: [
-      'Mountain peak',
-      'View points',
-      'Ecological trail stops'
+      'Горная вершина',
+      'Смотровые площадки',
+      'Остановки на экологической тропе'
     ],
 
     targetAudience: ['advanced', 'experienced_hikers'],
@@ -140,21 +141,21 @@ const routes = [
     id: 'safonova-dacha',
     locationId: 'kavminvody',
 
-    name: 'Safonova dacha',
-    description: 'State nature reserve with protected trails',
+    name: 'Сафонова дача',
+    description: 'Государственный природный заповедник с охраняемыми тропами',
 
     activities: ['walking', 'nordic_walking'],
 
     difficulty: 2,
-    duration: '2-3 hours',
+    duration: '2-3 часа',
 
-    distanceKm: 6,           // из "5-7 km"
-    distanceText: '5-7 km',
+    distanceKm: 6,           // из "5-7 км"
+    distanceText: '5-7 км',
 
     poi: [
-      'Reserve entrance',
-      'Protected forest areas',
-      'Wildlife viewing points'
+      'Вход в заповедник',
+      'Охраняемые лесные зоны',
+      'Точки наблюдения за дикой природой'
     ],
 
     targetAudience: ['intermediate', 'nature_lovers'],
@@ -174,21 +175,21 @@ const routes = [
     id: 'kislovodsk-park-3',
     locationId: 'kislovodsk',
 
-    name: 'Kislovodsk park terrenkur #3',
-    description: 'Health trail in Kislovodsk park',
+    name: 'Кисловодский парк Терренкур #3',
+    description: 'Оздоровительная тропа в Кисловодском парке',
 
     activities: ['walking', 'nordic_walking'],
 
     difficulty: 1,
-    duration: '1-2 hours',
+    duration: '1-2 часа',
 
-    distanceKm: 3,           // из "2-4 km"
-    distanceText: '2-4 km',
+    distanceKm: 3,           // из "2-4 км"
+    distanceText: '2-4 км',
 
     poi: [
-      'Park entrance',
-      'Health trail markers',
-      'Scenic viewpoints'
+      'Вход в парк',
+      'Маркеры оздоровительной тропы',
+      'Смотровые площадки'
     ],
 
     targetAudience: ['beginners', 'health_focused', 'elderly'],
@@ -216,21 +217,21 @@ const routes = [
     id: 'olka-mountain',
     locationId: 'kislovodsk',
 
-    name: 'Olka Mountain',
-    description: 'Panoramic views from mountain peak',
+    name: 'Гора Олка',
+    description: 'Панорамные виды с горной вершины',
 
     activities: ['walking', 'running'],
 
     difficulty: 2,
-    duration: '2-3 hours',
+    duration: '2-3 часа',
 
-    distanceKm: 6,           // из "5-7 km"
-    distanceText: '5-7 km',
+    distanceKm: 6,           // из "5-7 км"
+    distanceText: '5-7 км',
 
     poi: [
-      'Mountain base',
-      'Viewing platforms',
-      'Summit area'
+      'Подножие горы',
+      'Смотровые площадки',
+      'Вершина'
     ],
 
     targetAudience: ['intermediate', 'photography_lovers'],
@@ -250,21 +251,21 @@ const routes = [
     id: 'proval-lake',
     locationId: 'pyatigorsk',
 
-    name: 'Proval Lake and Mashuk Mountain',
-    description: 'Scenic lake area with mountain views',
+    name: 'Озеро Провал и гора Машук',
+    description: 'Живописная озёрная местность с горными видами',
 
     activities: ['walking', 'running', 'nordic_walking'],
 
     difficulty: 2,
-    duration: '2-3 hours',
+    duration: '2-3 часа',
 
-    distanceKm: 5,           // из "4-6 km"
-    distanceText: '4-6 km',
+    distanceKm: 5,           // из "4-6 км"
+    distanceText: '4-6 км',
 
     poi: [
-      'Lake shore',
-      'Mountain trail access',
-      'Viewing platforms'
+      'Берег озера',
+      'Подход к горной тропе',
+      'Смотровые площадки'
     ],
 
     targetAudience: ['intermediate', 'nature_lovers'],
@@ -282,21 +283,21 @@ const routes = [
     id: 'gorsky-park',
     locationId: 'pyatigorsk',
 
-    name: 'Gorsky Park trails',
-    description: 'Urban park with multiple walking paths',
+    name: 'Горский парк тропы',
+    description: 'Городской парк с множеством пешеходных дорожек',
 
     activities: ['walking', 'running', 'cycling'],
 
     difficulty: 1,
-    duration: '1-2 hours',
+    duration: '1-2 часа',
 
-    distanceKm: 4,           // из "3-5 km"
-    distanceText: '3-5 km',
+    distanceKm: 4,           // из "3-5 км"
+    distanceText: '3-5 км',
 
     poi: [
-      'Park entrances',
-      'Walking loops',
-      'Recreation areas'
+      'Входы в парк',
+      'Пешеходные петли',
+      'Зоны отдыха'
     ],
 
     targetAudience: ['beginners', 'families', 'urban_walkers'],

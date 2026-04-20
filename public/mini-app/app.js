@@ -21,6 +21,15 @@ let plannedStart = null;      // точка старта готового мар
 let hasReachedStart = false;  // достиг ли пользователь старта
 const START_RADIUS_M = 20;    // радиус в метрах для старта
 
+// Отслеживание прогресса по маршруту
+let routeProgress = {
+  currentIndex: 0,      // текущий индекс точки маршрута
+  completedSegments: 0,  // сколько сегментов завершено
+  totalSegments: 0,       // всего сегментов в маршруте
+  isOnRoute: false,        // находится ли пользователь на маршруте
+  lastProgressUpdate: 0   // время последнего обновления прогресса
+};
+
 // DOM-элементы
 const statsPanel   = document.getElementById('statsPanel');
 const timeEl       = document.getElementById('time');
@@ -44,17 +53,20 @@ if (routeId || userRouteId) {
   sessionMode = 'free_run';
 }
 
-// Параметры фильтрации GPS
-const MIN_DISTANCE_METERS   = 8;    // минимальное смещение, чтобы считать движение (≈8 м)
-const MIN_TIME_MS           = 3000; // минимум 3 сек между точками
-const MAX_JUMP_METERS       = 60;   // выброс, если слишком далеко за короткий интервал
-const MAX_ACCURACY_METERS   = 30;   // отбрасываем точки с точностью хуже 30 м
-const MAX_SPEED_M_S         = 7;    // ~25 км/ч – всё выше считаем выбросом (для бега/джоггинга)
+// === GPS FILTERING ===
 
-// Для карты (ограничение частоты плавного flyTo)
-let lastFlyTime    = 0;
-const FLY_INTERVAL_MS = 5000;
+// Base parameters for filtering GPS
+const BASE_MIN_DISTANCE_METERS   = 8;    // minimum displacement to consider movement (approx. 8 m)
+const BASE_MIN_TIME_MS           = 3000; // minimum 3 sec between points
+const BASE_MAX_JUMP_METERS       = 60;   // outlier if too far in short interval
+const BASE_MAX_ACCURACY_METERS   = 30;   // discard points with accuracy worse than 30 m
+const BASE_MAX_SPEED_M_S         = 7;    // ~25 km/h - everything above is considered outlier (for running/jogging)
 
+// Adaptive filtering state
+let currentSpeed = 0;           // current speed in m/s
+let recentSpeeds = [];          // last few speed measurements for averaging
+const SPEED_HISTORY_SIZE = 5;   // how many recent speeds to average
+const WALKING_SPEED_THRESHOLD = 2; // m/s - below this is considered walking
 // Таймер для UI
 let uiTimerId = null;
 
@@ -143,13 +155,52 @@ async function loadPlannedRoute(id) {
 
     const coords = plannedRoute.geometry.coordinates;
     const center = coords[Math.floor(coords.length / 2)];
-    plannedStart = coords[0];
-
-    setStartMarker([plannedStart[0], plannedStart[1]]);
-
-    map.flyTo({ center: [center[0], center[1]], zoom: 14 });
-
-    statusDiv.innerText = `✅ Маршрут "${plannedRoute.properties.name}" загружен. Подойдите к точке старта и нажмите "Старт"`;
+    
+    // Находим ближайшую точку маршрута к пользователю
+    let nearestPoint = coords[0];
+    let minDistance = Infinity;
+    
+    // Получаем текущее местоположение пользователя для определения ближайшей точки
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+        
+        // Ищем ближайшую точку маршрута к пользователю
+        for (let i = 0; i < coords.length; i++) {
+          const dist = haversineDistance(userLat, userLng, coords[i][1], coords[i][0]);
+          if (dist < minDistance) {
+            minDistance = dist;
+            nearestPoint = coords[i];
+          }
+        }
+        
+        plannedStart = nearestPoint;
+        setStartMarker([plannedStart[0], plannedStart[1]]);
+        
+        // Центрируем карту между пользователем и ближайшей точкой
+        const mapCenter = [(userLng + plannedStart[0]) / 2, (userLat + plannedStart[1]) / 2];
+        map.flyTo({ center: mapCenter, zoom: 14 });
+        
+        const distanceToStart = Math.round(minDistance);
+        statusDiv.innerText = `✅ Маршрут "${plannedRoute.properties.name}" загружен. Ближайшая точка старта в ${distanceToStart}м. Подойдите и нажмите "Старт"`;
+        setTimeout(() => {
+          if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
+        }, 4000);
+      },
+      (err) => {
+        console.error('Ошибка получения местоположения:', err);
+        // Если не удалось получить местоположение, используем первую точку
+        plannedStart = coords[0];
+        setStartMarker([plannedStart[0], plannedStart[1]]);
+        map.flyTo({ center: [center[0], center[1]], zoom: 14 });
+        statusDiv.innerText = `✅ Маршрут "${plannedRoute.properties.name}" загружен. Подойдите к точке старта и нажмите "Старт"`;
+        setTimeout(() => {
+          if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
+        }, 3000);
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
     setTimeout(() => {
       if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
     }, 3000);
@@ -177,33 +228,51 @@ async function loadUserRoute(id, chatId) {
     const lineFeature = plannedRoute.features[0];
     const coords = lineFeature.geometry.coordinates;
 
-    plannedStart = coords[0];
-    const center = coords[Math.floor(coords.length / 2)];
-
-    if (!map.getSource('planned-route')) {
-      map.addSource('planned-route', { type: 'geojson', data: plannedRoute });
-      map.addLayer({
-        id: 'planned-route-line',
-        type: 'line',
-        source: 'planned-route',
-        paint: {
-          'line-color': '#3b82f6',
-          'line-width': 4,
-          'line-dasharray': [2, 2]
+    // Находим ближайшую точку маршрута к пользователю
+    let nearestPoint = coords[0];
+    let minDistance = Infinity;
+    
+    // Получаем текущее местоположение пользователя для определения ближайшей точки
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+        
+        // Ищем ближайшую точку маршрута к пользователю
+        for (let i = 0; i < coords.length; i++) {
+          const dist = haversineDistance(userLat, userLng, coords[i][1], coords[i][0]);
+          if (dist < minDistance) {
+            minDistance = dist;
+            nearestPoint = coords[i];
+          }
         }
-      });
-    } else {
-      map.getSource('planned-route').setData(plannedRoute);
-    }
-
-    setStartMarker([plannedStart[0], plannedStart[1]]);
-
-    map.flyTo({ center: [center[0], center[1]], zoom: 14 });
-
-    statusDiv.innerText = '✅ Ваш маршрут загружен. Подойдите к точке старта и нажмите "Старт"';
-    setTimeout(() => {
-      if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
-    }, 3000);
+        
+        plannedStart = nearestPoint;
+        setStartMarker([plannedStart[0], plannedStart[1]]);
+        
+        // Центрируем карту между пользователем и ближайшей точкой
+        const mapCenter = [(userLng + plannedStart[0]) / 2, (userLat + plannedStart[1]) / 2];
+        map.flyTo({ center: mapCenter, zoom: 14 });
+        
+        const distanceToStart = Math.round(minDistance);
+        statusDiv.innerText = `✅ Ваш маршрут загружен. Ближайшая точка старта в ${distanceToStart}м. Подойдите и нажмите "Старт"`;
+        setTimeout(() => {
+          if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
+        }, 4000);
+      },
+      (err) => {
+        console.error('Ошибка получения местоположения:', err);
+        // Если не удалось получить местоположение, используем первую точку
+        plannedStart = coords[0];
+        setStartMarker([plannedStart[0], plannedStart[1]]);
+        map.flyTo({ center: [coords[Math.floor(coords.length / 2)][0], coords[Math.floor(coords.length / 2)][1]], zoom: 14 });
+        statusDiv.innerText = '✅ Ваш маршрут загружен. Подойдите к точке старта и нажмите "Старт"';
+        setTimeout(() => {
+          if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
+        }, 3000);
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
 
     getUserLocation();
   } catch (err) {
@@ -281,11 +350,58 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// === ADAPTIVE FILTERING ===
+
+function updateCurrentSpeed(newSpeed) {
+  currentSpeed = newSpeed;
+  recentSpeeds.push(newSpeed);
+  if (recentSpeeds.length > SPEED_HISTORY_SIZE) {
+    recentSpeeds.shift();
+  }
+}
+
+function getAverageSpeed() {
+  if (recentSpeeds.length === 0) return 0;
+  return recentSpeeds.reduce((sum, speed) => sum + speed, 0) / recentSpeeds.length;
+}
+
+function getAdaptiveFilters() {
+  const avgSpeed = getAverageSpeed();
+  const isWalking = avgSpeed < WALKING_SPEED_THRESHOLD;
+  
+  return {
+    maxAccuracy: isWalking ? 20 : BASE_MAX_ACCURACY_METERS,  // stricter for walking
+    maxJump: isWalking ? 30 : BASE_MAX_JUMP_METERS,           // smaller jumps for walking
+    minDistance: isWalking ? 3 : BASE_MIN_DISTANCE_METERS,   // more precise for walking
+    maxSpeed: isWalking ? 4 : BASE_MAX_SPEED_M_S,             // lower max for walking
+    minTime: isWalking ? 2000 : BASE_MIN_TIME_MS              // more frequent for walking
+  };
+}
+
+function detectMovementPattern() {
+  if (recentSpeeds.length < 3) return 'unknown';
+  
+  const speeds = recentSpeeds.slice(-3);
+  const variance = speeds.reduce((sum, speed) => {
+    const avg = getAverageSpeed();
+    return sum + Math.pow(speed - avg, 2);
+  }, 0) / speeds.length;
+  
+  if (variance < 0.5) return 'steady';      // stable speed
+  if (variance > 2.0) return 'erratic';     // lots of speed changes
+  return 'normal';                          // normal variation
+}
+
 // === ЛОГИКА ФИЛЬТРАЦИИ GPS ===
 
 function shouldSavePoint(lat, lng, now, accuracy) {
-  if (typeof accuracy === 'number' && accuracy > MAX_ACCURACY_METERS) {
-    console.warn(`Точка отброшена по accuracy = ${accuracy.toFixed(1)} м`);
+  // Get adaptive filters based on current movement pattern
+  const filters = getAdaptiveFilters();
+  const pattern = detectMovementPattern();
+  
+  // Dynamic accuracy threshold
+  if (typeof accuracy === 'number' && accuracy > filters.maxAccuracy) {
+    console.warn(`Point rejected by accuracy = ${accuracy.toFixed(1)} m (threshold: ${filters.maxAccuracy} m, pattern: ${pattern})`);
     return false;
   }
 
@@ -294,20 +410,32 @@ function shouldSavePoint(lat, lng, now, accuracy) {
   const dist     = haversineDistance(lastSavedPoint.lat, lastSavedPoint.lng, lat, lng);
   const timeDiff = now - lastSavedPoint.timestamp;
 
+  // Update speed tracking
   if (timeDiff > 0) {
     const speed = dist / (timeDiff / 1000);
-    if (speed > MAX_SPEED_M_S && dist > MIN_DISTANCE_METERS) {
-      console.warn(`Выброс по скорости: ${speed.toFixed(1)} м/с (dist=${dist.toFixed(1)} м, dt=${timeDiff} мс, acc=${accuracy})`);
+    updateCurrentSpeed(speed);
+    
+    // Dynamic speed threshold
+    if (speed > filters.maxSpeed && dist > filters.minDistance) {
+      console.warn(`Speed outlier: ${speed.toFixed(1)} m/s (max: ${filters.maxSpeed} m/s, dist=${dist.toFixed(1)} m, dt=${timeDiff} ms, acc=${accuracy}, pattern: ${pattern})`);
       return false;
     }
   }
 
-  if (dist > MAX_JUMP_METERS && timeDiff < MIN_TIME_MS) {
-    console.warn(`Выброс GPS: ${dist.toFixed(1)} м за ${timeDiff} мс (acc=${accuracy})`);
+  // Dynamic jump detection
+  if (dist > filters.maxJump && timeDiff < filters.minTime) {
+    console.warn(`GPS jump: ${dist.toFixed(1)} m in ${timeDiff} ms (max: ${filters.maxJump} m, min time: ${filters.minTime} ms, acc=${accuracy}, pattern: ${pattern})`);
     return false;
   }
 
-  return dist >= MIN_DISTANCE_METERS || timeDiff >= MIN_TIME_MS;
+  // Dynamic distance/time thresholds
+  const shouldSave = dist >= filters.minDistance || timeDiff >= filters.minTime;
+  
+  if (!shouldSave) {
+    console.log(`Point too close/fast: dist=${dist.toFixed(1)} m (min: ${filters.minDistance} m), dt=${timeDiff} ms (min: ${filters.minTime} ms), pattern: ${pattern}`);
+  }
+
+  return shouldSave;
 }
 
 function addFilteredPoint(lat, lng, timestamp, accuracy) {
@@ -356,6 +484,7 @@ function updateStatsUI() {
   const paceMin = Math.floor(pace);
   const paceSec = Math.floor((pace - paceMin) * 60);
   paceEl.textContent = `${paceMin}'${paceSec.toString().padStart(2, '0')}"`;
+
 }
 
 function redrawTrack() {
@@ -412,6 +541,11 @@ function onGPSPosition(pos) {
 
   updateUserMarker(center);
 
+  // Отслеживание прогресса по маршруту
+  if (sessionMode === 'planned_route' && hasReachedStart) {
+    updateRouteProgress(latitude, longitude);
+  }
+
   if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart) {
     const distToStart = haversineDistance(
       plannedStart[1], plannedStart[0],
@@ -421,6 +555,7 @@ function onGPSPosition(pos) {
     if (distToStart <= START_RADIUS_M) {
       hasReachedStart = true;
       lastStartStatus = null;
+      initializeRouteProgress(); // инициализируем отслеживание прогресса
       statusDiv.innerText = '✅ Вы в зоне старта маршрута, можно начинать';
       setTimeout(() => {
         if (statusDiv.innerText.includes('зоне старта')) {
