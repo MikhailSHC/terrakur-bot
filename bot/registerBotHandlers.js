@@ -24,33 +24,86 @@ function registerBotHandlers(bot, deps) {
     commandHandler,
     messageHandler
   } = deps;
+  const ROUTES_PAGE_SIZE = 5;
+
+  async function sendRoutesPage(chatId, session, page = 0) {
+    const routes = session.availableRoutes || [];
+    if (!routes.length) return;
+
+    const totalPages = Math.max(1, Math.ceil(routes.length / ROUTES_PAGE_SIZE));
+    const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+    const start = currentPage * ROUTES_PAGE_SIZE;
+    const pageRoutes = routes.slice(start, start + ROUTES_PAGE_SIZE);
+
+    let text = '';
+    let keyboardOptions = {};
+
+    if (session.routeListMode === 'nearby') {
+      text = `📍 Ближайшие маршруты к вам (${currentPage + 1}/${totalPages}):\n\n`;
+      pageRoutes.forEach((route, idx) => {
+        const routeLengthText = route.distanceText || (route.distanceKm ? `~${route.distanceKm} км` : 'нет данных');
+        const distanceKm = typeof route.nearbyDistanceKm === 'number' ? route.nearbyDistanceKm.toFixed(1) : '?';
+        text += `${idx + 1}. ${route.name} — ${distanceKm} км от вас\n`;
+        text += `   🧭 Длина маршрута: ${routeLengthText}\n`;
+        text += `   (${route.nearbyLocationEmoji || ''} ${route.nearbyLocationName || 'Unknown location'})\n`;
+      });
+      text += '\nВыберите маршрут (кнопкой ниже):';
+      keyboardOptions = {
+        page: currentPage,
+        pageSize: ROUTES_PAGE_SIZE,
+        pagePayloadPrefix: 'nearby_page',
+        backPayload: 'main_menu'
+      };
+    } else {
+      text = `📍 Найдено ${routes.length} маршрутов для ${session.selectedActivity.name} в ${session.selectedLocation.name} (${currentPage + 1}/${totalPages}):\n\n`;
+      text += formatRouteList(pageRoutes);
+      text += '\nВыберите маршрут (кнопкой ниже):';
+      keyboardOptions = {
+        page: currentPage,
+        pageSize: ROUTES_PAGE_SIZE,
+        pagePayloadPrefix: 'routes_page',
+        backPayload: 'back_to_activities'
+      };
+    }
+
+    userService.setUserState(chatId, session.routeListMode === 'nearby' ? 'routes_nearby_shown' : 'routes_shown', {
+      currentRoutePage: currentPage
+    });
+
+    await bot.api.sendMessageToChat(chatId, text, {
+      attachments: [keyboards.getRouteKeyboard(routes, keyboardOptions)]
+    });
+  }
 
   async function showNearbyRoutesForUser(chatId, latitude, longitude) {
-    const routesWithDistance = routeService.getRoutesSortedByDistance(latitude, longitude, { limit: 5 });
+    const routesWithDistance = routeService.getRoutesSortedByDistance(latitude, longitude);
 
     if (!routesWithDistance.length) {
       await bot.api.sendMessageToChat(chatId, '❌ Пока не могу найти маршруты с координатами рядом с вами.');
       return;
     }
 
-    let text = '📍 Ближайшие маршруты к вам:\n\n';
-    const nearestRoutes = routesWithDistance.map((item, index) => {
+    const nearestRoutes = routesWithDistance.map((item) => {
       const { route, location, distanceKm } = item;
-      text += `${index + 1}. ${route.name} — ${distanceKm.toFixed(1)} км от вас\n`;
-      text += `   (${location?.emoji || ''} ${location?.name || 'Unknown location'})\n`;
-      return { ...route, locationId: location?.id || null };
+      return {
+        ...route,
+        locationId: location?.id || null,
+        nearbyDistanceKm: distanceKm,
+        nearbyLocationName: location?.name || null,
+        nearbyLocationEmoji: location?.emoji || ''
+      };
     });
-    text += '\nВыберите маршрут (введите номер или нажмите кнопку):';
 
     userService.setUserState(chatId, 'routes_nearby_shown', {
       availableRoutes: nearestRoutes,
       selectedLocation: null,
-      selectedActivity: null
+      selectedActivity: null,
+      routeListMode: 'nearby',
+      currentRoutePage: 0
     });
 
-    await bot.api.sendMessageToChat(chatId, text, {
-      attachments: [keyboards.getRouteKeyboard(nearestRoutes)]
-    });
+    const session = userService.getUserSession(chatId);
+    await sendRoutesPage(chatId, session, 0);
   }
 
   bot.command('start', async (ctx) => {
@@ -72,6 +125,7 @@ function registerBotHandlers(bot, deps) {
     const chatId = ctx.message?.recipient?.chat_id || ctx.chatId;
     const callbackData = ctx.callback?.payload;
     if (!chatId || !callbackData) return;
+    if (callbackData === 'noop') return;
 
     if (callbackData === 'main_menu') return commandHandler.handleStart(chatId);
     if (callbackData === 'help') return commandHandler.handleHelp(chatId);
@@ -147,17 +201,23 @@ function registerBotHandlers(bot, deps) {
         return;
       }
 
-      let text = `📍 Найдено ${routes.length} маршрутов для ${activity.name} в ${session.selectedLocation.name}:\n\n`;
-      text += formatRouteList(routes.slice(0, 5));
-      text += '\nВыберите маршрут (введите номер или нажмите кнопку):';
-
       userService.setUserState(chatId, 'routes_shown', {
         availableRoutes: routes,
         selectedActivity: activity,
-        selectedLocation: session.selectedLocation
+        selectedLocation: session.selectedLocation,
+        routeListMode: 'standard',
+        currentRoutePage: 0
       });
+      const updatedSession = userService.getUserSession(chatId);
+      await sendRoutesPage(chatId, updatedSession, 0);
+      return;
+    }
 
-      await bot.api.sendMessageToChat(chatId, text, { attachments: [keyboards.getRouteKeyboard(routes)] });
+    if (callbackData.startsWith('routes_page_') || callbackData.startsWith('nearby_page_')) {
+      const nextPage = Number.parseInt(callbackData.split('_').pop(), 10);
+      if (Number.isNaN(nextPage)) return;
+      const session = userService.getUserSession(chatId);
+      await sendRoutesPage(chatId, session, nextPage);
       return;
     }
 
@@ -213,11 +273,13 @@ function registerBotHandlers(bot, deps) {
     if (callbackData === 'back_to_routes') {
       const session = userService.getUserSession(chatId);
       const routes = session.availableRoutes || [];
-      if (routes.length > 0 && session.selectedLocation && session.selectedActivity) {
-        let text = `📍 Найдено ${routes.length} маршрутов для ${session.selectedActivity.name} в ${session.selectedLocation.name}:\n\n`;
-        text += formatRouteList(routes.slice(0, 5));
-        text += '\nВыберите маршрут:';
-        await bot.api.sendMessageToChat(chatId, text, { attachments: [keyboards.getRouteKeyboard(routes)] });
+      if (!routes.length) return;
+      if (session.routeListMode === 'nearby') {
+        await sendRoutesPage(chatId, session, session.currentRoutePage || 0);
+        return;
+      }
+      if (session.selectedLocation && session.selectedActivity) {
+        await sendRoutesPage(chatId, session, session.currentRoutePage || 0);
       }
     }
   });

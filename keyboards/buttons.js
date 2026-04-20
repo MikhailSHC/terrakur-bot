@@ -9,10 +9,10 @@ const mainMenuKeyboard = {
         { type: 'callback', text: '🧭 Начать свой трек', payload: 'start_free_track' }
       ],
       [
-        { type: 'callback', text: '📋 Все маршруты', payload: 'find_routes' }
+        { type: 'callback', text: '📋 Маршруты Ставрополья', payload: 'find_routes' }
       ],
       [
-        { type: 'callback', text: '📍 Маршруты рядом', payload: 'nearby_routes' }
+        { type: 'callback', text: '📍 Рядом со мной', payload: 'nearby_routes' }
       ],
       [
         { type: 'callback', text: '📊 Моя история', payload: 'my_history' }
@@ -34,12 +34,12 @@ const locationKeyboard = {
   payload: {
     buttons: [
       [
-        { type: 'callback', text: 'Stavropol', payload: 'location_stavropol' },
-        { type: 'callback', text: 'KavMinVody', payload: 'location_kavminvody' }
+        { type: 'callback', text: 'Ставрополь', payload: 'location_stavropol' },
+        { type: 'callback', text: 'КавМинВоды', payload: 'location_kavminvody' }
       ],
       [
-        { type: 'callback', text: 'Kislovodsk', payload: 'location_kislovodsk' },
-        { type: 'callback', text: 'Pyatigorsk', payload: 'location_pyatigorsk' }
+        { type: 'callback', text: 'Кисловодск', payload: 'location_kislovodsk' },
+        { type: 'callback', text: 'Пятигорск', payload: 'location_pyatigorsk' }
       ]
     ]
   }
@@ -52,15 +52,15 @@ const activityKeyboard = {
   payload: {
     buttons: [
       [
-        { type: 'callback', text: '🚶 Walking', payload: 'activity_walking' },
-        { type: 'callback', text: '🏃 Running', payload: 'activity_running' }
+        { type: 'callback', text: '🚶 Ходьба', payload: 'activity_walking' },
+        { type: 'callback', text: '🏃 Бег', payload: 'activity_running' }
       ],
       [
-        { type: 'callback', text: '🥾 Nordic Walking', payload: 'activity_nordic_walking' },
-        { type: 'callback', text: '🚲 Cycling', payload: 'activity_cycling' }
+        { type: 'callback', text: '🥾 Скандинавская ходьба', payload: 'activity_nordic_walking' },
+        { type: 'callback', text: '🚲 Велосипед', payload: 'activity_cycling' }
       ],
       [
-        { type: 'callback', text: '⬅️ Back to locations', payload: 'back_to_locations' }
+        { type: 'callback', text: '⬅️ К выбору города', payload: 'back_to_locations' }
       ]
     ]
   }
@@ -68,19 +68,40 @@ const activityKeyboard = {
 
 
 // ==================== КЛАВИАТУРА ДЛЯ ВЫБОРА МАРШРУТА ====================
-function getRouteKeyboard(routes) {
+function getRouteKeyboard(routes, options = {}) {
+  const {
+    page = 0,
+    pageSize = 5,
+    pagePayloadPrefix = 'routes_page',
+    backPayload = 'back_to_activities'
+  } = options;
+
+  const totalPages = Math.max(1, Math.ceil(routes.length / pageSize));
+  const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+  const start = currentPage * pageSize;
+  const end = Math.min(start + pageSize, routes.length);
+
   const buttons = [];
   const row = [];
 
-  for (let i = 1; i <= Math.min(routes.length, 5); i++) {
-    row.push({ type: 'callback', text: String(i), payload: `route_${i - 1}` });
+  for (let i = start; i < end; i++) {
+    row.push({ type: 'callback', text: String(i - start + 1), payload: `route_${i}` });
     if (row.length === 3) {
       buttons.push([...row]);
       row.length = 0;
     }
   }
   if (row.length > 0) buttons.push([...row]);
-  buttons.push([{ type: 'callback', text: '⬅️ Back to activities', payload: 'back_to_activities' }]);
+
+  if (totalPages > 1) {
+    buttons.push([
+      { type: 'callback', text: '⬅️', payload: `${pagePayloadPrefix}_${Math.max(0, currentPage - 1)}` },
+      { type: 'callback', text: `${currentPage + 1}/${totalPages}`, payload: 'noop' },
+      { type: 'callback', text: '➡️', payload: `${pagePayloadPrefix}_${Math.min(totalPages - 1, currentPage + 1)}` }
+    ]);
+  }
+
+  buttons.push([{ type: 'callback', text: '⬅️ К выбору активности', payload: backPayload }]);
 
   return {
     type: 'inline_keyboard',
@@ -95,9 +116,9 @@ function getRouteDetailKeyboard(routeId) {
     type: 'inline_keyboard',
     payload: {
       buttons: [
-        [{ type: 'callback', text: '✅ START', payload: `start_route_${routeId}` }],
-        [{ type: 'callback', text: '⬅️ Back to routes', payload: 'back_to_routes' }],
-        [{ type: 'callback', text: '🏠 Main menu', payload: 'main_menu' }]
+        [{ type: 'callback', text: '✅ Старт', payload: `start_route_${routeId}` }],
+        [{ type: 'callback', text: '⬅️ К списку маршрутов', payload: 'back_to_routes' }],
+        [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
       ]
     }
   };

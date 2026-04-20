@@ -131,9 +131,7 @@ function getAuthHeaders() {
 
 // Base parameters for filtering GPS
 
-const BASE_MIN_DISTANCE_METERS   = 8;    // minimum displacement to consider movement (approx. 8 m)
-
-const BASE_MIN_TIME_MS           = 3000; // minimum 3 sec between points
+const BASE_MIN_DISTANCE_METERS   = 3;    // smoother visual track updates
 
 const BASE_MAX_JUMP_METERS       = 60;   // outlier if too far in short interval
 
@@ -158,7 +156,6 @@ let lastFlyTime = 0;
 let lastCameraCenter = null;
 let isFollowingUser = true;
 
-let gpsQualityEl = null;
 let routeProgressEl = null;
 let recenterBtn = null;
 
@@ -172,6 +169,7 @@ let replayPanelEl = null;
 
 const REPLAY_SOURCE_ID = 'run-replay-source';
 const REPLAY_LAYER_ID = 'run-replay-line';
+let redrawQueued = false;
 
 
 
@@ -283,15 +281,6 @@ function initMap() {
 }
 
 function ensureUiEnhancements() {
-  if (!gpsQualityEl) {
-    gpsQualityEl = document.createElement('div');
-    gpsQualityEl.id = 'gpsQuality';
-    gpsQualityEl.style.cssText =
-      'position:fixed;top:72px;right:16px;z-index:3;background:rgba(0,0,0,0.72);color:#fff;padding:6px 10px;border-radius:14px;font-size:11px;font-weight:600;';
-    gpsQualityEl.innerText = 'GPS: ...';
-    document.body.appendChild(gpsQualityEl);
-  }
-
   if (!routeProgressEl) {
     routeProgressEl = document.createElement('div');
     routeProgressEl.id = 'routeProgress';
@@ -347,24 +336,8 @@ function getRouteNameSafe() {
   return 'Маршрут';
 }
 
-function updateGPSQuality(accuracy) {
-  if (!gpsQualityEl) return;
-  if (typeof accuracy !== 'number') {
-    gpsQualityEl.innerText = 'GPS: ?';
-    return;
-  }
-  if (accuracy <= 10) {
-    gpsQualityEl.style.color = '#22c55e';
-    gpsQualityEl.innerText = `GPS: отлично (${Math.round(accuracy)}м)`;
-    return;
-  }
-  if (accuracy <= 20) {
-    gpsQualityEl.style.color = '#f59e0b';
-    gpsQualityEl.innerText = `GPS: средне (${Math.round(accuracy)}м)`;
-    return;
-  }
-  gpsQualityEl.style.color = '#ef4444';
-  gpsQualityEl.innerText = `GPS: слабо (${Math.round(accuracy)}м)`;
+function updateGPSQuality(_accuracy) {
+  // intentionally hidden in MVP UI to reduce visual noise
 }
 
 function smoothCameraFollow(center, now) {
@@ -936,14 +909,28 @@ function getAdaptiveFilters() {
 
     maxJump: isWalking ? 30 : BASE_MAX_JUMP_METERS,           // smaller jumps for walking
 
-    minDistance: isWalking ? 3 : BASE_MIN_DISTANCE_METERS,   // more precise for walking
+    minDistance: isWalking ? 2 : BASE_MIN_DISTANCE_METERS,
 
     maxSpeed: isWalking ? 4 : BASE_MAX_SPEED_M_S,             // lower max for walking
 
-    minTime: isWalking ? 2000 : BASE_MIN_TIME_MS              // more frequent for walking
+    minTime: isWalking ? 1000 : 800
 
   };
 
+}
+
+function scheduleTrackRedraw() {
+  if (redrawQueued) return;
+  redrawQueued = true;
+  const draw = () => {
+    redrawQueued = false;
+    redrawTrack();
+  };
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(draw);
+    return;
+  }
+  setTimeout(draw, 16);
 }
 
 
@@ -1106,7 +1093,7 @@ function addFilteredPoint(lat, lng, timestamp, accuracy) {
 
 
 
-  redrawTrack();
+  scheduleTrackRedraw();
 
   return true;
 
