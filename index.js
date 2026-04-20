@@ -2,15 +2,26 @@ const { Bot } = require('@maxhub/max-bot-api');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 
 const config = require('./config');
+
 const UserService = require('./services/userService');
 const RouteService = require('./services/routeService');
 const UserRoutesService = require('./services/userRoutesService');
+
 const CommandHandler = require('./handlers/commandHandler');
 const MessageHandler = require('./handlers/messageHandler');
 const keyboards = require('./keyboards/buttons');
 const { formatRouteList, formatRouteDetails } = require('./utils/helpers');
+
+// Проверка наличия BOT_TOKEN
+if (!config.BOT_TOKEN) {
+  console.error('❌ BOT_TOKEN не найден в переменных окружения');
+  console.error('Пожалуйста, добавьте BOT_TOKEN в .env файл');
+  process.exit(1);
+}
 
 // Отлавливаем все ошибки
 process.on('uncaughtException', (err) => {
@@ -30,6 +41,14 @@ process.on('unhandledRejection', (reason, promise) => {
 // ==================== EXPRESS / MINI-APP / API ====================
 
 const app = express();
+
+// Настройка безопасности
+app.use(cors());
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 100, // максимум 100 запросов
+  message: { ok: false, error: 'Слишком много запросов, попробуйте позже' }
+}));
 app.use(express.json());
 
 // Статика mini-app
@@ -38,7 +57,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Инициализация сервисов до API
 const userService = new UserService();
 const routeService = new RouteService();
-const userRoutesService = new UserRoutesService();
+const userRoutesService = new UserRoutesService(userService);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'API is alive' });
@@ -87,6 +106,8 @@ app.get('/api/routes', (req, res) => {
         geojson: f
       }));
     }
+
+    // Пользовательские маршруты можно будет добавить позже (через userService / userRoutesService)
     const userRoutes = [];
     res.json({ ok: true, routes: [...systemRoutes, ...userRoutes] });
   } catch (err) {
@@ -113,24 +134,21 @@ app.get('/api/routes/:id/geojson', (req, res) => {
 // Сохранение тренировочной сессии + создание пользовательских маршрутов + запись в историю
 app.post('/api/sessions', (req, res) => {
   const { chatId, session } = req.body;
-  if (!chatId || !session) {
-    return res.status(400).json({ ok: false, error: 'Missing data' });
+  
+  // Валидация входных данных
+  if (!chatId || !/^\d+$/.test(chatId)) {
+    return res.status(400).json({ ok: false, error: 'Неверный chatId' });
+  }
+  
+  if (!session || typeof session !== 'object') {
+    return res.status(400).json({ ok: false, error: 'Неверные данные сессии' });
+  }
+  
+  if (!session.mode || !['free_run', 'planned_route'].includes(session.mode)) {
+    return res.status(400).json({ ok: false, error: 'Неверный режим сессии' });
   }
 
   try {
-    const userDataPath = path.join(__dirname, config.USER_DATA_FILE);
-    let allUsers = {};
-    if (fs.existsSync(userDataPath)) {
-      allUsers = JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
-    }
-
-    if (!allUsers[chatId]) {
-      allUsers[chatId] = { sessions: [], userRoutes: [] };
-    }
-    if (!allUsers[chatId].sessions) allUsers[chatId].sessions = [];
-    if (!allUsers[chatId].userRoutes) allUsers[chatId].userRoutes = [];
-
-    // ---- Сохраняем саму тренировочную сессию ----
     const sessionId = session.sessionId || Date.now().toString();
 
     const sessionRecord = {
@@ -142,10 +160,12 @@ app.post('/api/sessions', (req, res) => {
       avgPaceSecPerKm: session.avgPaceSecPerKm,
       geojson: session.geojson,
       mode: session.mode,
-      plannedRouteId: session.plannedRouteId || null
+      plannedRouteId: session.plannedRouteId || null,
+      userRouteId: session.userRouteId || null
     };
 
-    allUsers[chatId].sessions.push(sessionRecord);
+    // Сохраняем сессию через UserService
+    userService.addSession(chatId, sessionRecord);
 
     // ---- Если это free_run — создаём пользовательский маршрут ----
     if (session.mode === 'free_run' && session.geojson && session.geojson.features?.length) {
@@ -153,7 +173,7 @@ app.post('/api/sessions', (req, res) => {
       if (line.geometry && Array.isArray(line.geometry.coordinates)) {
         const coords = line.geometry.coordinates;
         if (coords.length > 1) {
-          const start  = coords[0];                     // [lon, lat]
+          const start  = coords[0];                    // [lon, lat]
           const end    = coords[coords.length - 1];
           const center = coords[Math.floor(coords.length / 2)];
 
@@ -170,9 +190,9 @@ app.post('/api/sessions', (req, res) => {
             geojson: session.geojson
           };
 
-          allUsers[chatId].userRoutes.push(userRoute);
+          userService.addUserRoute(chatId, userRoute);
 
-          // === free-run в историю бота ===
+          // free-run в историю бота
           userService.addRouteToHistory(chatId, userRoute.name, userRoute.id);
         }
       }
@@ -185,7 +205,6 @@ app.post('/api/sessions', (req, res) => {
       userService.addRouteToHistory(chatId, historyRouteName, session.plannedRouteId);
     }
 
-    fs.writeFileSync(userDataPath, JSON.stringify(allUsers, null, 2));
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -193,15 +212,14 @@ app.post('/api/sessions', (req, res) => {
   }
 });
 
-// Получение истории тренировок пользователя
+// Получение истории тренировок пользователя (сырые сессии для mini-app)
 app.get('/api/sessions', (req, res) => {
   const chatId = req.query.chatId;
-  if (!chatId) return res.status(400).json({ ok: false, error: 'chatId required' });
+  if (!chatId || !/^\d+$/.test(chatId)) {
+    return res.status(400).json({ ok: false, error: 'Неверный chatId' });
+  }
   try {
-    const userDataPath = path.join(__dirname, config.USER_DATA_FILE);
-    if (!fs.existsSync(userDataPath)) return res.json({ ok: true, sessions: [] });
-    const allUsers = JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
-    const sessions = allUsers[chatId]?.sessions || [];
+    const sessions = userService.getSessions(chatId);
     res.json({ ok: true, sessions });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -213,19 +231,16 @@ app.get('/api/user-routes/:id', (req, res) => {
   const chatId = req.query.chatId;
   const routeId = req.params.id;
 
-  if (!chatId) {
-    return res.status(400).json({ ok: false, error: 'chatId required' });
+  if (!chatId || !/^\d+$/.test(chatId)) {
+    return res.status(400).json({ ok: false, error: 'Неверный chatId' });
+  }
+
+  if (!routeId || typeof routeId !== 'string') {
+    return res.status(400).json({ ok: false, error: 'Неверный routeId' });
   }
 
   try {
-    const userDataPath = path.join(__dirname, config.USER_DATA_FILE);
-    if (!fs.existsSync(userDataPath)) {
-      return res.status(404).json({ ok: false, error: 'User data not found' });
-    }
-    const allUsers = JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
-    const user = allUsers[String(chatId)] || {};
-    const routes = Array.isArray(user.userRoutes) ? user.userRoutes : [];
-    const route = routes.find(r => r.id === routeId);
+    const route = userRoutesService.getUserRouteById(chatId, routeId);
 
     if (!route) {
       return res.status(404).json({ ok: false, error: 'User route not found' });
@@ -703,7 +718,8 @@ bot.on('message_created', async (ctx) => {
         updatedAt: new Date().toISOString()
       };
 
-      userService.setUserState(chatId, 'geo_saved', { lastLocation });
+      // Сохраняем lastLocation через UserService
+      userService.setLastLocation(chatId, lastLocation);
 
       await showNearbyRoutesForUser(chatId, latitude, longitude);
       return;

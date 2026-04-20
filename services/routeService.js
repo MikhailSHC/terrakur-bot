@@ -4,15 +4,6 @@ const routes = require('../data/routesData');
 const LOCATIONS = require('../data/locationsData');
 const ACTIVITIES = require('../data/activitiesData');
 
-console.log('DEBUG routes isArray:', Array.isArray(routes));
-console.log('DEBUG routes value:', routes);
-
-console.log('DEBUG LOCATIONS isArray:', Array.isArray(LOCATIONS));
-console.log('DEBUG LOCATIONS value:', LOCATIONS);
-
-console.log('DEBUG ACTIVITIES isArray:', Array.isArray(ACTIVITIES));
-console.log('DEBUG ACTIVITIES value:', ACTIVITIES);
-
 class RouteService {
   // Локации
   getLocationById(id) {
