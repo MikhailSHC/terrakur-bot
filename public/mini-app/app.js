@@ -32,9 +32,16 @@ const startBtn     = document.getElementById('startBtn');
 
 // Параметры из URL
 const urlParams   = new URLSearchParams(window.location.search);
-const routeId     = urlParams.get('routeId');
+const routeId     = urlParams.get('routeId');       // системный маршрут
+const userRouteId = urlParams.get('userRouteId');   // личный маршрут
 const chatId      = urlParams.get('chatId') || 'test_user';
-const sessionMode = routeId ? 'planned_route' : 'free_run';
+
+let sessionMode;
+if (routeId || userRouteId) {
+  sessionMode = 'planned_route'; // и системный, и личный – "готовые" маршруты
+} else {
+  sessionMode = 'free_run';
+}
 
 // Параметры фильтрации GPS
 const MIN_DISTANCE_METERS   = 8;    // минимальное смещение, чтобы считать движение (≈8 м)
@@ -91,14 +98,19 @@ function initMap() {
     });
 
     if (routeId) {
+      // системный маршрут из routes.geojson
       loadPlannedRoute(routeId);
+    } else if (userRouteId) {
+      // личный маршрут из user_data.json
+      loadUserRoute(userRouteId, chatId);
     } else {
+      // свободный трек
       getUserLocation();
     }
   });
 }
 
-// === ЗАГРУЗКА МАРШРУТА (ОПЦИОНАЛЬНО) ===
+// === ЗАГРУЗКА СИСТЕМНОГО МАРШРУТА (routes.geojson) ===
 
 async function loadPlannedRoute(id) {
   try {
@@ -121,6 +133,8 @@ async function loadPlannedRoute(id) {
           'line-dasharray': [2, 2]
         }
       });
+    } else {
+      map.getSource('planned-route').setData(plannedRoute);
     }
 
     const coords = plannedRoute.geometry.coordinates;
@@ -138,6 +152,55 @@ async function loadPlannedRoute(id) {
   } catch (err) {
     console.error(err);
     statusDiv.innerText = '❌ Ошибка загрузки маршрута';
+  }
+}
+
+// === ЗАГРУЗКА ПОЛЬЗОВАТЕЛЬСКОГО МАРШРУТА (userRoutes) ===
+
+async function loadUserRoute(id, chatId) {
+  try {
+    statusDiv.innerText = 'Загрузка вашего маршрута...';
+    const res  = await fetch(`/api/user-routes/${encodeURIComponent(id)}?chatId=${encodeURIComponent(chatId)}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Unknown error');
+
+    const userRoute = data.route;
+    // userRoute.geojson — FeatureCollection с LineString
+    plannedRoute = userRoute.geojson;
+
+    const lineFeature = plannedRoute.features[0];
+    const coords = lineFeature.geometry.coordinates;
+
+    plannedStart = coords[0];
+    const center = coords[Math.floor(coords.length / 2)];
+
+    if (!map.getSource('planned-route')) {
+      map.addSource('planned-route', { type: 'geojson', data: plannedRoute });
+      map.addLayer({
+        id: 'planned-route-line',
+        type: 'line',
+        source: 'planned-route',
+        paint: {
+          'line-color': '#3b82f6',
+          'line-width': 4,
+          'line-dasharray': [2, 2]
+        }
+      });
+    } else {
+      map.getSource('planned-route').setData(plannedRoute);
+    }
+
+    map.flyTo({ center: [center[0], center[1]], zoom: 14 });
+
+    statusDiv.innerText = '✅ Ваш маршрут загружен. Подойдите к точке старта и нажмите "Старт"';
+    setTimeout(() => {
+      if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
+    }, 3000);
+
+    getUserLocation();
+  } catch (err) {
+    console.error(err);
+    statusDiv.innerText = '❌ Ошибка загрузки вашего маршрута';
   }
 }
 
@@ -487,10 +550,16 @@ async function stopAndSave() {
   };
 
   if (sessionMode === 'planned_route') {
-    if (plannedRoute && plannedRoute.properties && plannedRoute.properties.id) {
-      session.plannedRouteId = plannedRoute.properties.id;
-    } else if (routeId) {
-      session.plannedRouteId = routeId;
+    if (routeId) {
+      // системный маршрут
+      if (plannedRoute && plannedRoute.properties && plannedRoute.properties.id) {
+        session.plannedRouteId = plannedRoute.properties.id;
+      } else {
+        session.plannedRouteId = routeId;
+      }
+    } else if (userRouteId) {
+      // личный маршрут
+      session.userRouteId = userRouteId;
     }
   }
 
@@ -531,7 +600,7 @@ async function stopAndSave() {
 
 // === КНОПКИ ===
 
-startBtn.onclick   = () => (isTracking ? pauseResume() : startRun());
+startBtn.onclick = () => (isTracking ? pauseResume() : startRun());
 // routesBtn.onclick  = () => { statusDiv.innerText = 'Выберите маршрут в боте'; };
 // historyBtn.onclick = () => { statusDiv.innerText = 'История тренировок (скоро)'; };
 

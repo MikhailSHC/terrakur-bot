@@ -1,15 +1,16 @@
 const { Bot } = require('@maxhub/max-bot-api');
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 
 const config = require('./config');
 const UserService = require('./services/userService');
 const RouteService = require('./services/routeService');
+const UserRoutesService = require('./services/userRoutesService');
 const CommandHandler = require('./handlers/commandHandler');
 const MessageHandler = require('./handlers/messageHandler');
 const keyboards = require('./keyboards/buttons');
 const { formatRouteList, formatRouteDetails } = require('./utils/helpers');
-const fs = require('fs');
 
 // Отлавливаем все ошибки
 process.on('uncaughtException', (err) => {
@@ -25,6 +26,7 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error(reason);
   console.error('='.repeat(50));
 });
+
 // ==================== EXPRESS / MINI-APP / API ====================
 
 const app = express();
@@ -36,10 +38,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Инициализация сервисов до API
 const userService = new UserService();
 const routeService = new RouteService();
+const userRoutesService = new UserRoutesService();
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'API is alive' });
 });
+
 // API: получить маршрут по id
 app.get('/api/routes/:id', (req, res) => {
   try {
@@ -83,7 +87,6 @@ app.get('/api/routes', (req, res) => {
         geojson: f
       }));
     }
-    // Пользовательские маршруты (пока пусто, потом добавим)
     const userRoutes = [];
     res.json({ ok: true, routes: [...systemRoutes, ...userRoutes] });
   } catch (err) {
@@ -92,7 +95,7 @@ app.get('/api/routes', (req, res) => {
   }
 });
 
-// Получение одного маршрута по ID (в GeoJSON)
+// Получение одного системного маршрута по ID (в GeoJSON)
 app.get('/api/routes/:id/geojson', (req, res) => {
   const id = req.params.id;
   try {
@@ -107,9 +110,7 @@ app.get('/api/routes/:id/geojson', (req, res) => {
   }
 });
 
-// Сохранение тренировочной сессии
-// В index.js, в разделе API / scripts/api/sessions.js — куда у тебя сейчас это подключено
-
+// Сохранение тренировочной сессии + создание пользовательских маршрутов + запись в историю
 app.post('/api/sessions', (req, res) => {
   const { chatId, session } = req.body;
   if (!chatId || !session) {
@@ -171,13 +172,13 @@ app.post('/api/sessions', (req, res) => {
 
           allUsers[chatId].userRoutes.push(userRoute);
 
-          // === Записываем free-run в историю бота ===
+          // === free-run в историю бота ===
           userService.addRouteToHistory(chatId, userRoute.name, userRoute.id);
         }
       }
     }
 
-    // ---- Если это planned_route — пишем в историю тоже, по имени системного маршрута ----
+    // ---- Если это planned_route — пишем в историю по имени системного маршрута ----
     if (session.mode === 'planned_route' && session.plannedRouteId) {
       const route = routeService.findRouteById(session.plannedRouteId);
       const historyRouteName = route ? route.name : `Маршрут ${session.plannedRouteId}`;
@@ -207,9 +208,11 @@ app.get('/api/sessions', (req, res) => {
   }
 });
 
-// Получение пользовательских маршрутов
-app.get('/api/user-routes', (req, res) => {
+// Получение одного пользовательского маршрута по id
+app.get('/api/user-routes/:id', (req, res) => {
   const chatId = req.query.chatId;
+  const routeId = req.params.id;
+
   if (!chatId) {
     return res.status(400).json({ ok: false, error: 'chatId required' });
   }
@@ -217,12 +220,18 @@ app.get('/api/user-routes', (req, res) => {
   try {
     const userDataPath = path.join(__dirname, config.USER_DATA_FILE);
     if (!fs.existsSync(userDataPath)) {
-      return res.json({ ok: true, routes: [] });
+      return res.status(404).json({ ok: false, error: 'User data not found' });
     }
     const allUsers = JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
-    const user = allUsers[chatId] || {};
-    const routes = user.userRoutes || [];
-    res.json({ ok: true, routes });
+    const user = allUsers[String(chatId)] || {};
+    const routes = Array.isArray(user.userRoutes) ? user.userRoutes : [];
+    const route = routes.find(r => r.id === routeId);
+
+    if (!route) {
+      return res.status(404).json({ ok: false, error: 'User route not found' });
+    }
+
+    return res.json({ ok: true, route });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, error: err.message });
@@ -237,7 +246,6 @@ app.listen(PORT, () => {
 
 // ==================== BOT ====================
 
-// Инициализация бота MAX
 const bot = new Bot(config.BOT_TOKEN);
 
 // Хендлеры
@@ -246,7 +254,6 @@ const messageHandler = new MessageHandler(bot, userService, routeService, comman
 
 // ==================== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ====================
 
-// Показать ближайшие маршруты по координатам пользователя
 async function showNearbyRoutesForUser(chatId, latitude, longitude) {
   const routesWithDistance = routeService.getRoutesSortedByDistance(
     latitude,
@@ -353,17 +360,57 @@ bot.on('message_callback', async (ctx) => {
   }
 
   if (callbackData === 'my_routes') {
-  // пока простая заглушка, потом сделаем нормальный вывод
-  await bot.api.sendMessageToChat(
-    chatId,
-    '🧾 Ваши маршруты (free-run):\n\n' +
-    'Скоро здесь появится список ваших собственных маршрутов, ' +
-    'построенных через "Начать свой трек".'
-  );
-  return;
-}
+    const routes = userRoutesService.getUserRoutes(chatId);
 
-  // ===== НОВОЕ: НАЧАТЬ СВОЙ ТРЕК (free_run) =====
+    if (!routes.length) {
+      await bot.api.sendMessageToChat(
+        chatId,
+        '🧾 У вас пока нет собственных маршрутов.\n' +
+        'Нажмите «🧭 Начать свой трек», чтобы записать первый маршрут.'
+      );
+      return;
+    }
+
+    const lastRoutes = routes.slice(-5).reverse();
+    let text = '🧾 *Ваши маршруты (free-run):*\n\n';
+
+    lastRoutes.forEach((route, index) => {
+      const km = route.distanceM ? (route.distanceM / 1000).toFixed(2) : '0.00';
+      const durMin = route.durationSec ? Math.round(route.durationSec / 60) : 0;
+      text += `${index + 1}. ${route.name}\n`;
+      text += `   📏 ${km} км, ⏱ ${durMin} мин\n\n`;
+    });
+
+    const buttons = [];
+    const row = [];
+    for (let i = 0; i < lastRoutes.length; i++) {
+      row.push({ type: 'callback', text: String(i + 1), payload: `myroute_${i}` });
+      if (row.length === 3) {
+        buttons.push([...row]);
+        row.length = 0;
+      }
+    }
+    if (row.length) buttons.push([...row]);
+    buttons.push([{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]);
+
+    await bot.api.sendMessageToChat(chatId, text, {
+      parse_mode: 'Markdown',
+      attachments: [
+        {
+          type: 'inline_keyboard',
+          payload: { buttons }
+        }
+      ]
+    });
+
+    userService.setUserState(chatId, 'my_routes_shown', {
+      myRoutesList: lastRoutes
+    });
+
+    return;
+  }
+
+  // ===== НАЧАТЬ СВОЙ ТРЕК (free_run) =====
   if (callbackData === 'start_free_track') {
     const navUrl = `${config.MINI_APP_URL}?chatId=${encodeURIComponent(chatId)}`;
 
@@ -408,8 +455,6 @@ bot.on('message_callback', async (ctx) => {
     await showNearbyRoutesForUser(chatId, latitude, longitude);
     return;
   }
-
-  
 
   if (callbackData === 'settings') {
     await bot.api.sendMessageToChat(
@@ -516,6 +561,34 @@ bot.on('message_callback', async (ctx) => {
         '❌ Неверный маршрут. Пожалуйста, выберите номер из кнопок.'
       );
     }
+    return;
+  }
+
+  if (callbackData.startsWith('myroute_')) {
+    const idx = parseInt(callbackData.replace('myroute_', ''), 10);
+    const session = userService.getUserSession(chatId);
+    const myRoutesList = session.myRoutesList || [];
+
+    if (Number.isNaN(idx) || idx < 0 || idx >= myRoutesList.length) {
+      await bot.api.sendMessageToChat(
+        chatId,
+        '❌ Неверный номер маршрута. Пожалуйста, выберите из списка.'
+      );
+      return;
+    }
+
+    const route = myRoutesList[idx];
+
+    const navUrl = `${config.MINI_APP_URL}?chatId=${encodeURIComponent(chatId)}&userRouteId=${encodeURIComponent(route.id)}`;
+
+    await bot.api.sendMessageToChat(
+      chatId,
+      `✅ Личный маршрут *${route.name}* выбран!\n\n` +
+      `Откройте навигатор по ссылке:\n` +
+      `${navUrl}`,
+      { parse_mode: 'Markdown' }
+    );
+
     return;
   }
 
