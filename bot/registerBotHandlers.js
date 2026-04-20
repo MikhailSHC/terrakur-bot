@@ -16,6 +16,20 @@ function buildMiniAppUrl(config, chatId, extraParams = {}) {
   return `${config.MINI_APP_URL}?${params.toString()}`;
 }
 
+function getOpenRouteKeyboard(navUrl) {
+  return [
+    {
+      type: 'inline_keyboard',
+      payload: {
+        buttons: [
+          [{ type: 'link', text: '🗺️ Открыть маршрут', url: navUrl }],
+          [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+        ]
+      }
+    }
+  ];
+}
+
 function registerBotHandlers(bot, deps) {
   const {
     config,
@@ -45,7 +59,7 @@ function registerBotHandlers(bot, deps) {
         const distanceKm = typeof route.nearbyDistanceKm === 'number' ? route.nearbyDistanceKm.toFixed(1) : '?';
         text += `${idx + 1}. ${route.name} — ${distanceKm} км от вас\n`;
         text += `   🧭 Длина маршрута: ${routeLengthText}\n`;
-        text += `   (${route.nearbyLocationEmoji || ''} ${route.nearbyLocationName || 'Unknown location'})\n`;
+        text += `   (${route.nearbyLocationEmoji || ''} ${route.nearbyLocationName || 'Локация не указана'})\n`;
       });
       text += '\nВыберите маршрут (кнопкой ниже):';
       keyboardOptions = {
@@ -135,8 +149,11 @@ function registerBotHandlers(bot, deps) {
       const navUrl = buildMiniAppUrl(config, chatId);
       await bot.api.sendMessageToChat(
         chatId,
-        `🧭 Начинаем ваш личный трек!\n\nОткройте трекер по ссылке:\n${navUrl}\n\nНажмите "Старт" в мини-приложении, чтобы начать запись маршрута.`,
-        { parse_mode: 'Markdown' }
+        '🧭 Начинаем ваш личный трек!\n\nНажмите кнопку ниже, чтобы открыть трекер.',
+        {
+          parse_mode: 'Markdown',
+          attachments: getOpenRouteKeyboard(navUrl)
+        }
       );
       userService.setUserState(chatId, 'free_run_started', {
         lastFreeRun: { startedAt: new Date().toISOString() }
@@ -249,8 +266,11 @@ function registerBotHandlers(bot, deps) {
       const navUrl = buildMiniAppUrl(config, chatId, { routeId: route.id });
       await bot.api.sendMessageToChat(
         chatId,
-        `✅ Маршрут *${route.name}* начат!\n\nОткройте навигатор по ссылке:\n${navUrl}`,
-        { parse_mode: 'Markdown' }
+        `✅ Маршрут *${route.name}* начат!\n\nНажмите кнопку ниже, чтобы открыть навигатор.`,
+        {
+          parse_mode: 'Markdown',
+          attachments: getOpenRouteKeyboard(navUrl)
+        }
       );
       return;
     }

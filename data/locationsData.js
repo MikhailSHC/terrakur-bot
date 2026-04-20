@@ -3,22 +3,22 @@
 const LOCATIONS = [
   {
     id: 'stavropol',
-    name: 'Stavropol',
+    name: 'Ставрополь',
     emoji: '🏙️'
   },
   {
     id: 'kavminvody',
-    name: 'Kavkazskie Mineralnye Vody',
+    name: 'Кавказские Минеральные Воды',
     emoji: '⛰️'
   },
   {
     id: 'kislovodsk',
-    name: 'Kislovodsk',
+    name: 'Кисловодск',
     emoji: '🌳'
   },
   {
     id: 'pyatigorsk',
-    name: 'Pyatigorsk',
+    name: 'Пятигорск',
     emoji: '💧'
   }
 ];

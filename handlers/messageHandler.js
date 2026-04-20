@@ -93,13 +93,13 @@ class MessageHandler {
     async handleLocationSelection(chatId, messageText) {
         let location = null;
         
-        if (messageText === 'Stavropol') {
+        if (messageText === 'Ставрополь' || messageText === 'Stavropol') {
             location = this.routeService.getLocationById('stavropol');
-        } else if (messageText === 'KavMinVody') {
+        } else if (messageText === 'КавМинВоды' || messageText === 'KavMinVody') {
             location = this.routeService.getLocationById('kavminvody');
-        } else if (messageText === 'Kislovodsk') {
+        } else if (messageText === 'Кисловодск' || messageText === 'Kislovodsk') {
             location = this.routeService.getLocationById('kislovodsk');
-        } else if (messageText === 'Pyatigorsk') {
+        } else if (messageText === 'Пятигорск' || messageText === 'Pyatigorsk') {
             location = this.routeService.getLocationById('pyatigorsk');
         }
         

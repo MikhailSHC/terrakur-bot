@@ -4,19 +4,28 @@ const fs = require('fs');
 
 const path = require('path');
 
+const routes = require('../data/routesData');
 
+function buildFallbackTrack(route) {
+  const centerLat = route?.center?.lat;
+  const centerLon = route?.center?.lon;
+  if (typeof centerLat !== 'number' || typeof centerLon !== 'number') {
+    return [];
+  }
 
-// Путь к исходному routesData.js
+  // Approximate loop around center so each route has a start/finish geometry in MVP.
+  const radiusM = Math.max(80, Math.min(250, (Number(route.distanceKm) || 1) * 120));
+  const dLat = radiusM / 111320;
+  const dLon = radiusM / (111320 * Math.cos((centerLat * Math.PI) / 180));
 
-const routesPath = path.join(__dirname, '../data/routesData.js');
-
-// Читаем файл как текст, чтобы извлечь массив
-
-const routesContent = fs.readFileSync(routesPath, 'utf8');
-
-// Убираем module.exports = и выполняем eval (осторожно, но для своего скрипта ок)
-
-const routes = eval(routesContent.match(/module\.exports = (\[[\s\S]*\]);/)[1]);
+  return [
+    [centerLon, centerLat + dLat],
+    [centerLon + dLon, centerLat],
+    [centerLon, centerLat - dLat],
+    [centerLon - dLon, centerLat],
+    [centerLon, centerLat + dLat]
+  ];
+}
 
 
 
@@ -63,8 +72,8 @@ const geojsonRoutes = routes.map(route => {
     };
 
   } else {
-
-    // Если трека нет, создаём пустой Feature (только центр)
+    // Если трека нет, создаём fallback LineString вокруг центра.
+    const fallbackTrack = buildFallbackTrack(route);
 
     geojson = {
 
@@ -72,9 +81,9 @@ const geojsonRoutes = routes.map(route => {
 
       geometry: {
 
-        type: "Point",
+        type: "LineString",
 
-        coordinates: [route.center.lon, route.center.lat]
+        coordinates: fallbackTrack
 
       },
 
@@ -84,7 +93,12 @@ const geojsonRoutes = routes.map(route => {
 
         name: route.name,
 
-        noTrack: true
+        noTrack: true,
+        distanceKm: route.distanceKm,
+        duration: route.duration,
+        difficulty: route.difficulty,
+        locationId: route.locationId,
+        activities: route.activities
 
       }
 

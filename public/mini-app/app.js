@@ -371,6 +371,7 @@ function processStartProximity(latitude, longitude) {
     if (distToStart <= START_RADIUS_M) {
       hasReachedStart = true;
       lastStartStatus = null;
+      removeStartMarker();
       statusDiv.innerText = '✅ Вы в зоне старта маршрута, нажмите "Старт"';
     } else {
       hasReachedStart = false;
@@ -812,11 +813,19 @@ function setStartMarker(lngLat) {
   const el = document.createElement('div');
 
   el.style.cssText =
-
-    'width:18px;height:18px;background:#3b82f6;border:2px solid white;border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.4);';
+    'width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.45);';
+  el.innerText = '🚩';
+  el.title = 'Точка старта';
 
   startMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
 
+}
+
+function removeStartMarker() {
+  if (startMarker) {
+    startMarker.remove();
+    startMarker = null;
+  }
 }
 
 
@@ -1430,6 +1439,7 @@ function onGPSPosition(pos) {
       hasReachedStart = true;
 
       lastStartStatus = null;
+      removeStartMarker();
 
       initializeRouteProgress(); // инициализируем отслеживание прогресса
 
@@ -1503,7 +1513,7 @@ function startRun() {
     if (hasReachedStart) {
       // fall through and start tracking
     } else {
-      statusDiv.innerText = '🏁 Сначала подойдите к точке старта маршрута (синяя линия на карте)';
+      statusDiv.innerText = '🏁 Сначала подойдите к стартовому флажку на карте';
       return;
     }
   }

@@ -4,46 +4,126 @@
     {
       "type": "Feature",
       "geometry": {
-        "type": "Point",
+        "type": "LineString",
         "coordinates": [
-          41.98,
-          39.05
+          [
+            41.98,
+            39.05224577793747
+          ],
+          [
+            41.98289182090752,
+            39.05
+          ],
+          [
+            41.98,
+            39.04775422206252
+          ],
+          [
+            41.977108179092475,
+            39.05
+          ],
+          [
+            41.98,
+            39.05224577793747
+          ]
         ]
       },
       "properties": {
         "id": "tamanskiy-les",
         "name": "Таманский лес",
-        "noTrack": true
+        "noTrack": true,
+        "distanceKm": 4,
+        "duration": "1-2 часа",
+        "difficulty": 1,
+        "locationId": "stavropol",
+        "activities": [
+          "walking",
+          "running",
+          "nordic_walking"
+        ]
       }
     },
     {
       "type": "Feature",
       "geometry": {
-        "type": "Point",
+        "type": "LineString",
         "coordinates": [
-          41.98,
-          40.05
+          [
+            41.98,
+            40.05224577793747
+          ],
+          [
+            41.98293380429236,
+            40.05
+          ],
+          [
+            41.98,
+            40.04775422206252
+          ],
+          [
+            41.977066195707636,
+            40.05
+          ],
+          [
+            41.98,
+            40.05224577793747
+          ]
         ]
       },
       "properties": {
         "id": "tatarskoe-gorodische",
         "name": "Татарское городище",
-        "noTrack": true
+        "noTrack": true,
+        "distanceKm": 5,
+        "duration": "2-3 часа",
+        "difficulty": 2,
+        "locationId": "stavropol",
+        "activities": [
+          "walking",
+          "running",
+          "nordic_walking"
+        ]
       }
     },
     {
       "type": "Feature",
       "geometry": {
-        "type": "Point",
+        "type": "LineString",
         "coordinates": [
-          41.98,
-          41.05
+          [
+            41.98,
+            41.05224577793747
+          ],
+          [
+            41.98297794513759,
+            41.05
+          ],
+          [
+            41.98,
+            41.04775422206252
+          ],
+          [
+            41.9770220548624,
+            41.05
+          ],
+          [
+            41.98,
+            41.05224577793747
+          ]
         ]
       },
       "properties": {
         "id": "kholodnye-rodniki",
         "name": "Холодные родники",
-        "noTrack": true
+        "noTrack": true,
+        "distanceKm": 2.5,
+        "duration": "1-1.5 часа",
+        "difficulty": 1,
+        "locationId": "stavropol",
+        "activities": [
+          "walking",
+          "nordic_walking"
+        ]
       }
     },
     {
@@ -79,16 +159,42 @@
     {
       "type": "Feature",
       "geometry": {
-        "type": "Point",
+        "type": "LineString",
         "coordinates": [
-          41.98,
-          43.05
+          [
+            41.98,
+            43.05224577793747
+          ],
+          [
+            41.98307321591523,
+            43.05
+          ],
+          [
+            41.98,
+            43.04775422206252
+          ],
+          [
+            41.97692678408476,
+            43.05
+          ],
+          [
+            41.98,
+            43.05224577793747
+          ]
         ]
       },
       "properties": {
         "id": "safonova-dacha",
         "name": "Сафонова дача",
-        "noTrack": true
+        "noTrack": true,
+        "distanceKm": 6,
+        "duration": "2-3 часа",
+        "difficulty": 2,
+        "locationId": "kavminvody",
+        "activities": [
+          "walking",
+          "nordic_walking"
+        ]
       }
     },
     {
@@ -127,46 +233,126 @@
     {
       "type": "Feature",
       "geometry": {
-        "type": "Point",
+        "type": "LineString",
         "coordinates": [
-          41.98,
-          46.05
+          [
+            41.98,
+            46.05224577793747
+          ],
+          [
+            41.98323584969066,
+            46.05
+          ],
+          [
+            41.98,
+            46.04775422206252
+          ],
+          [
+            41.976764150309336,
+            46.05
+          ],
+          [
+            41.98,
+            46.05224577793747
+          ]
         ]
       },
       "properties": {
         "id": "olka-mountain",
         "name": "Гора Олка",
-        "noTrack": true
+        "noTrack": true,
+        "distanceKm": 6,
+        "duration": "2-3 часа",
+        "difficulty": 2,
+        "locationId": "kislovodsk",
+        "activities": [
+          "walking",
+          "running"
+        ]
       }
     },
     {
       "type": "Feature",
       "geometry": {
-        "type": "Point",
+        "type": "LineString",
         "coordinates": [
-          41.98,
-          47.05
+          [
+            41.98,
+            47.05224577793747
+          ],
+          [
+            41.98329602317854,
+            47.05
+          ],
+          [
+            41.98,
+            47.04775422206252
+          ],
+          [
+            41.976703976821454,
+            47.05
+          ],
+          [
+            41.98,
+            47.05224577793747
+          ]
         ]
       },
       "properties": {
         "id": "proval-lake",
         "name": "Озеро Провал и гора Машук",
-        "noTrack": true
+        "noTrack": true,
+        "distanceKm": 5,
+        "duration": "2-3 часа",
+        "difficulty": 2,
+        "locationId": "pyatigorsk",
+        "activities": [
+          "walking",
+          "running",
+          "nordic_walking"
+        ]
       }
     },
     {
       "type": "Feature",
       "geometry": {
-        "type": "Point",
+        "type": "LineString",
         "coordinates": [
-          41.98,
-          48.05
+          [
+            41.98,
+            48.05224577793747
+          ],
+          [
+            41.98335951976309,
+            48.05
+          ],
+          [
+            41.98,
+            48.04775422206252
+          ],
+          [
+            41.9766404802369,
+            48.05
+          ],
+          [
+            41.98,
+            48.05224577793747
+          ]
         ]
       },
       "properties": {
         "id": "gorsky-park",
         "name": "Горский парк тропы",
-        "noTrack": true
+        "noTrack": true,
+        "distanceKm": 4,
+        "duration": "1-2 часа",
+        "difficulty": 1,
+        "locationId": "pyatigorsk",
+        "activities": [
+          "walking",
+          "running",
+          "cycling"
+        ]
       }
     }
   ]

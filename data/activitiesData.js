@@ -1,10 +1,10 @@
 // data/activitiesData.js
 
 const ACTIVITIES = [
-  { id: 'walking',        name: 'Walking',         emoji: '🚶', description: 'Casual walking for health and recreation' },
-  { id: 'running',        name: 'Running',         emoji: '🏃', description: 'Running and jogging for fitness' },
-  { id: 'nordic_walking', name: 'Nordic Walking',  emoji: '🥾', description: 'Walking with poles for full body workout' },
-  { id: 'cycling',        name: 'Cycling',         emoji: '🚲', description: 'Bicycle rides and cycling tours' }
+  { id: 'walking',        name: 'Ходьба',                emoji: '🚶', description: 'Спокойные прогулки для здоровья и отдыха' },
+  { id: 'running',        name: 'Бег',                   emoji: '🏃', description: 'Бег и джоггинг для поддержания формы' },
+  { id: 'nordic_walking', name: 'Скандинавская ходьба',  emoji: '🥾', description: 'Ходьба с палками для тренировки всего тела' },
+  { id: 'cycling',        name: 'Велосипед',             emoji: '🚲', description: 'Велопрогулки и веломаршруты' }
 ];
 
 module.exports = ACTIVITIES;
