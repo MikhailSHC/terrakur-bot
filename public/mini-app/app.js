@@ -1,15 +1,21 @@
-// app.js – TerraKur беговой трекер (исправленный)
+// app.js – TerraKur беговой трекер с фильтрацией GPS (кнопка "Старт")
 let map, userMarker, watchId = null;
 let isTracking = false, isPaused = false;
-let trackPoints = [], startTime = null, pausedDuration = 0, pauseStart = null;
+let trackPoints = [];
+let startTime = null, pausedDuration = 0, pauseStart = null;
 let plannedRoute = null;
+let lastSavedPoint = null;
+
+const MIN_DISTANCE_METERS = 5;
+const MIN_TIME_MS = 2000;
+const MAX_JUMP_METERS = 50;
 
 const statsPanel = document.getElementById('statsPanel');
 const timeEl = document.getElementById('time');
 const distanceEl = document.getElementById('distance');
 const paceEl = document.getElementById('pace');
 const statusDiv = document.getElementById('status');
-const freeRunBtn = document.getElementById('freeRunBtn');
+const startBtn = document.getElementById('startBtn');
 const routesBtn = document.getElementById('routesBtn');
 const historyBtn = document.getElementById('historyBtn');
 
@@ -22,15 +28,12 @@ function initMap() {
     container: 'map',
     style: {
       version: 8,
-      sources: {
-        osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256 }
-      },
+      sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256 } },
       layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
     },
     center: [42.7165, 43.9071], zoom: 13
   });
   map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
   map.on('load', () => {
     map.addSource('run-track', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({ id: 'run-line', type: 'line', source: 'run-track', paint: { 'line-color': '#ff4d4d', 'line-width': 5 } });
@@ -82,23 +85,49 @@ function addUserMarker(lngLat) {
   userMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
 }
 
-function updateUserMarker(lngLat) { userMarker ? userMarker.setLngLat(lngLat) : addUserMarker(lngLat); }
+function updateUserMarker(lngLat) {
+  userMarker ? userMarker.setLngLat(lngLat) : addUserMarker(lngLat);
+}
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000, toRad = (x) => x * Math.PI / 180;
+  const R = 6371000, toRad = x => x * Math.PI / 180;
   const φ1 = toRad(lat1), φ2 = toRad(lat2);
   const Δφ = toRad(lat2 - lat1), Δλ = toRad(lon2 - lon1);
   const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+function shouldSavePoint(lat, lng, now) {
+  if (!lastSavedPoint) return true;
+  const dist = haversineDistance(lastSavedPoint.lat, lastSavedPoint.lng, lat, lng);
+  const timeDiff = now - lastSavedPoint.timestamp;
+  if (dist > MAX_JUMP_METERS && timeDiff < MIN_TIME_MS) {
+    console.warn(`Выброс GPS: ${dist.toFixed(1)} м за ${timeDiff} мс`);
+    return false;
+  }
+  return (dist >= MIN_DISTANCE_METERS || timeDiff >= MIN_TIME_MS);
+}
+
+function addFilteredPoint(lat, lng, timestamp) {
+  if (!shouldSavePoint(lat, lng, timestamp)) return false;
+  const point = { lat, lng, timestamp };
+  trackPoints.push(point);
+  lastSavedPoint = point;
+  redrawTrack();
+  updateStatsUI();
+  return true;
+}
+
 function updateStatsUI() {
   if (!startTime || isPaused || !isTracking) return;
-  const elapsedSec = Math.max(0, (Date.now() - startTime - pausedDuration) / 1000);
+  const now = Date.now();
+  let elapsedSec = Math.max(0, (now - startTime - pausedDuration) / 1000);
   const minutes = Math.floor(elapsedSec / 60), seconds = Math.floor(elapsedSec % 60);
   timeEl.textContent = `${minutes}:${seconds.toString().padStart(2,'0')}`;
   let totalDistance = 0;
-  for (let i = 1; i < trackPoints.length; i++) totalDistance += haversineDistance(trackPoints[i-1].lat, trackPoints[i-1].lng, trackPoints[i].lat, trackPoints[i].lng);
+  for (let i = 1; i < trackPoints.length; i++) {
+    totalDistance += haversineDistance(trackPoints[i-1].lat, trackPoints[i-1].lng, trackPoints[i].lat, trackPoints[i].lng);
+  }
   const distanceKm = totalDistance / 1000;
   distanceEl.textContent = distanceKm.toFixed(2);
   let pace = 0;
@@ -115,33 +144,43 @@ function redrawTrack() {
   });
 }
 
-function addTrackPoint(lat, lng, timestamp) {
-  trackPoints.push({ lat, lng, timestamp });
-  redrawTrack();
-  updateStatsUI();
+function getSmoothedPosition() {
+  if (trackPoints.length === 0) return null;
+  const len = trackPoints.length;
+  const count = Math.min(3, len);
+  let sumLat = 0, sumLng = 0;
+  for (let i = len - count; i < len; i++) {
+    sumLat += trackPoints[i].lat;
+    sumLng += trackPoints[i].lng;
+  }
+  return { lat: sumLat / count, lng: sumLng / count };
+}
+
+function onGPSPosition(pos) {
+  if (!isTracking || isPaused) return;
+  const { latitude, longitude } = pos.coords;
+  const now = Date.now();
+  addFilteredPoint(latitude, longitude, now);
+  const smoothed = getSmoothedPosition();
+  if (smoothed) updateUserMarker([smoothed.lng, smoothed.lat]);
+  else updateUserMarker([longitude, latitude]);
+  if (smoothed) map.flyTo({ center: [smoothed.lng, smoothed.lat], zoom: 16, duration: 500 });
+  else map.flyTo({ center: [longitude, latitude], zoom: 16, duration: 500 });
 }
 
 function startRun() {
   if (isTracking) return;
   if (!navigator.geolocation) { statusDiv.innerText = '❌ Геолокация недоступна'; return; }
-  isTracking = true; isPaused = false; trackPoints = []; startTime = Date.now(); pausedDuration = 0; pauseStart = null;
+  isTracking = true; isPaused = false;
+  trackPoints = []; lastSavedPoint = null;
+  startTime = Date.now(); pausedDuration = 0; pauseStart = null;
   statsPanel.classList.remove('hidden');
-  freeRunBtn.textContent = '⏸ Пауза';
+  startBtn.textContent = '⏸ Пауза';
   routesBtn.disabled = historyBtn.disabled = true;
   statusDiv.innerText = '🏃 Тренировка началась...';
   redrawTrack();
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  watchId = navigator.geolocation.watchPosition(
-    (pos) => {
-      if (!isTracking || isPaused) return;
-      const { latitude, longitude } = pos.coords;
-      updateUserMarker([longitude, latitude]);
-      addTrackPoint(latitude, longitude, Date.now());
-      map.flyTo({ center: [longitude, latitude], zoom: 16, duration: 500 });
-    },
-    (err) => console.error(err),
-    { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
-  );
+  watchId = navigator.geolocation.watchPosition(onGPSPosition, err => console.error(err), { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 });
 }
 
 function pauseResume() {
@@ -150,14 +189,14 @@ function pauseResume() {
     isPaused = false;
     if (pauseStart) pausedDuration += Date.now() - pauseStart;
     pauseStart = null;
-    freeRunBtn.textContent = '⏸ Пауза';
+    startBtn.textContent = '⏸ Пауза';
     statusDiv.innerText = '▶️ Продолжаем...';
     setTimeout(() => { if (statusDiv.innerText === '▶️ Продолжаем...') statusDiv.innerText = ''; }, 1500);
-    if (watchId === null) watchId = navigator.geolocation.watchPosition(()=>{}, ()=>console.error, {enableHighAccuracy:true});
+    if (watchId === null) watchId = navigator.geolocation.watchPosition(onGPSPosition, err => console.error(err), { enableHighAccuracy: true });
   } else {
     isPaused = true;
     pauseStart = Date.now();
-    freeRunBtn.textContent = '▶️ Старт';
+    startBtn.textContent = '▶️ Старт';
     statusDiv.innerText = '⏸ Тренировка на паузе';
     if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   }
@@ -182,15 +221,15 @@ async function stopAndSave() {
     statusDiv.innerText = data.ok ? '✅ Тренировка сохранена!' : '⚠️ Ошибка сохранения';
   } catch (err) { statusDiv.innerText = '❌ Не удалось сохранить'; }
   statsPanel.classList.add('hidden');
-  freeRunBtn.textContent = '🏃 Свободная';
+  startBtn.textContent = '▶️ Старт';
   routesBtn.disabled = historyBtn.disabled = false;
   setTimeout(() => { if (statusDiv.innerText !== '✅ Тренировка сохранена!') statusDiv.innerText = ''; }, 3000);
   const stopBtn = document.getElementById('dynamicStopBtn');
   if (stopBtn) stopBtn.remove();
 }
 
-freeRunBtn.onclick = () => isTracking ? pauseResume() : startRun();
-routesBtn.onclick = () => statusDiv.innerText = 'Выбор маршрута осуществляется в боте';
+startBtn.onclick = () => isTracking ? pauseResume() : startRun();
+routesBtn.onclick = () => statusDiv.innerText = 'Выберите маршрут в боте';
 historyBtn.onclick = () => statusDiv.innerText = 'История тренировок (скоро)';
 
 function showStopButton() {
