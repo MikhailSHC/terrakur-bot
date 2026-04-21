@@ -9,6 +9,79 @@ class UserService {
     this.loadData();
   }
 
+  sanitizeSessionRecord(record) {
+    if (!record || typeof record !== 'object') return null;
+    return {
+      id: record.id || Date.now().toString(),
+      startedAt: record.startedAt || null,
+      finishedAt: record.finishedAt || null,
+      durationSec: Number(record.durationSec) || 0,
+      distanceM: Number(record.distanceM) || 0,
+      avgPaceSecPerKm: Number(record.avgPaceSecPerKm) || 0,
+      mode: record.mode || null,
+      plannedRouteId: record.plannedRouteId || null,
+      activityId: record.activityId || null,
+      // Тяжелый geojson оставляем только как есть, если он есть в записи;
+      // в persist-снимке ниже будем хранить его только у последних сессий.
+      geojson: record.geojson || null
+    };
+  }
+
+  buildPersistentSnapshot() {
+    const result = {};
+    const userEntries = Object.entries(this.userData || {});
+
+    for (const [chatId, user] of userEntries) {
+      if (!user || typeof user !== 'object') continue;
+
+      const historyRaw = Array.isArray(user.history) ? user.history : [];
+      const historyDedupMap = new Map();
+      for (const item of historyRaw) {
+        if (!item || typeof item !== 'object') continue;
+        const routeId = item.routeId || '';
+        const timestamp = item.timestamp || '';
+        const uniqueKey = `${routeId}|${timestamp}`;
+        historyDedupMap.set(uniqueKey, {
+          routeName: item.routeName || 'Маршрут',
+          routeId: item.routeId || null,
+          date: item.date || null,
+          completed: item.completed !== false,
+          timestamp: item.timestamp || new Date().toISOString()
+        });
+      }
+      const history = Array.from(historyDedupMap.values()).slice(-100);
+
+      const sessionsRaw = Array.isArray(user.sessions) ? user.sessions : [];
+      const sessionsSanitized = sessionsRaw
+        .map((s) => this.sanitizeSessionRecord(s))
+        .filter(Boolean)
+        .slice(-300);
+      const keepGeojsonFrom = Math.max(0, sessionsSanitized.length - 20);
+      const sessions = sessionsSanitized.map((s, idx) => {
+        if (idx < keepGeojsonFrom) {
+          return { ...s, geojson: null };
+        }
+        return s;
+      });
+
+      result[String(chatId)] = {
+        chatId: String(chatId),
+        // Оставляем только полезные для продукта поля.
+        history,
+        sessions,
+        totalDistanceM: Number(user.totalDistanceM) || 0,
+        totalDurationSec: Number(user.totalDurationSec) || 0,
+        totalSessions: Number(user.totalSessions) || 0,
+        lastLocation: user.lastLocation || null,
+        hasSeenWelcome: Boolean(user.hasSeenWelcome),
+        createdAt: user.createdAt || new Date().toISOString(),
+        lastUpdated: user.lastUpdated || new Date().toISOString()
+      };
+    }
+
+    return result;
+  }
+
   loadData() {
     try {
       if (fs.existsSync(this.dataFile)) {
@@ -27,9 +100,10 @@ class UserService {
 
   saveData() {
     try {
-      const data = JSON.stringify(this.userData, null, 2);
+      const snapshot = this.buildPersistentSnapshot();
+      const data = JSON.stringify(snapshot, null, 2);
       fs.writeFileSync(this.dataFile, data, 'utf8');
-      console.log(`💾 Сохранены данные для ${Object.keys(this.userData).length} пользователей`);
+      console.log(`💾 Сохранены данные для ${Object.keys(snapshot).length} пользователей`);
     } catch (error) {
       console.error('❌ Ошибка сохранения данных пользователей:', error.message);
       throw new Error('Не удалось сохранить данные пользователя');
@@ -53,6 +127,7 @@ class UserService {
         totalDurationSec: 0,
         totalSessions: 0,
         lastLocation: null,
+        hasSeenWelcome: false,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
       };
@@ -70,6 +145,7 @@ class UserService {
     if (typeof u.totalDurationSec !== 'number') u.totalDurationSec = 0;
     if (typeof u.totalSessions !== 'number') u.totalSessions = 0;
     if (!('lastLocation' in u)) u.lastLocation = null;
+    if (!('hasSeenWelcome' in u)) u.hasSeenWelcome = false;
     if (!u.createdAt) u.createdAt = new Date().toISOString();
     if (!u.lastUpdated) u.lastUpdated = new Date().toISOString();
     if (!('locationShareIntent' in u)) u.locationShareIntent = null;
@@ -99,13 +175,26 @@ class UserService {
   addRouteToHistory(chatId, routeName, routeId) {
     const id = String(chatId);
     const session = this.getUserSession(id);
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.parse(nowIso);
+
+    const lastEntry = Array.isArray(session.history) && session.history.length
+      ? session.history[session.history.length - 1]
+      : null;
+    if (lastEntry && lastEntry.routeId === routeId) {
+      const lastTsMs = Date.parse(lastEntry.timestamp || '');
+      if (Number.isFinite(lastTsMs) && nowMs - lastTsMs <= 15000) {
+        // Защита от дублей: один и тот же маршрут, записанный повторно сразу после предыдущей записи.
+        return;
+      }
+    }
 
     const historyEntry = {
       routeName: routeName,
       routeId: routeId,
       date: new Date().toLocaleString(),
       completed: true,
-      timestamp: new Date().toISOString()
+      timestamp: nowIso
     };
 
     session.history.push(historyEntry);

@@ -6,3 +6,10 @@ npm-debug.log
 .DS_Store
 .vscode/
 .idea/
+coverage/
+.nyc_output/
+*.tmp
+*.bak
+*.local
+.env.local
+.env.*.local

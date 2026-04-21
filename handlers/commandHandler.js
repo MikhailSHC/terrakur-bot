@@ -8,16 +8,23 @@ class CommandHandler {
     }
 
     async handleStart(chatId) {
-        this.userService.setUserState(chatId, 'start');
-        
-        await this.bot.api.sendMessageToChat(
-            chatId,
-            '🌲 *Добро пожаловать в TerraKur и ZHIV routes!* 🌲\n\n' +
-            'Я помогу найти идеальный маршрут для вашей активности в Ставропольском крае.\n\n' +
-            '🏙️ *Выберите действие:*',
-            { parse_mode: 'Markdown' }
-        );
-        
+        const session = this.userService.getUserSession(chatId);
+        const isFirstStart = !session.hasSeenWelcome;
+
+        this.userService.setUserState(chatId, 'start', {
+            hasSeenWelcome: true
+        });
+
+        if (isFirstStart) {
+            await this.bot.api.sendMessageToChat(
+                chatId,
+                '🌿 *Добро пожаловать в ЗОЖ-маршруты и тропы Ставрополья!*\n\n' +
+                'Здесь вы сможете выбрать маршрут по городу, найти тропы рядом с вами и сохранить свои тренировки в истории.\n\n' +
+                'Рад быть вашим проводником к активному отдыху 💚',
+                { parse_mode: 'Markdown' }
+            );
+        }
+
         await this.bot.api.sendMessageToChat(chatId, 'Главное меню:', {
             attachments: [keyboards.mainMenuKeyboard]
         });

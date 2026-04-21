@@ -8,12 +8,7 @@ module.exports = [
     ignores: [
       'node_modules/**',
       'data/user_data.json',
-      'public/mini-app/routes.geojson',
-      'public/mini-app/app_enhanced.js',
-      'public/mini-app/app_fixed.js',
-      'public/mini-app/fixes.js',
-      'public/mini-app/gps_functions_enhanced.js',
-      'public/mini-app/free_run_adaptations.js'
+      'public/mini-app/routes.geojson'
     ],
     languageOptions: {
       ecmaVersion: 2022,
