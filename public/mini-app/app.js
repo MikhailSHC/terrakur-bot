@@ -30,6 +30,12 @@ let pauseStart = null;
 
 let lastSavedPoint = null;
 
+/** Сглаженная позиция конца трека только для отрисовки (дистанция — по trackPoints) */
+let trailDisplayLat = null;
+let trailDisplayLng = null;
+const TRAIL_DISPLAY_SMOOTH_ALPHA = 0.38;
+const TRAIL_DISPLAY_MAX_LAG_M = 42;
+
 let startMarker = null;    // маркер точки старта маршрута
 let finishMarker = null;   // маркер точки финиша маршрута
 
@@ -68,7 +74,7 @@ let routeProgress = {
 
 const OFF_ROUTE_RADIUS_M = 35;
 const OFF_ROUTE_GRACE_MS = 12000;
-const PROGRESS_UPDATE_INTERVAL_MS = 2000;
+const PROGRESS_UPDATE_INTERVAL_MS = 1000;
 
 /** Источники GeoJSON: пройденный участок (сплошной зелёный) и остаток (синий пунктир) */
 const PLANNED_ROUTE_DONE_SOURCE = 'planned-route-done';
@@ -1376,6 +1382,33 @@ function shouldSavePoint(lat, lng, now, accuracy) {
 
 }
 
+function resetTrailDisplayHead() {
+  trailDisplayLat = null;
+  trailDisplayLng = null;
+}
+
+function snapTrailDisplayTo(lat, lng) {
+  trailDisplayLat = lat;
+  trailDisplayLng = lng;
+}
+
+function updateTrailDisplayHead(rawLat, rawLng) {
+  if (trailDisplayLat === null || trailDisplayLng === null) {
+    trailDisplayLat = rawLat;
+    trailDisplayLng = rawLng;
+    return;
+  }
+  const lag = haversineDistance(trailDisplayLat, trailDisplayLng, rawLat, rawLng);
+  if (lag > TRAIL_DISPLAY_MAX_LAG_M) {
+    trailDisplayLat = rawLat;
+    trailDisplayLng = rawLng;
+    return;
+  }
+  const a = TRAIL_DISPLAY_SMOOTH_ALPHA;
+  trailDisplayLat = a * rawLat + (1 - a) * trailDisplayLat;
+  trailDisplayLng = a * rawLng + (1 - a) * trailDisplayLng;
+}
+
 
 
 function addFilteredPoint(lat, lng, timestamp, accuracy) {
@@ -1413,10 +1446,6 @@ function addFilteredPoint(lat, lng, timestamp, accuracy) {
   trackPoints.push(point);
 
   lastSavedPoint = point;
-
-
-
-  scheduleTrackRedraw();
 
   return true;
 
@@ -1483,6 +1512,19 @@ function redrawTrack() {
 
 
   const coordinates = trackPoints.map(p => [p.lng, p.lat]);
+
+  if (
+    isTracking &&
+    trailDisplayLat != null &&
+    trailDisplayLng != null &&
+    trackPoints.length > 0
+  ) {
+    const last = coordinates[coordinates.length - 1];
+    const dHead = haversineDistance(last[1], last[0], trailDisplayLat, trailDisplayLng);
+    if (dHead >= 0.65) {
+      coordinates.push([trailDisplayLng, trailDisplayLat]);
+    }
+  }
 
 
 
@@ -1728,17 +1770,23 @@ function onGPSPosition(pos) {
 
 
 
-  addFilteredPoint(latitude, longitude, now, accuracy);
+  const savedPoint = addFilteredPoint(latitude, longitude, now, accuracy);
 
+  if (savedPoint) {
+    snapTrailDisplayTo(latitude, longitude);
+  } else {
+    updateTrailDisplayHead(latitude, longitude);
+  }
 
+  scheduleTrackRedraw();
 
-  const smoothed = getSmoothedPosition();
-
-  const center   = smoothed
-
-    ? [smoothed.lng, smoothed.lat]
-
-    : [longitude, latitude];
+  const center =
+    trailDisplayLat != null && trailDisplayLng != null
+      ? [trailDisplayLng, trailDisplayLat]
+      : (() => {
+          const smoothed = getSmoothedPosition();
+          return smoothed ? [smoothed.lng, smoothed.lat] : [longitude, latitude];
+        })();
 
 
 
@@ -1876,6 +1924,7 @@ function startRun() {
     lastSavedPoint = null;
     lastRawPoint = null;
     autoPausedBySystem = false;
+    resetTrailDisplayHead();
     clearNavToStartLine();
     if (replayPanelEl) replayPanelEl.style.display = 'none';
     if (map?.getSource(REPLAY_SOURCE_ID)) {
