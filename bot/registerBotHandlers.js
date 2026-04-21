@@ -161,7 +161,7 @@ function registerBotHandlers(bot, deps) {
     const chatId = ctx.chatId;
     if (!chatId) return;
     userService.getUserSession(chatId);
-    await commandHandler.handleStart(chatId);
+    await commandHandler.handleStart(chatId, { withGreeting: true });
   });
 
   bot.command('help', async (ctx) => {
@@ -451,7 +451,7 @@ function registerBotHandlers(bot, deps) {
         messageText = body;
       }
       if (messageText === '/start') {
-        await commandHandler.handleStart(chatId);
+        await commandHandler.handleStart(chatId, { withGreeting: true });
         return;
       }
       if (messageText && !messageText.startsWith('/')) {

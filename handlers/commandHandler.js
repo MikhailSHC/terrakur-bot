@@ -7,15 +7,14 @@ class CommandHandler {
         this.routeService = routeService;
     }
 
-    async handleStart(chatId) {
-        const session = this.userService.getUserSession(chatId);
-        const isFirstStart = !session.hasSeenWelcome;
+    async handleStart(chatId, options = {}) {
+        const { withGreeting = false } = options;
 
         this.userService.setUserState(chatId, 'start', {
             hasSeenWelcome: true
         });
 
-        if (isFirstStart) {
+        if (withGreeting) {
             await this.bot.api.sendMessageToChat(
                 chatId,
                 '🌿 *Добро пожаловать в ЗОЖ-маршруты и тропы Ставрополья!*\n\n' +
@@ -107,7 +106,7 @@ class CommandHandler {
                 '📝 Пока нет тренировок с этим видом активности в трекере и нет завершённых маршрутов в истории.';
             await this.bot.api.sendMessageToChat(chatId, profileText, {
                 parse_mode: 'Markdown',
-                attachments: [keyboards.mainMenuKeyboard]
+                attachments: [keyboards.profileActivityResultKeyboard]
             });
             return;
         }
@@ -117,7 +116,7 @@ class CommandHandler {
                 '🗺️ В истории завершённых маршрутов для этого вида пока пусто (есть только записи трекера выше).';
             await this.bot.api.sendMessageToChat(chatId, profileText, {
                 parse_mode: 'Markdown',
-                attachments: [keyboards.mainMenuKeyboard]
+                attachments: [keyboards.profileActivityResultKeyboard]
             });
             return;
         }
@@ -132,7 +131,7 @@ class CommandHandler {
             });
         await this.bot.api.sendMessageToChat(chatId, profileText, {
             parse_mode: 'Markdown',
-            attachments: [keyboards.mainMenuKeyboard]
+            attachments: [keyboards.profileActivityResultKeyboard]
         });
     }
 

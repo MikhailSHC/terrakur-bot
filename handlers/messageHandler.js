@@ -11,13 +11,17 @@ class MessageHandler {
     // Главный обработчик текстовых сообщений
     async handleTextMessage(chatId, messageText) {
         const session = this.userService.getUserSession(chatId);
+        const normalized = String(messageText || '').trim().toLowerCase();
 
         if (
-            messageText === 'Начать' ||
-            messageText === 'start' ||
-            messageText === '/start'
+            normalized === '/start' ||
+            normalized === 'start' ||
+            normalized === 'начать' ||
+            normalized.startsWith('начать ')
         ) {
-            await this.commandHandler.handleStart(chatId);
+            await this.commandHandler.handleStart(chatId, {
+                withGreeting: normalized === '/start'
+            });
             return;
         }
         

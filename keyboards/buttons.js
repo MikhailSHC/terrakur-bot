@@ -223,6 +223,17 @@ const profileActivityPickKeyboard = {
   }
 };
 
+/** Навигация в экранах статистики по выбранной активности */
+const profileActivityResultKeyboard = {
+  type: 'inline_keyboard',
+  payload: {
+    buttons: [
+      [{ type: 'callback', text: '⬅️ К выбору активности', payload: 'my_history' }],
+      [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+    ]
+  }
+};
+
 
 module.exports = {
   mainMenuKeyboard,
@@ -234,5 +245,6 @@ module.exports = {
   settingsKeyboard,
   nearbyActivityPickKeyboard,
   freeTrackActivityPickKeyboard,
-  profileActivityPickKeyboard
+  profileActivityPickKeyboard,
+  profileActivityResultKeyboard
 };
