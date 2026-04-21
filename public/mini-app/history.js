@@ -25,16 +25,22 @@ function getParams() {
 }
 
 function closeMiniAppToBot(statusEl) {
+  const closeCandidates = [
+    window?.MAX?.WebApp?.close,
+    window?.Max?.WebApp?.close,
+    window?.max?.WebApp?.close,
+    window?.MAX?.MiniApp?.close,
+    window?.Max?.MiniApp?.close,
+    window?.max?.MiniApp?.close,
+    window?.Telegram?.WebApp?.close
+  ];
   try {
-    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
-      window.Telegram.WebApp.close();
-      return;
+    for (const closeFn of closeCandidates) {
+      if (typeof closeFn === 'function') {
+        closeFn.call(window);
+        return;
+      }
     }
-  } catch {
-    // noop
-  }
-  try {
-    window.close();
   } catch {
     // noop
   }

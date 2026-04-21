@@ -963,6 +963,7 @@ function addUserMarker(lngLat) {
 
 
 function updateUserMarker(lngLat, headingDeg = null) {
+  if (isReplayRunning) return;
 
   if (userMarker) userMarker.setLngLat(lngLat);
 
@@ -1617,16 +1618,22 @@ function setReplayCoordinates(coords) {
 }
 
 function closeMiniAppToBot() {
+  const closeCandidates = [
+    window?.MAX?.WebApp?.close,
+    window?.Max?.WebApp?.close,
+    window?.max?.WebApp?.close,
+    window?.MAX?.MiniApp?.close,
+    window?.Max?.MiniApp?.close,
+    window?.max?.MiniApp?.close,
+    window?.Telegram?.WebApp?.close
+  ];
   try {
-    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
-      window.Telegram.WebApp.close();
-      return;
+    for (const closeFn of closeCandidates) {
+      if (typeof closeFn === 'function') {
+        closeFn.call(window);
+        return;
+      }
     }
-  } catch {
-    // noop
-  }
-  try {
-    window.close();
   } catch {
     // noop
   }
@@ -1635,6 +1642,18 @@ function closeMiniAppToBot() {
   } else {
     statusDiv.innerText = 'Вернитесь в бот вручную (кнопка Назад в приложении).';
   }
+}
+
+function setReplayMapStatic(enabled) {
+  if (!map) return;
+  const method = enabled ? 'disable' : 'enable';
+  map.dragPan?.[method]?.();
+  map.scrollZoom?.[method]?.();
+  map.boxZoom?.[method]?.();
+  map.dragRotate?.[method]?.();
+  map.keyboard?.[method]?.();
+  map.doubleClickZoom?.[method]?.();
+  map.touchZoomRotate?.[method]?.();
 }
 
 function hideLiveMarkerForReplay() {
@@ -1661,6 +1680,7 @@ function animateCompletedPath(trackCoords, options = {}) {
     replayTimerId = null;
   }
   isReplayRunning = true;
+  setReplayMapStatic(true);
 
   // Hide live red track so replay animation is clearly visible.
   if (map.getSource('run-track')) {
@@ -1691,10 +1711,11 @@ function animateCompletedPath(trackCoords, options = {}) {
     [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
   );
 
-  const replayBottomPadding = Math.max(200, Math.round(window.innerHeight * 0.34));
+  const replayBottomPadding = Math.max(260, Math.round(window.innerHeight * 0.46));
   map.fitBounds(rawBounds, {
-    padding: { top: 32, right: 24, bottom: replayBottomPadding, left: 24 },
-    duration: 700
+    padding: { top: 44, right: 34, bottom: replayBottomPadding, left: 34 },
+    duration: 820,
+    maxZoom: 13.5
   });
 
   replayTimerId = setInterval(() => {
@@ -1708,6 +1729,7 @@ function animateCompletedPath(trackCoords, options = {}) {
       replayTimerId = null;
       setReplayCoordinates(trackCoords);
       isReplayRunning = false;
+      setReplayMapStatic(false);
       if (typeof onDone === 'function') onDone();
     }
   }, frameMs);
