@@ -657,7 +657,11 @@ async function loadPlannedRoute(id) {
       setFinishMarker([plannedFinish[0], plannedFinish[1]]);
     }
 
-    // Получаем местоположение пользователя — расстояние считаем до официального старта (первая точка)
+    // Один поток геолокации: не вызывать getUserLocation() здесь — второй getCurrentPosition
+    // с другим timeout давал гонку: при timeout 5s срабатывал error и карта улетала в центр линии
+    // маршрута, хотя позже приходил успешный фикс с реальной позицией пользователя.
+    ensurePassiveLocationWatch();
+
     navigator.geolocation.getCurrentPosition(
 
       (pos) => {
@@ -666,10 +670,16 @@ async function loadPlannedRoute(id) {
 
         let userLng = pos.coords.longitude;
 
+        let accuracy = pos.coords.accuracy;
+
         if (simulateEnabled && simulatedGeo) {
           userLat = simulatedGeo.lat;
           userLng = simulatedGeo.lng;
+          accuracy = 5;
         }
+
+        const now = Date.now();
+        applyPassiveUserPosition(userLat, userLng, accuracy, now);
 
         const distanceToStart =
           plannedStart != null
@@ -679,7 +689,7 @@ async function loadPlannedRoute(id) {
         const userCenter = [userLng, userLat];
         lastCameraCenter = userCenter;
         isFollowingUser = true;
-        map.flyTo({ center: userCenter, zoom: 16 });
+        map.jumpTo({ center: userCenter, zoom: 16 });
 
         updateNavToStartLineIfNeeded(userLat, userLng);
 
@@ -697,43 +707,34 @@ async function loadPlannedRoute(id) {
 
         console.error('Ошибка получения местоположения:', err);
 
-        if (plannedStart) {
-          setStartMarker([plannedStart[0], plannedStart[1]]);
-        }
-        if (plannedFinish) {
-          setFinishMarker([plannedFinish[0], plannedFinish[1]]);
-        }
+        const applyFallbackCamera = () => {
+          if (lastKnownPosition) {
+            const c = [lastKnownPosition.longitude, lastKnownPosition.latitude];
+            lastCameraCenter = c;
+            isFollowingUser = true;
+            map.flyTo({ center: c, zoom: 16 });
+            statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. До «СТАРТ» см. маркер и оранжевую линию.`;
+          } else {
+            map.flyTo({ center: [center[0], center[1]], zoom: 14 });
+            statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Подойдите к маркеру «СТАРТ» и нажмите «Старт»`;
+          }
+          setTimeout(() => {
+            if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
+          }, 3000);
+        };
 
-        map.flyTo({ center: [center[0], center[1]], zoom: 14 });
-
-        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Подойдите к маркеру «СТАРТ» и нажмите «Старт»`;
-
-        setTimeout(() => {
-
-          if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
-
-        }, 3000);
+        setTimeout(applyFallbackCamera, 1000);
 
       },
 
-      { enableHighAccuracy: true, timeout: 5000 }
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
 
     );
-
-    setTimeout(() => {
-
-      if (statusDiv.innerText.includes('загружен')) statusDiv.innerText = '';
-
-    }, 3000);
-
-
 
     if (simulateEnabled) {
       simRouteStepIndex = 0;
       ensureSimulatePanel();
     }
-
-    getUserLocation();
 
   } catch (err) {
 
