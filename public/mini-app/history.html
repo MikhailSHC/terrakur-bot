@@ -98,10 +98,17 @@
     .row-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
     .row-meta { color: #9da7b3; font-size: 12px; }
     .error { color: #ff8383; font-size: 13px; margin-top: 10px; }
+    #dayDetails {
+      display: none;
+      margin-bottom: 12px;
+    }
+    #dayDetails.show {
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <h1>📊 Моя история</h1>
+  <h1>Моя история</h1>
   <div class="muted" id="status">Загрузка статистики...</div>
 
   <div class="grid">
@@ -129,6 +136,7 @@
   </div>
   <div class="filters" id="periodFilters"></div>
   <canvas id="chart" width="360" height="200"></canvas>
+  <div class="card" id="dayDetails"></div>
 
   <div class="list" id="sessionList"></div>
   <div class="error" id="errorBox"></div>
