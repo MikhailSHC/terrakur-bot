@@ -6,6 +6,16 @@ const ACTIVITY_LABELS = {
   cycling: 'Велосипед'
 };
 
+const PERIOD_LABELS = {
+  7: '7 дн',
+  30: '30 дн'
+};
+
+const METRIC_LABELS = {
+  km: 'Км',
+  time: 'Время'
+};
+
 function getParams() {
   const params = new URLSearchParams(window.location.search);
   return {
@@ -27,22 +37,69 @@ function formatDate(iso) {
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function bucketByDate(sessions) {
-  const map = new Map();
-  sessions.forEach((s) => {
-    const key = formatDate(s.finishedAt || s.startedAt);
-    if (!map.has(key)) map.set(key, 0);
-    map.set(key, map.get(key) + (Number(s.distanceM) || 0));
-  });
-  return Array.from(map.entries())
-    .slice(-7)
-    .map(([date, meters]) => ({ date, km: meters / 1000 }));
+function formatShortDate(isoDateKey) {
+  const [y, m, d] = isoDateKey.split('-');
+  return `${d}.${m}`;
 }
 
-function drawChart(canvas, points) {
+function getDayKey(dateLike) {
+  const d = new Date(dateLike);
+  if (Number.isNaN(d.getTime())) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function buildMetricSeries(sessions, periodDays, metric) {
+  const map = new Map();
+  sessions.forEach((s) => {
+    const key = getDayKey(s.finishedAt || s.startedAt);
+    if (!key) return;
+    if (!map.has(key)) map.set(key, { distanceM: 0, durationSec: 0 });
+    const agg = map.get(key);
+    agg.distanceM += Number(s.distanceM) || 0;
+    agg.durationSec += Number(s.durationSec) || 0;
+  });
+
+  const points = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = periodDays - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = getDayKey(d);
+    const dayAgg = map.get(key) || { distanceM: 0, durationSec: 0 };
+    const value = metric === 'time' ? dayAgg.durationSec / 3600 : dayAgg.distanceM / 1000;
+    points.push({ date: formatShortDate(key), value });
+  }
+
+  return points;
+}
+
+function formatMetricValue(value, metric) {
+  if (metric === 'time') return `${value.toFixed(1)} ч`;
+  return `${value.toFixed(1)} км`;
+}
+
+function getChartTitle(metric) {
+  return metric === 'time' ? 'Динамика времени тренировок' : 'Динамика километража';
+}
+
+function prepareCanvas(canvas, cssHeight = 220) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = Math.max(280, canvas.clientWidth || 360);
+  canvas.style.height = `${cssHeight}px`;
+  canvas.width = Math.floor(cssWidth * dpr);
+  canvas.height = Math.floor(cssHeight * dpr);
   const ctx = canvas.getContext('2d');
-  const w = canvas.width;
-  const h = canvas.height;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: cssWidth, h: cssHeight };
+}
+
+function drawChart(canvas, points, metric) {
+  const { ctx, w, h } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#171c22';
   ctx.fillRect(0, 0, w, h);
@@ -54,36 +111,83 @@ function drawChart(canvas, points) {
     return;
   }
 
-  const max = Math.max(...points.map((p) => p.km), 1);
-  const left = 24;
+  const max = Math.max(...points.map((p) => p.value), 1);
+  const left = 30;
   const right = 12;
   const top = 14;
-  const bottom = 36;
+  const bottom = 40;
   const plotW = w - left - right;
   const plotH = h - top - bottom;
-  const barW = Math.max(10, Math.floor(plotW / points.length) - 8);
+  const stepX = plotW / points.length;
+  const barW = Math.max(3, Math.floor(stepX) - 4);
+
+  ctx.strokeStyle = '#2d3742';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = top + (plotH * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(w - right, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = '#8c98a5';
+  ctx.font = '10px sans-serif';
+  ctx.fillText(formatMetricValue(max, metric), 4, top + 4);
+  ctx.fillText('0', 14, top + plotH + 2);
 
   points.forEach((p, idx) => {
-    const x = left + idx * (plotW / points.length) + 4;
-    const barH = Math.max(2, (p.km / max) * plotH);
+    const x = left + idx * stepX + 2;
+    const barH = Math.max(2, (p.value / max) * plotH);
     const y = top + (plotH - barH);
 
-    ctx.fillStyle = '#2a9a5b';
+    const gradient = ctx.createLinearGradient(0, y, 0, y + barH);
+    gradient.addColorStop(0, '#41c776');
+    gradient.addColorStop(1, '#1f7a46');
+    ctx.fillStyle = gradient;
     ctx.fillRect(x, y, barW, barH);
 
     ctx.fillStyle = '#9da7b3';
     ctx.font = '10px sans-serif';
-    ctx.fillText(p.date.slice(0, 5), x, h - 20);
+    if (points.length <= 10 || idx % 3 === 0 || idx === points.length - 1) {
+      ctx.fillText(p.date, x, h - 20);
+    }
 
-    ctx.fillStyle = '#dfe6ee';
-    ctx.font = '10px sans-serif';
-    ctx.fillText(p.km.toFixed(1), x, y - 4);
+    if (p.value > 0) {
+      ctx.fillStyle = '#dfe6ee';
+      ctx.font = '10px sans-serif';
+      ctx.fillText(p.value.toFixed(1), x, y - 4);
+    }
   });
 }
 
 function renderFilters(container, selected, onSelect) {
   container.innerHTML = '';
   Object.entries(ACTIVITY_LABELS).forEach(([id, label]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `chip${selected === id ? ' active' : ''}`;
+    btn.textContent = label;
+    btn.addEventListener('click', () => onSelect(id));
+    container.appendChild(btn);
+  });
+}
+
+function renderPeriodFilters(container, selected, onSelect) {
+  container.innerHTML = '';
+  Object.entries(PERIOD_LABELS).forEach(([id, label]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `chip${String(selected) === id ? ' active' : ''}`;
+    btn.textContent = label;
+    btn.addEventListener('click', () => onSelect(Number(id)));
+    container.appendChild(btn);
+  });
+}
+
+function renderMetricFilters(container, selected, onSelect) {
+  container.innerHTML = '';
+  Object.entries(METRIC_LABELS).forEach(([id, label]) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `chip${selected === id ? ' active' : ''}`;
@@ -133,8 +237,11 @@ async function init() {
   const statusEl = document.getElementById('status');
   const errorBox = document.getElementById('errorBox');
   const filtersEl = document.getElementById('filters');
+  const metricFiltersEl = document.getElementById('metricFilters');
+  const periodFiltersEl = document.getElementById('periodFilters');
   const listEl = document.getElementById('sessionList');
   const canvas = document.getElementById('chart');
+  const chartTitleEl = document.querySelector('.chart-title');
 
   if (!chatId) {
     errorBox.textContent = 'Отсутствует chatId в ссылке mini-app.';
@@ -153,6 +260,8 @@ async function init() {
 
   const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
   let selectedActivity = 'all';
+  let selectedPeriodDays = 7;
+  let selectedMetric = 'km';
 
   function render() {
     const filtered = selectedActivity === 'all'
@@ -166,16 +275,28 @@ async function init() {
     document.getElementById('totalTime').textContent = formatDuration(durationSec);
     document.getElementById('totalSessions').textContent = String(filtered.length);
 
-    drawChart(canvas, bucketByDate(filtered));
+    if (chartTitleEl) {
+      chartTitleEl.textContent = getChartTitle(selectedMetric);
+    }
+    drawChart(canvas, buildMetricSeries(filtered, selectedPeriodDays, selectedMetric), selectedMetric);
     renderSessions(listEl, filtered);
     renderFilters(filtersEl, selectedActivity, (id) => {
       selectedActivity = id;
       render();
     });
-    statusEl.textContent = `Показаны данные: ${ACTIVITY_LABELS[selectedActivity]}`;
+    renderPeriodFilters(periodFiltersEl, selectedPeriodDays, (days) => {
+      selectedPeriodDays = days;
+      render();
+    });
+    renderMetricFilters(metricFiltersEl, selectedMetric, (metric) => {
+      selectedMetric = metric;
+      render();
+    });
+    statusEl.textContent = `Показаны данные: ${ACTIVITY_LABELS[selectedActivity]} · ${METRIC_LABELS[selectedMetric]} · период ${selectedPeriodDays} дн`;
   }
 
   render();
+  window.addEventListener('resize', render);
 }
 
 init();
