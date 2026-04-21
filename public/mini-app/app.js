@@ -350,7 +350,7 @@ function ensureUiEnhancements() {
     replayPanelEl = document.createElement('div');
     replayPanelEl.id = 'replayPanel';
     replayPanelEl.style.cssText =
-      'position:fixed;left:16px;right:16px;bottom:150px;z-index:4;background:rgba(0,0,0,0.78);color:#fff;border-radius:16px;padding:12px 14px;display:none;';
+      'position:fixed;left:0;right:0;bottom:0;z-index:5;background:rgba(8,10,14,0.92);color:#fff;border-radius:18px 18px 0 0;padding:14px 14px calc(16px + env(safe-area-inset-bottom));display:none;box-shadow:0 -8px 26px rgba(0,0,0,0.45);max-height:46vh;overflow:auto;';
     document.body.appendChild(replayPanelEl);
   }
 }
@@ -1691,7 +1691,11 @@ function animateCompletedPath(trackCoords, options = {}) {
     [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
   );
 
-  map.fitBounds(rawBounds, { padding: 28, duration: 550 });
+  const replayBottomPadding = Math.max(200, Math.round(window.innerHeight * 0.34));
+  map.fitBounds(rawBounds, {
+    padding: { top: 32, right: 24, bottom: replayBottomPadding, left: 24 },
+    duration: 700
+  });
 
   replayTimerId = setInterval(() => {
     const progress = Math.min(1, step / steps);
