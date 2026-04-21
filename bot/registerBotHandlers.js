@@ -450,6 +450,10 @@ function registerBotHandlers(bot, deps) {
       if (!messageText && typeof body === 'string') {
         messageText = body;
       }
+      if (messageText === '/start') {
+        await commandHandler.handleStart(chatId);
+        return;
+      }
       if (messageText && !messageText.startsWith('/')) {
         await messageHandler.handleTextMessage(chatId, messageText);
       }

@@ -11,6 +11,15 @@ class MessageHandler {
     // Главный обработчик текстовых сообщений
     async handleTextMessage(chatId, messageText) {
         const session = this.userService.getUserSession(chatId);
+
+        if (
+            messageText === 'Начать' ||
+            messageText === 'start' ||
+            messageText === '/start'
+        ) {
+            await this.commandHandler.handleStart(chatId);
+            return;
+        }
         
         // ========== ОБРАБОТКА КНОПОК ГЛАВНОГО МЕНЮ ==========
         
