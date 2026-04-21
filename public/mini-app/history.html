@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>TerraKur - Моя история</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1216;
+      color: #eef2f7;
+      padding: 14px;
+    }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    .muted { color: #9da7b3; font-size: 13px; margin-bottom: 12px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .card {
+      background: #171c22;
+      border: 1px solid #26303b;
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .label { color: #9da7b3; font-size: 11px; margin-bottom: 6px; }
+    .value { font-size: 18px; font-weight: 700; }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .chip {
+      border: 1px solid #2a3440;
+      background: #151a20;
+      color: #d7dde6;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .chip.active {
+      background: #1f7a46;
+      border-color: #2a9a5b;
+      color: #fff;
+    }
+    canvas {
+      width: 100%;
+      height: 200px;
+      background: #171c22;
+      border: 1px solid #26303b;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .row {
+      background: #171c22;
+      border: 1px solid #26303b;
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .row-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .row-meta { color: #9da7b3; font-size: 12px; }
+    .error { color: #ff8383; font-size: 13px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>📊 Моя история</h1>
+  <div class="muted" id="status">Загрузка статистики...</div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Всего километров</div>
+      <div class="value" id="totalKm">0.00</div>
+    </div>
+    <div class="card">
+      <div class="label">Общее время</div>
+      <div class="value" id="totalTime">0 ч 0 м</div>
+    </div>
+    <div class="card">
+      <div class="label">Тренировок</div>
+      <div class="value" id="totalSessions">0</div>
+    </div>
+  </div>
+
+  <div class="filters" id="filters"></div>
+  <canvas id="chart" width="360" height="200"></canvas>
+
+  <div class="list" id="sessionList"></div>
+  <div class="error" id="errorBox"></div>
+
+  <script src="./history.js?v=20260421-1"></script>
+</body>
+</html>

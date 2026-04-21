@@ -8,7 +8,7 @@ const LOCATIONS = [
   },
   {
     id: 'kavminvody',
-    name: 'Кавказские Минеральные Воды',
+    name: 'Минеральные воды',
     emoji: '⛰️'
   },
   {

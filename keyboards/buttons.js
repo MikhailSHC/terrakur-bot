@@ -1,31 +1,35 @@
 // keyboards/buttons.js
 
 // ==================== ГЛАВНОЕ МЕНЮ ====================
-const mainMenuKeyboard = {
-  type: 'inline_keyboard',
-  payload: {
-    buttons: [
-      [
-        { type: 'callback', text: '🧭 Начать свой трек', payload: 'start_free_track' }
-      ],
-      [
-        { type: 'callback', text: '📋 Маршруты Ставрополья', payload: 'find_routes' }
-      ],
-      [
-        { type: 'callback', text: '📍 Рядом со мной', payload: 'nearby_routes' }
-      ],
-      [
-        { type: 'callback', text: '📊 Моя история', payload: 'my_history' }
-      ],
-      [
-        { type: 'callback', text: '⚙️ Настройки', payload: 'settings' }
-      ],
-      [
-        { type: 'callback', text: '❓ Помощь', payload: 'help' }
+function getMainMenuKeyboard(historyUrl) {
+  const historyButton = historyUrl
+    ? { type: 'link', text: '📊 Моя история', url: historyUrl }
+    : { type: 'callback', text: '📊 Моя история', payload: 'my_history' };
+
+  return {
+    type: 'inline_keyboard',
+    payload: {
+      buttons: [
+        [
+          { type: 'callback', text: '🧭 Начать свой трек', payload: 'start_free_track' }
+        ],
+        [
+          { type: 'callback', text: '📋 Маршруты Ставрополья', payload: 'find_routes' }
+        ],
+        [
+          { type: 'callback', text: '📍 Рядом со мной', payload: 'nearby_routes' }
+        ],
+        [historyButton],
+        [
+          { type: 'callback', text: '⚙️ Настройки', payload: 'settings' }
+        ],
+        [
+          { type: 'callback', text: '❓ Помощь', payload: 'help' }
+        ]
       ]
-    ]
-  }
-};
+    }
+  };
+}
 
 
 // ==================== КЛАВИАТУРА С ГОРОДАМИ ====================
@@ -35,7 +39,7 @@ const locationKeyboard = {
     buttons: [
       [
         { type: 'callback', text: 'Ставрополь', payload: 'location_stavropol' },
-        { type: 'callback', text: 'КавМинВоды', payload: 'location_kavminvody' }
+        { type: 'callback', text: 'Минеральные воды', payload: 'location_kavminvody' }
       ],
       [
         { type: 'callback', text: 'Кисловодск', payload: 'location_kislovodsk' },
@@ -236,7 +240,7 @@ const profileActivityResultKeyboard = {
 
 
 module.exports = {
-  mainMenuKeyboard,
+  getMainMenuKeyboard,
   locationKeyboard,
   activityKeyboard,
   getRouteKeyboard,

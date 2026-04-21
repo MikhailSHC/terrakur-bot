@@ -362,7 +362,7 @@ function registerBotHandlers(bot, deps) {
       });
       await bot.api.sendMessageToChat(
         chatId,
-        `✅ Маршрут *${route.name}* начат!\n\nНажмите кнопку ниже, чтобы открыть навигатор.`,
+        `✅ Маршрут ${route.name} начат!\n\nНажмите кнопку ниже, чтобы открыть навигатор.`,
         {
           parse_mode: 'Markdown',
           attachments: getOpenRouteKeyboard(navUrl)

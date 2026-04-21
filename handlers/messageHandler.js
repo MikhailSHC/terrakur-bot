@@ -76,7 +76,7 @@ class MessageHandler {
             await this.bot.api.sendMessageToChat(
                 chatId,
                 '🌲 Добро пожаловать!',
-                { attachments: [keyboards.mainMenuKeyboard] }
+                { attachments: [keyboards.getMainMenuKeyboard()] }
             );
         }
     }
@@ -87,7 +87,7 @@ class MessageHandler {
         
         if (messageText === 'Ставрополь' || messageText === 'Stavropol') {
             location = this.routeService.getLocationById('stavropol');
-        } else if (messageText === 'КавМинВоды' || messageText === 'KavMinVody') {
+        } else if (messageText === 'Минеральные воды' || messageText === 'КавМинВоды' || messageText === 'KavMinVody') {
             location = this.routeService.getLocationById('kavminvody');
         } else if (messageText === 'Кисловодск' || messageText === 'Kislovodsk') {
             location = this.routeService.getLocationById('kislovodsk');
@@ -238,7 +238,7 @@ class MessageHandler {
             
             await this.bot.api.sendMessageToChat(
                 chatId,
-                `✅ Маршрут *${route.name}* начат!\n\n` +
+                `✅ Маршрут ${route.name} начат!\n\n` +
                 `Желаем удачи! Ваш прогресс сохранен.\n\n` +
                 `Используйте /profile чтобы увидеть историю.\n\n` +
                 `Используйте /start чтобы найти другие маршруты!`,

@@ -50,7 +50,7 @@ function formatRouteDetails(route, options = {}) {
   const lines = [];
 
   const name = route.name || 'Маршрут';
-  lines.push(`*${name}*`);
+  lines.push(name);
 
   if (locationName) {
     lines.push(`📍 Локация: ${locationName}`);
