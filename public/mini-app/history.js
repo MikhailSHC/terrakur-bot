@@ -24,6 +24,27 @@ function getParams() {
   };
 }
 
+function closeMiniAppToBot(statusEl) {
+  try {
+    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
+      window.Telegram.WebApp.close();
+      return;
+    }
+  } catch {
+    // noop
+  }
+  try {
+    window.close();
+  } catch {
+    // noop
+  }
+  if (window.history.length > 1) {
+    window.history.back();
+  } else if (statusEl) {
+    statusEl.textContent = 'Вернитесь в бот вручную (кнопка Назад в приложении).';
+  }
+}
+
 function formatDuration(totalSec) {
   const sec = Number(totalSec) || 0;
   const h = Math.floor(sec / 3600);
@@ -300,6 +321,7 @@ async function init() {
   const chartTitleEl = document.querySelector('.chart-title');
   const summaryPanelEl = document.getElementById('summaryPanel');
   const summaryToggleEl = document.getElementById('summaryToggle');
+  const backToBotBtnEl = document.getElementById('backToBotBtn');
 
   if (!chatId) {
     errorBox.textContent = 'Отсутствует chatId в ссылке mini-app.';
@@ -379,6 +401,9 @@ async function init() {
   }
 
   render();
+  if (backToBotBtnEl) {
+    backToBotBtnEl.addEventListener('click', () => closeMiniAppToBot(statusEl));
+  }
   if (summaryToggleEl && summaryPanelEl) {
     summaryToggleEl.addEventListener('click', () => {
       isSummaryOpen = !isSummaryOpen;

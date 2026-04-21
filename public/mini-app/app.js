@@ -203,10 +203,12 @@ let autoPausedBySystem = false;
 let lastRawPoint = null;
 let lastHeadingDeg = null;
 let replayPanelEl = null;
+let isReplayRunning = false;
 
 const REPLAY_SOURCE_ID = 'run-replay-source';
 const REPLAY_LAYER_ID = 'run-replay-line';
 let redrawQueued = false;
+let replayTimerId = null;
 
 
 
@@ -574,6 +576,7 @@ function processStartProximity(latitude, longitude) {
 function applyPassiveUserPosition(latitude, longitude, accuracy, now) {
   lastKnownPosition = { latitude, longitude, accuracy };
   updateGPSQuality(accuracy);
+  if (isReplayRunning) return;
   processStartProximity(latitude, longitude);
   updateNavToStartLineIfNeeded(latitude, longitude);
   updateUserMarker([longitude, latitude]);
@@ -1613,8 +1616,74 @@ function setReplayCoordinates(coords) {
   });
 }
 
-function animateCompletedPath(trackCoords) {
+function closeMiniAppToBot() {
+  try {
+    if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.close === 'function') {
+      window.Telegram.WebApp.close();
+      return;
+    }
+  } catch {
+    // noop
+  }
+  try {
+    window.close();
+  } catch {
+    // noop
+  }
+  if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    statusDiv.innerText = 'Вернитесь в бот вручную (кнопка Назад в приложении).';
+  }
+}
+
+function hideLiveMarkerForReplay() {
+  if (userMarker) {
+    userMarker.remove();
+    userMarker = null;
+    userMarkerEl = null;
+  }
+}
+
+function simplifyTrackForReplay(coords) {
+  if (!Array.isArray(coords) || coords.length < 2) return coords || [];
+  const filtered = [coords[0]];
+  for (let i = 1; i < coords.length; i += 1) {
+    const prev = filtered[filtered.length - 1];
+    const cur = coords[i];
+    const d = haversineDistance(prev[1], prev[0], cur[1], cur[0]);
+    if (d >= 3 || i === coords.length - 1) {
+      filtered.push(cur);
+    }
+  }
+  const maxPoints = 280;
+  if (filtered.length <= maxPoints) return filtered;
+  const step = Math.ceil(filtered.length / maxPoints);
+  const downsampled = [];
+  for (let i = 0; i < filtered.length; i += step) downsampled.push(filtered[i]);
+  if (downsampled[downsampled.length - 1] !== filtered[filtered.length - 1]) {
+    downsampled.push(filtered[filtered.length - 1]);
+  }
+  return downsampled;
+}
+
+function getReplayDurationMs(pointCount) {
+  const minMs = 6000;
+  const maxMs = 20000;
+  const estimated = pointCount * 40;
+  return Math.min(maxMs, Math.max(minMs, estimated));
+}
+
+function animateCompletedPath(trackCoords, options = {}) {
+  const { onProgress, onDone } = options;
   if (!Array.isArray(trackCoords) || trackCoords.length < 2 || !map) return;
+  if (replayTimerId) {
+    clearInterval(replayTimerId);
+    replayTimerId = null;
+  }
+  const replayCoords = simplifyTrackForReplay(trackCoords);
+  if (replayCoords.length < 2) return;
+  isReplayRunning = true;
 
   // Hide live red track so replay animation is clearly visible.
   if (map.getSource('run-track')) {
@@ -1625,15 +1694,16 @@ function animateCompletedPath(trackCoords) {
   }
 
   ensureReplayLayer();
+  hideLiveMarkerForReplay();
 
-  const totalPoints = trackCoords.length;
-  const totalDurationMs = 6000;
+  const totalPoints = replayCoords.length;
+  const totalDurationMs = getReplayDurationMs(totalPoints);
   const frameMs = 60;
   const steps = Math.max(1, Math.round(totalDurationMs / frameMs));
   let step = 1;
 
-  setReplayCoordinates([trackCoords[0]]);
-  const rawBounds = trackCoords.reduce(
+  setReplayCoordinates([replayCoords[0]]);
+  const rawBounds = replayCoords.reduce(
     (acc, c) => {
       acc[0][0] = Math.min(acc[0][0], c[0]);
       acc[0][1] = Math.min(acc[0][1], c[1]);
@@ -1641,21 +1711,27 @@ function animateCompletedPath(trackCoords) {
       acc[1][1] = Math.max(acc[1][1], c[1]);
       return acc;
     },
-    [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
+    [[replayCoords[0][0], replayCoords[0][1]], [replayCoords[0][0], replayCoords[0][1]]]
   );
 
   map.fitBounds(rawBounds, { padding: 28, duration: 550 });
 
-  const timer = setInterval(() => {
-    const progress = step / steps;
-    const sliceEnd = Math.max(2, Math.floor(progress * totalPoints));
-    setReplayCoordinates(trackCoords.slice(0, sliceEnd));
-    step += 1;
-    if (step > steps) {
-      clearInterval(timer);
-      setReplayCoordinates(trackCoords);
-    }
-  }, frameMs);
+  setTimeout(() => {
+    replayTimerId = setInterval(() => {
+      const progress = Math.min(1, step / steps);
+      const sliceEnd = Math.max(2, Math.floor(progress * totalPoints));
+      setReplayCoordinates(replayCoords.slice(0, sliceEnd));
+      if (typeof onProgress === 'function') onProgress(Math.round(progress * 100));
+      step += 1;
+      if (step > steps) {
+        clearInterval(replayTimerId);
+        replayTimerId = null;
+        setReplayCoordinates(replayCoords);
+        isReplayRunning = false;
+        if (typeof onDone === 'function') onDone();
+      }
+    }, frameMs);
+  }, 420);
 }
 
 function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, trackCoords, showReplay = true }) {
@@ -1672,17 +1748,31 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, t
     replayPanelEl.innerHTML =
       `<div style="font-size:14px;font-weight:700;margin-bottom:6px;">Итог тренировки</div>` +
       `<div style="font-size:12px;opacity:0.95;">Дистанция: <b>${km} км</b> | Время: <b>${mins}:${secs}</b>${paceBlock}</div>` +
-      `<div style="font-size:11px;opacity:0.75;margin-top:6px;">Воспроизведение вашего GPS-трека…</div>`;
+      `<div id="replayPhase" style="font-size:11px;opacity:0.75;margin-top:6px;">Подготовка воспроизведения...</div>` +
+      `<div style="margin-top:8px;"><button type="button" id="backToBotBtn" style="background:#1f7a46;color:#fff;border:none;border-radius:10px;padding:8px 12px;font-size:12px;cursor:pointer;">Вернуться в приложение</button></div>`;
     replayPanelEl.style.display = 'block';
-    animateCompletedPath(trackCoords);
+    const phaseEl = replayPanelEl.querySelector('#replayPhase');
+    const backBtn = replayPanelEl.querySelector('#backToBotBtn');
+    if (backBtn) backBtn.onclick = closeMiniAppToBot;
+    animateCompletedPath(trackCoords, {
+      onProgress: (percent) => {
+        if (phaseEl) phaseEl.textContent = `Воспроизведение ${percent}%`;
+      },
+      onDone: () => {
+        if (phaseEl) phaseEl.textContent = 'Готово';
+      }
+    });
     return;
   }
 
   replayPanelEl.innerHTML =
     `<div style="font-size:14px;font-weight:700;margin-bottom:6px;">Маршрут завершён</div>` +
     `<div style="font-size:12px;opacity:0.95;">Дистанция: <b>${km} км</b> | Время: <b>${mins}:${secs}</b>${paceBlock}</div>` +
-    `<div style="font-size:11px;opacity:0.75;margin-top:8px;">Пройденная тропа на карте отмечена зелёным.</div>`;
+    `<div style="font-size:11px;opacity:0.75;margin-top:8px;">Пройденная тропа на карте отмечена зелёным.</div>` +
+    `<div style="margin-top:8px;"><button type="button" id="backToBotBtn" style="background:#1f7a46;color:#fff;border:none;border-radius:10px;padding:8px 12px;font-size:12px;cursor:pointer;">Вернуться в приложение</button></div>`;
   replayPanelEl.style.display = 'block';
+  const backBtn = replayPanelEl.querySelector('#backToBotBtn');
+  if (backBtn) backBtn.onclick = closeMiniAppToBot;
 }
 
 
@@ -2250,6 +2340,7 @@ async function stopAndSave() {
 
 
   try {
+    statusDiv.innerText = 'Сохранение...';
 
     const res  = await fetch('/api/sessions', {
 
@@ -2310,6 +2401,7 @@ async function stopAndSave() {
   }
 
   const replayCoordinates = trackPoints.map((p) => [p.lng, p.lat]);
+  statusDiv.innerText = 'Подготовка воспроизведения...';
   showWorkoutSummaryAndReplay({
     distanceM,
     elapsedSec,
