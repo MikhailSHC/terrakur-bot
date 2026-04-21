@@ -88,7 +88,7 @@ function getRouteKeyboard(routes, options = {}) {
   const row = [];
 
   for (let i = start; i < end; i++) {
-    row.push({ type: 'callback', text: String(i - start + 1), payload: `route_${i}` });
+    row.push({ type: 'callback', text: String(i + 1), payload: `route_${i}` });
     if (row.length === 3) {
       buttons.push([...row]);
       row.length = 0;

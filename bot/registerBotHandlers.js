@@ -1,5 +1,5 @@
 const keyboards = require('../keyboards/buttons');
-const { formatRouteList, formatRouteDetails } = require('../utils/helpers');
+const { formatRouteDetails } = require('../utils/helpers');
 const { createMiniAppToken } = require('../utils/miniAppAuth');
 
 function buildMiniAppUrl(config, chatId, extraParams = {}) {
@@ -30,6 +30,14 @@ function getOpenRouteKeyboard(navUrl) {
   ];
 }
 
+function getCallbackMessageId(ctx) {
+  return (
+    ctx?.callback?.message?.body?.mid ||
+    ctx?.message?.body?.mid ||
+    null
+  );
+}
+
 function registerBotHandlers(bot, deps) {
   const {
     config,
@@ -57,9 +65,10 @@ function registerBotHandlers(bot, deps) {
       const actHint = act ? ` — ${act.emoji} ${act.name}` : '';
       text = `📍 Ближайшие маршруты к вам${actHint} (стр. ${currentPage + 1}/${totalPages}):\n\n`;
       pageRoutes.forEach((route, idx) => {
+        const globalNumber = start + idx + 1;
         const routeLengthText = route.distanceText || (route.distanceKm ? `~${route.distanceKm} км` : 'нет данных');
         const distanceKm = typeof route.nearbyDistanceKm === 'number' ? route.nearbyDistanceKm.toFixed(1) : '?';
-        text += `${idx + 1}. ${route.name} — ${distanceKm} км от вас\n`;
+        text += `${globalNumber}. ${route.name} — ${distanceKm} км от вас\n`;
         text += `   🧭 Длина маршрута: ${routeLengthText}\n`;
         text += `   (${route.nearbyLocationEmoji || ''} ${route.nearbyLocationName || 'Локация не указана'})\n`;
       });
@@ -73,7 +82,21 @@ function registerBotHandlers(bot, deps) {
       };
     } else {
       text = `📍 Найдено ${routes.length} маршрутов для ${session.selectedActivity.name} в ${session.selectedLocation.name} (${currentPage + 1}/${totalPages}):\n\n`;
-      text += formatRouteList(pageRoutes);
+      pageRoutes.forEach((route, idx) => {
+        const globalNumber = start + idx + 1;
+        const name = route.name || `Маршрут ${globalNumber}`;
+        const distance = route.distance || route.distanceText || (route.distanceKm ? `${route.distanceKm} км` : null);
+        const duration = route.duration;
+        const difficulty = route.difficulty;
+        let line = `${globalNumber}. ${name}`;
+        if (distance) line += ` — ${distance}`;
+        if (duration) line += `, ${duration}`;
+        if (difficulty !== undefined) {
+          const difficultyLabel = difficulty === 1 ? 'легкий' : difficulty === 2 ? 'средний' : difficulty === 3 ? 'сложный' : String(difficulty);
+          line += ` (сложность: ${difficultyLabel})`;
+        }
+        text += `${line}\n`;
+      });
       text += '\nВыберите маршрут (кнопкой ниже):';
       keyboardOptions = {
         page: currentPage,
@@ -154,6 +177,15 @@ function registerBotHandlers(bot, deps) {
     const callbackData = ctx.callback?.payload;
     if (!chatId || !callbackData) return;
     if (callbackData === 'noop') return;
+
+    const callbackMessageId = getCallbackMessageId(ctx);
+    if (callbackMessageId) {
+      try {
+        await bot.api.deleteMessage(callbackMessageId);
+      } catch {
+        // Best effort: если удаление не поддерживается/сообщение уже недоступно, продолжаем.
+      }
+    }
 
     if (callbackData === 'main_menu') return commandHandler.handleStart(chatId);
     if (callbackData === 'help') return commandHandler.handleHelp(chatId);
