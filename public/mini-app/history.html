@@ -21,6 +21,7 @@
       gap: 8px;
       margin-bottom: 12px;
     }
+    .hidden { display: none !important; }
     .card {
       background: #171c22;
       border: 1px solid #26303b;
@@ -110,7 +111,11 @@
 <body>
   <h1>Моя история</h1>
   <div class="muted" id="status">Загрузка статистики...</div>
+  <div class="filters">
+    <button type="button" class="chip active" id="summaryToggle">Суммарная статистика</button>
+  </div>
 
+  <div id="summaryPanel">
   <div class="grid">
     <div class="card">
       <div class="label">Всего километров</div>
@@ -124,6 +129,21 @@
       <div class="label">Тренировок</div>
       <div class="value" id="totalSessions">0</div>
     </div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="label">Средний темп</div>
+      <div class="value" id="avgPace">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Личный рекорд</div>
+      <div class="value" id="personalBest">0.00 км</div>
+    </div>
+    <div class="card">
+      <div class="label">Дата рекорда</div>
+      <div class="value" id="personalBestDate">—</div>
+    </div>
+  </div>
   </div>
 
   <div class="filters" id="filters"></div>
@@ -141,6 +161,6 @@
   <div class="list" id="sessionList"></div>
   <div class="error" id="errorBox"></div>
 
-  <script src="./history.js?v=20260421-3"></script>
+  <script src="./history.js?v=20260421-4"></script>
 </body>
 </html>

@@ -31,6 +31,16 @@ function formatDuration(totalSec) {
   return `${h} ч ${m} м`;
 }
 
+function formatPace(durationSec, distanceM) {
+  const distKm = (Number(distanceM) || 0) / 1000;
+  const totalSec = Number(durationSec) || 0;
+  if (distKm <= 0 || totalSec <= 0) return '—';
+  const secPerKm = totalSec / distKm;
+  const min = Math.floor(secPerKm / 60);
+  const sec = Math.round(secPerKm % 60);
+  return `${min}:${String(sec).padStart(2, '0')} мин/км`;
+}
+
 function formatDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
@@ -288,6 +298,8 @@ async function init() {
   const dayDetailsEl = document.getElementById('dayDetails');
   const canvas = document.getElementById('chart');
   const chartTitleEl = document.querySelector('.chart-title');
+  const summaryPanelEl = document.getElementById('summaryPanel');
+  const summaryToggleEl = document.getElementById('summaryToggle');
 
   if (!chatId) {
     errorBox.textContent = 'Отсутствует chatId в ссылке mini-app.';
@@ -311,6 +323,7 @@ async function init() {
   let selectedDayIndex = null;
   let currentPoints = [];
   let currentHitBoxes = [];
+  let isSummaryOpen = true;
 
   function render() {
     const filtered = selectedActivity === 'all'
@@ -323,6 +336,19 @@ async function init() {
     document.getElementById('totalKm').textContent = (distanceM / 1000).toFixed(2);
     document.getElementById('totalTime').textContent = formatDuration(durationSec);
     document.getElementById('totalSessions').textContent = String(filtered.length);
+    document.getElementById('avgPace').textContent = formatPace(durationSec, distanceM);
+
+    const bestSession = filtered.reduce((best, s) => {
+      const dist = Number(s.distanceM) || 0;
+      if (!best || dist > (Number(best.distanceM) || 0)) return s;
+      return best;
+    }, null);
+    document.getElementById('personalBest').textContent = bestSession
+      ? `${((Number(bestSession.distanceM) || 0) / 1000).toFixed(2)} км`
+      : '0.00 км';
+    document.getElementById('personalBestDate').textContent = bestSession
+      ? formatDate(bestSession.finishedAt || bestSession.startedAt)
+      : '—';
 
     if (chartTitleEl) {
       chartTitleEl.textContent = getChartTitle(selectedMetric);
@@ -353,6 +379,13 @@ async function init() {
   }
 
   render();
+  if (summaryToggleEl && summaryPanelEl) {
+    summaryToggleEl.addEventListener('click', () => {
+      isSummaryOpen = !isSummaryOpen;
+      summaryPanelEl.classList.toggle('hidden', !isSummaryOpen);
+      summaryToggleEl.classList.toggle('active', isSummaryOpen);
+    });
+  }
   canvas.addEventListener('click', (event) => {
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;

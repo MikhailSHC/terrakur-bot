@@ -184,6 +184,9 @@ const BASE_MAX_SPEED_M_S         = 7;    // ~25 km/h - everything above is consi
 let recentSpeeds = [];          // last few speed measurements for averaging
 
 const SPEED_HISTORY_SIZE = 5;   // how many recent speeds to average
+const STATIONARY_MAX_SPEED_M_S = 0.9;
+const STATIONARY_MIN_TIME_MS = 1500;
+const STATIONARY_MAX_DRIFT_METERS = 10;
 
 const WALKING_SPEED_THRESHOLD = 2; // m/s - below this is considered walking
 
@@ -1356,6 +1359,17 @@ function shouldSavePoint(lat, lng, now, accuracy) {
   if (timeDiff > 0) {
 
     const speed = dist / (timeDiff / 1000);
+
+    // Если пользователь фактически стоит, игнорируем мелкий GPS-дрейф,
+    // чтобы не "прыгали" метрики скорости/темпа.
+    if (
+      timeDiff >= STATIONARY_MIN_TIME_MS &&
+      dist <= STATIONARY_MAX_DRIFT_METERS &&
+      speed <= STATIONARY_MAX_SPEED_M_S
+    ) {
+      updateCurrentSpeed(0);
+      return false;
+    }
 
     updateCurrentSpeed(speed);
 
