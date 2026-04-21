@@ -204,6 +204,7 @@ let lastRawPoint = null;
 let lastHeadingDeg = null;
 let replayPanelEl = null;
 let isReplayRunning = false;
+let isReplayViewLocked = false;
 
 const REPLAY_SOURCE_ID = 'run-replay-source';
 const REPLAY_LAYER_ID = 'run-replay-line';
@@ -576,7 +577,7 @@ function processStartProximity(latitude, longitude) {
 function applyPassiveUserPosition(latitude, longitude, accuracy, now) {
   lastKnownPosition = { latitude, longitude, accuracy };
   updateGPSQuality(accuracy);
-  if (isReplayRunning) return;
+  if (isReplayRunning || isReplayViewLocked) return;
   processStartProximity(latitude, longitude);
   updateNavToStartLineIfNeeded(latitude, longitude);
   updateUserMarker([longitude, latitude]);
@@ -963,7 +964,7 @@ function addUserMarker(lngLat) {
 
 
 function updateUserMarker(lngLat, headingDeg = null) {
-  if (isReplayRunning) return;
+  if (isReplayRunning || isReplayViewLocked) return;
 
   if (userMarker) userMarker.setLngLat(lngLat);
 
@@ -1680,6 +1681,7 @@ function animateCompletedPath(trackCoords, options = {}) {
     replayTimerId = null;
   }
   isReplayRunning = true;
+  isReplayViewLocked = true;
   setReplayMapStatic(true);
 
   // Hide live red track so replay animation is clearly visible.
@@ -1712,7 +1714,7 @@ function animateCompletedPath(trackCoords, options = {}) {
   );
 
   // Keep room for summary panel, but avoid excessive zoom-out.
-  const replayBottomPadding = Math.max(120, Math.min(190, Math.round(window.innerHeight * 0.24)));
+  const replayBottomPadding = Math.max(70, Math.round(window.innerHeight * 0.12));
   map.fitBounds(rawBounds, {
     padding: { top: 34, right: 26, bottom: replayBottomPadding, left: 26 },
     duration: 820,
@@ -1730,7 +1732,6 @@ function animateCompletedPath(trackCoords, options = {}) {
       replayTimerId = null;
       setReplayCoordinates(trackCoords);
       isReplayRunning = false;
-      setReplayMapStatic(false);
       if (typeof onDone === 'function') onDone();
     }
   }, frameMs);
@@ -2031,6 +2032,8 @@ function startRun() {
     // Первый запуск тренировки
 
     isTracking     = true;
+    isReplayViewLocked = false;
+    setReplayMapStatic(false);
     hasReachedFinish = false; // Сбрасываем состояние финиша
 
     isPaused       = false;
