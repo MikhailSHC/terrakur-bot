@@ -76,6 +76,9 @@ const PLANNED_ROUTE_REMAINING_SOURCE = 'planned-route-remaining';
 /** Зелёная «тропа» отображается после прохода хотя бы одного сегмента полилинии */
 const ROUTE_PROGRESS_MIN_VERTEX_FOR_GREEN = 1;
 
+/** Пунктир от текущей позиции до точки старта (скрывается в зоне старта) */
+const NAV_TO_START_SOURCE = 'nav-to-start-line';
+
 
 const CAMERA_UPDATE_INTERVAL_MS = 2500;
 const CAMERA_MIN_MOVE_M = 8;
@@ -110,6 +113,11 @@ const routeId     = urlParams.get('routeId');       // системный мар
 
 const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
+
+/** Тест без прогулки: добавьте в URL `&simulate=1` (вместе с routeId). */
+const simulateEnabled = urlParams.get('simulate') === '1';
+let simulatedGeo = null; // { lat, lng } — подмена позиции, пока включена симуляция
+let simRouteStepIndex = 0;
 
 
 
@@ -265,6 +273,8 @@ function initMap() {
       }
 
     });
+
+    ensureNavToStartLayer();
 
 
 
@@ -435,6 +445,57 @@ function finalizePlannedRouteMapProgress() {
   if (coords.length < 2 || !map?.getSource(PLANNED_ROUTE_DONE_SOURCE)) return;
   setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, coords);
   setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, []);
+  clearNavToStartLine();
+}
+
+function ensureNavToStartLayer() {
+  if (!map || map.getSource(NAV_TO_START_SOURCE)) return;
+  map.addSource(NAV_TO_START_SOURCE, {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+  map.addLayer({
+    id: 'nav-to-start-line-layer',
+    type: 'line',
+    source: NAV_TO_START_SOURCE,
+    paint: {
+      'line-color': '#f97316',
+      'line-width': 4,
+      'line-dasharray': [0.4, 1.2],
+      'line-opacity': 0.9
+    }
+  });
+}
+
+function clearNavToStartLine() {
+  if (!map?.getSource(NAV_TO_START_SOURCE)) return;
+  map.getSource(NAV_TO_START_SOURCE).setData({ type: 'FeatureCollection', features: [] });
+}
+
+function updateNavToStartLineIfNeeded(userLat, userLng) {
+  if (!map) return;
+  ensureNavToStartLayer();
+  if (
+    sessionMode !== 'planned_route' ||
+    !plannedStart ||
+    hasReachedStart ||
+    isTracking
+  ) {
+    clearNavToStartLine();
+    return;
+  }
+  const a = userLng;
+  const b = userLat;
+  const c = plannedStart[0];
+  const d = plannedStart[1];
+  if (haversineDistance(b, a, d, c) < 2) {
+    clearNavToStartLine();
+    return;
+  }
+  setGeoJSONLineSource(NAV_TO_START_SOURCE, [
+    [a, b],
+    [c, d]
+  ]);
 }
 
 function updateGPSQuality(_accuracy) {
@@ -473,11 +534,12 @@ function processStartProximity(latitude, longitude) {
       hasReachedStart = true;
       lastStartStatus = null;
       removeStartMarker();
+      clearNavToStartLine();
       statusDiv.innerText = '✅ Вы в зоне старта маршрута, нажмите "Старт"';
     } else {
       hasReachedStart = false;
       const rounded = Math.round(distToStart / 5) * 5;
-      const msg = `🏁 Подойдите к точке старта (≈ ${rounded} м)`;
+      const msg = `📍 Подойдите к старту (≈ ${rounded} м)`;
       if (msg !== lastStartStatus) {
         lastStartStatus = msg;
         statusDiv.innerText = msg;
@@ -486,21 +548,37 @@ function processStartProximity(latitude, longitude) {
   }
 }
 
+function applyPassiveUserPosition(latitude, longitude, accuracy, now) {
+  lastKnownPosition = { latitude, longitude, accuracy };
+  updateGPSQuality(accuracy);
+  processStartProximity(latitude, longitude);
+  updateNavToStartLineIfNeeded(latitude, longitude);
+  updateUserMarker([longitude, latitude]);
+
+  if (!isTracking && isFollowingUser) {
+    smoothCameraFollow([longitude, latitude], now);
+  }
+}
+
 function ensurePassiveLocationWatch() {
   if (!navigator.geolocation || passiveWatchId !== null) return;
 
   passiveWatchId = navigator.geolocation.watchPosition(
     (pos) => {
-      const { latitude, longitude, accuracy } = pos.coords;
       const now = Date.now();
-      lastKnownPosition = { latitude, longitude, accuracy };
-      updateGPSQuality(accuracy);
-      processStartProximity(latitude, longitude);
-      updateUserMarker([longitude, latitude]);
-
-      if (!isTracking && isFollowingUser) {
-        smoothCameraFollow([longitude, latitude], now);
+      let latitude;
+      let longitude;
+      let accuracy;
+      if (simulateEnabled && simulatedGeo) {
+        latitude = simulatedGeo.lat;
+        longitude = simulatedGeo.lng;
+        accuracy = 5;
+      } else {
+        latitude = pos.coords.latitude;
+        longitude = pos.coords.longitude;
+        accuracy = pos.coords.accuracy;
       }
+      applyPassiveUserPosition(latitude, longitude, accuracy, now);
     },
     () => {},
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 7000 }
@@ -557,9 +635,14 @@ async function loadPlannedRoute(id) {
 
       (pos) => {
 
-        const userLat = pos.coords.latitude;
+        let userLat = pos.coords.latitude;
 
-        const userLng = pos.coords.longitude;
+        let userLng = pos.coords.longitude;
+
+        if (simulateEnabled && simulatedGeo) {
+          userLat = simulatedGeo.lat;
+          userLng = simulatedGeo.lng;
+        }
 
         const distanceToStart =
           plannedStart != null
@@ -573,7 +656,9 @@ async function loadPlannedRoute(id) {
 
         map.flyTo({ center: mapCenter, zoom: 14 });
 
-        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. До старта (флажок) ≈ ${distanceToStart} м. Подойдите и нажмите «Старт»`;
+        updateNavToStartLineIfNeeded(userLat, userLng);
+
+        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. До «СТАРТ» ≈ ${distanceToStart} м. Оранжевая линия — направление к старту.`;
 
         setTimeout(() => {
 
@@ -596,7 +681,7 @@ async function loadPlannedRoute(id) {
 
         map.flyTo({ center: [center[0], center[1]], zoom: 14 });
 
-        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Подойдите к зелёному флажку старта и нажмите «Старт»`;
+        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Подойдите к маркеру «СТАРТ» и нажмите «Старт»`;
 
         setTimeout(() => {
 
@@ -617,6 +702,11 @@ async function loadPlannedRoute(id) {
     }, 3000);
 
 
+
+    if (simulateEnabled) {
+      simRouteStepIndex = 0;
+      ensureSimulatePanel();
+    }
 
     getUserLocation();
 
@@ -656,12 +746,20 @@ function getUserLocation() {
 
     (pos) => {
 
-      const { latitude, longitude, accuracy } = pos.coords;
-      lastKnownPosition = { latitude, longitude, accuracy };
-      updateGPSQuality(accuracy);
-      processStartProximity(latitude, longitude);
-
-      addUserMarker([longitude, latitude]);
+      const now = Date.now();
+      let latitude;
+      let longitude;
+      let accuracy;
+      if (simulateEnabled && simulatedGeo) {
+        latitude = simulatedGeo.lat;
+        longitude = simulatedGeo.lng;
+        accuracy = 5;
+      } else {
+        latitude = pos.coords.latitude;
+        longitude = pos.coords.longitude;
+        accuracy = pos.coords.accuracy;
+      }
+      applyPassiveUserPosition(latitude, longitude, accuracy, now);
 
       map.flyTo({ center: [longitude, latitude], zoom: 15 });
 
@@ -870,14 +968,27 @@ function setStartMarker(lngLat) {
 
   }
 
-  const el = document.createElement('div');
+  const wrap = document.createElement('div');
+  wrap.style.cssText =
+    'display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));';
 
-  el.style.cssText =
-    'width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:rgba(34,197,94,0.45);border:2px solid rgba(255,255,255,0.9);border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.45);';
-  el.innerText = '🚩';
-  el.title = 'Старт маршрута';
+  const badge = document.createElement('div');
+  badge.style.cssText =
+    'min-width:38px;height:38px;border-radius:50%;background:linear-gradient(145deg,#4ade80,#15803d);border:3px solid #fff;box-shadow:0 0 0 2px rgba(21,128,61,0.9);display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;';
+  badge.innerHTML = '&#x1F6A9;';
+  badge.title = 'Старт';
 
-  startMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
+  const lbl = document.createElement('div');
+  lbl.textContent = 'СТАРТ';
+  lbl.style.cssText =
+    'margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.12em;color:#fff;background:rgba(21,128,61,0.96);padding:2px 7px;border-radius:8px;border:1px solid rgba(255,255,255,0.9);';
+
+  wrap.appendChild(badge);
+  wrap.appendChild(lbl);
+
+  startMarker = new maplibregl.Marker({ element: wrap, anchor: 'bottom' })
+    .setLngLat(lngLat)
+    .addTo(map);
 
 }
 
@@ -893,14 +1004,28 @@ function setFinishMarker(lngLat) {
     finishMarker.setLngLat(lngLat);
     return;
   }
-  
-  const el = document.createElement('div');
-  el.style.cssText =
-    'width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:rgba(220,38,38,0.5);border:2px solid rgba(255,255,255,0.9);border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.45);';
-  el.innerText = '🏁';
-  el.title = 'Финиш маршрута';
-  
-  finishMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText =
+    'display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.55));';
+
+  const badge = document.createElement('div');
+  badge.style.cssText =
+    'min-width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1e1b4b 100%);border:3px solid #fbbf24;box-shadow:inset 0 0 0 2px rgba(251,191,36,0.35);display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;';
+  badge.innerHTML = '&#x1F3C1;';
+  badge.title = 'Финиш';
+
+  const lbl = document.createElement('div');
+  lbl.textContent = 'ФИНИШ';
+  lbl.style.cssText =
+    'margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.14em;color:#fef3c7;background:rgba(76,29,149,0.98);padding:2px 7px;border-radius:8px;border:1px solid #fbbf24;';
+
+  wrap.appendChild(badge);
+  wrap.appendChild(lbl);
+
+  finishMarker = new maplibregl.Marker({ element: wrap, anchor: 'bottom' })
+    .setLngLat(lngLat)
+    .addTo(map);
 }
 
 // === МАТЕМАТИКА ДИСТАНЦИИ ===
@@ -931,6 +1056,24 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 
 }
 
+function destinationPointLatLon(latDeg, lonDeg, bearingDeg, distanceM) {
+  const R = 6371000;
+  const δ = distanceM / R;
+  const θ = (bearingDeg * Math.PI) / 180;
+  const φ1 = (latDeg * Math.PI) / 180;
+  const λ1 = (lonDeg * Math.PI) / 180;
+  const φ2 = Math.asin(
+    Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ)
+  );
+  const λ2 =
+    λ1 +
+    Math.atan2(
+      Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
+      Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2)
+    );
+  return { lat: (φ2 * 180) / Math.PI, lon: (λ2 * 180) / Math.PI };
+}
+
 function calculateBearingDeg(lat1, lon1, lat2, lon2) {
   const toRad = (v) => (v * Math.PI) / 180;
   const toDeg = (v) => (v * 180) / Math.PI;
@@ -946,6 +1089,104 @@ function calculateBearingDeg(lat1, lon1, lat2, lon2) {
 
   const heading = toDeg(Math.atan2(y, x));
   return (heading + 360) % 360;
+}
+
+function pointAwayFromStart(coords, distanceM) {
+  const lon0 = coords[0][0];
+  const lat0 = coords[0][1];
+  if (coords.length < 2) {
+    return destinationPointLatLon(lat0, lon0, 180, distanceM);
+  }
+  const lon1 = coords[1][0];
+  const lat1 = coords[1][1];
+  const bearing = calculateBearingDeg(lat0, lon0, lat1, lon1);
+  const back = (bearing + 180) % 360;
+  return destinationPointLatLon(lat0, lon0, back, distanceM);
+}
+
+function setSimulatedPosition(lat, lng) {
+  if (!simulateEnabled) return;
+  simulatedGeo = { lat, lng };
+  const now = Date.now();
+  applyPassiveUserPosition(lat, lng, 5, now);
+  if (isTracking) {
+    onGPSPosition({
+      coords: {
+        latitude: lat,
+        longitude: lng,
+        accuracy: 5,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null
+      },
+      timestamp: now
+    });
+  }
+}
+
+function ensureSimulatePanel() {
+  if (!simulateEnabled || !routeId || document.getElementById('terraSimPanel')) return;
+  ensureUiEnhancements();
+  const panel = document.createElement('div');
+  panel.id = 'terraSimPanel';
+  panel.style.cssText =
+    'position:fixed;top:108px;right:10px;z-index:10;max-width:min(210px,calc(100vw - 24px));background:rgba(15,23,42,0.94);color:#e2e8f0;border:1px solid rgba(248,250,252,0.22);border-radius:14px;padding:10px 10px 6px;font-size:11px;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
+
+  const title = document.createElement('div');
+  title.textContent = 'Тест без прогулки';
+  title.style.cssText = 'font-weight:700;margin-bottom:6px;color:#fff;font-size:12px;';
+  panel.appendChild(title);
+
+  const hint = document.createElement('div');
+  hint.textContent = 'Параметр URL: simulate=1';
+  hint.style.cssText = 'opacity:0.8;margin-bottom:8px;line-height:1.35;font-size:10px;';
+  panel.appendChild(hint);
+
+  function addBtn(label, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.style.cssText =
+      'display:block;width:100%;margin-bottom:6px;padding:8px 10px;font-size:12px;font-weight:600;border:none;border-radius:10px;background:#334155;color:#fff;cursor:pointer;';
+    b.onclick = onClick;
+    panel.appendChild(b);
+  }
+
+  addBtn('~80 м от старта', () => {
+    const coords = getRouteLineCoordinates();
+    if (coords.length < 1) return;
+    const p = pointAwayFromStart(coords, 80);
+    simRouteStepIndex = 0;
+    setSimulatedPosition(p.lat, p.lon);
+  });
+  addBtn('В зоне старта', () => {
+    if (!plannedStart) return;
+    simRouteStepIndex = 0;
+    setSimulatedPosition(plannedStart[1], plannedStart[0]);
+  });
+  addBtn('+1 вершина трека', () => {
+    const coords = getRouteLineCoordinates();
+    if (!coords.length) return;
+    simRouteStepIndex = Math.min(simRouteStepIndex + 1, coords.length - 1);
+    const c = coords[simRouteStepIndex];
+    setSimulatedPosition(c[1], c[0]);
+  });
+  addBtn('Сброс к старту', () => {
+    const coords = getRouteLineCoordinates();
+    if (!coords.length) return;
+    simRouteStepIndex = 0;
+    const c = coords[0];
+    setSimulatedPosition(c[1], c[0]);
+  });
+  addBtn('У финиша', () => {
+    if (!plannedFinish) return;
+    const coords = getRouteLineCoordinates();
+    simRouteStepIndex = Math.max(0, coords.length - 1);
+    setSimulatedPosition(plannedFinish[1], plannedFinish[0]);
+  });
+
+  document.body.appendChild(panel);
 }
 
 
@@ -1428,7 +1669,18 @@ function onGPSPosition(pos) {
 
 
 
-  const { latitude, longitude, accuracy } = pos.coords;
+  let latitude;
+  let longitude;
+  let accuracy;
+  if (simulateEnabled && simulatedGeo) {
+    latitude = simulatedGeo.lat;
+    longitude = simulatedGeo.lng;
+    accuracy = 5;
+  } else {
+    latitude = pos.coords.latitude;
+    longitude = pos.coords.longitude;
+    accuracy = pos.coords.accuracy;
+  }
   lastKnownPosition = { latitude, longitude, accuracy };
   updateGPSQuality(accuracy);
 
@@ -1522,6 +1774,7 @@ function onGPSPosition(pos) {
 
       lastStartStatus = null;
       removeStartMarker();
+      clearNavToStartLine();
 
       initializeRouteProgress(); // инициализируем отслеживание прогресса
 
@@ -1541,7 +1794,7 @@ function onGPSPosition(pos) {
 
       const rounded = Math.round(distToStart / 5) * 5;
 
-      const msg = `🏁 Подойдите к точке старта (≈ ${rounded} м)`;
+      const msg = `📍 Подойдите к старту (≈ ${rounded} м)`;
 
       if (msg !== lastStartStatus) {
 
@@ -1623,6 +1876,7 @@ function startRun() {
     lastSavedPoint = null;
     lastRawPoint = null;
     autoPausedBySystem = false;
+    clearNavToStartLine();
     if (replayPanelEl) replayPanelEl.style.display = 'none';
     if (map?.getSource(REPLAY_SOURCE_ID)) {
       setReplayCoordinates([]);
