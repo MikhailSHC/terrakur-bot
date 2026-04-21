@@ -8,29 +8,6 @@ class MessageHandler {
         this.commandHandler = commandHandler;
     }
 
-    // Обработка геолокации
-    async handleLocation(chatId, location) {
-        console.log(`📍 Получена геолокация от ${chatId}:`, location);
-        
-        const { latitude, longitude } = location;
-        const mapsLink = `https://yandex.ru/maps/?pt=${longitude},${latitude}&z=15&l=map`;
-        
-        await this.bot.api.sendMessageToChat(
-            chatId,
-            `📍 *Ваше местоположение:*\n\n` +
-            `Широта: ${latitude}\n` +
-            `Долгота: ${longitude}\n\n` +
-            `[Открыть на карте](${mapsLink})\n\n` +
-            `🔍 *Функция поиска маршрутов рядом с вами скоро появится!*\n\n` +
-            `А пока выберите город из списка:`,
-            { parse_mode: 'Markdown' }
-        );
-        
-        await this.bot.api.sendMessageToChat(chatId, 'Выберите город:', {
-            attachments: [keyboards.locationKeyboard]
-        });
-    }
-
     // Главный обработчик текстовых сообщений
     async handleTextMessage(chatId, messageText) {
         const session = this.userService.getUserSession(chatId);
@@ -45,9 +22,11 @@ class MessageHandler {
         }
         
         if (messageText === '📍 Маршруты рядом со мной') {
-            await this.bot.api.sendMessageToChat(chatId, '📍 Поделитесь вашим местоположением:', {
-                attachments: [keyboards.geoRequestKeyboard]
-            });
+            await this.bot.api.sendMessageToChat(
+                chatId,
+                'Сначала выберите вид активности — затем при необходимости поделитесь геолокацией (как в главном меню по кнопке «Рядом со мной»):',
+                { attachments: [keyboards.nearbyActivityPickKeyboard] }
+            );
             return;
         }
         

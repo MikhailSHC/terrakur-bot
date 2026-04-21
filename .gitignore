@@ -1,6 +1,7 @@
 node_modules/
 .env
 data/user_data.json
+.jest-user-activity-test.json
 npm-debug.log
 .DS_Store
 .vscode/

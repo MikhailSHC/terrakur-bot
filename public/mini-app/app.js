@@ -119,6 +119,7 @@ const routeId     = urlParams.get('routeId');       // системный мар
 
 const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
+const activityIdFromUrl = urlParams.get('activityId');
 
 /** Тест без прогулки: добавьте в URL `&simulate=1` (вместе с routeId). */
 const simulateEnabled = urlParams.get('simulate') === '1';
@@ -2195,7 +2196,9 @@ async function stopAndSave() {
 
     geojson: geojsonTrack,
 
-    mode: sessionMode
+    mode: sessionMode,
+
+    activityId: activityIdFromUrl || null
 
   };
 

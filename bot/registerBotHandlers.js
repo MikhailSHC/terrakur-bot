@@ -53,7 +53,9 @@ function registerBotHandlers(bot, deps) {
     let keyboardOptions = {};
 
     if (session.routeListMode === 'nearby') {
-      text = `📍 Ближайшие маршруты к вам (${currentPage + 1}/${totalPages}):\n\n`;
+      const act = session.nearbyActivityId ? routeService.getActivityById(session.nearbyActivityId) : null;
+      const actHint = act ? ` — ${act.emoji} ${act.name}` : '';
+      text = `📍 Ближайшие маршруты к вам${actHint} (стр. ${currentPage + 1}/${totalPages}):\n\n`;
       pageRoutes.forEach((route, idx) => {
         const routeLengthText = route.distanceText || (route.distanceKm ? `~${route.distanceKm} км` : 'нет данных');
         const distanceKm = typeof route.nearbyDistanceKm === 'number' ? route.nearbyDistanceKm.toFixed(1) : '?';
@@ -89,11 +91,18 @@ function registerBotHandlers(bot, deps) {
     });
   }
 
-  async function showNearbyRoutesForUser(chatId, latitude, longitude) {
-    const routesWithDistance = routeService.getRoutesSortedByDistance(latitude, longitude);
+  async function showNearbyRoutesForUser(chatId, latitude, longitude, activityId) {
+    const routesWithDistance = routeService.getRoutesSortedByDistance(latitude, longitude, {
+      activityId: activityId || undefined
+    });
 
     if (!routesWithDistance.length) {
-      await bot.api.sendMessageToChat(chatId, '❌ Пока не могу найти маршруты с координатами рядом с вами.');
+      const act = activityId ? routeService.getActivityById(activityId) : null;
+      const actHint = act ? ` для «${act.name}»` : '';
+      await bot.api.sendMessageToChat(
+        chatId,
+        `❌ Не нашёл маршрутов${actHint} с координатами центра в данных. Попробуйте другой вид активности или маршруты по городу из меню.`
+      );
       return;
     }
 
@@ -108,11 +117,15 @@ function registerBotHandlers(bot, deps) {
       };
     });
 
+    const selectedAct = activityId ? routeService.getActivityById(activityId) : null;
+
     userService.setUserState(chatId, 'routes_nearby_shown', {
       availableRoutes: nearestRoutes,
       selectedLocation: null,
-      selectedActivity: null,
+      selectedActivity: selectedAct,
       routeListMode: 'nearby',
+      nearbyActivityId: activityId || null,
+      nearbyPendingActivityId: null,
       currentRoutePage: 0
     });
 
@@ -145,18 +158,36 @@ function registerBotHandlers(bot, deps) {
     if (callbackData === 'help') return commandHandler.handleHelp(chatId);
     if (callbackData === 'my_history') return commandHandler.handleProfile(chatId);
 
+    if (callbackData.startsWith('pick_profile_activity_')) {
+      const raw = callbackData.replace('pick_profile_activity_', '');
+      const activityFilter = raw === 'all' ? null : raw;
+      if (activityFilter && !routeService.getActivityById(activityFilter)) return;
+      return commandHandler.handleProfileForActivity(chatId, activityFilter);
+    }
+
     if (callbackData === 'start_free_track') {
-      const navUrl = buildMiniAppUrl(config, chatId);
       await bot.api.sendMessageToChat(
         chatId,
-        '🧭 Начинаем ваш личный трек!\n\nНажмите кнопку ниже, чтобы открыть трекер.',
+        '🧭 Выберите тип тренировки — километры и время в трекере сохранятся с этим видом активности:',
+        { attachments: [keyboards.freeTrackActivityPickKeyboard] }
+      );
+      return;
+    }
+
+    if (callbackData.startsWith('pick_free_activity_')) {
+      const activityId = callbackData.replace('pick_free_activity_', '');
+      if (!routeService.getActivityById(activityId)) return;
+      const navUrl = buildMiniAppUrl(config, chatId, { activityId });
+      await bot.api.sendMessageToChat(
+        chatId,
+        '🧭 Откройте трекер по кнопке ниже. После тренировки данные попадут в «Моя история» для выбранного вида.',
         {
           parse_mode: 'Markdown',
           attachments: getOpenRouteKeyboard(navUrl)
         }
       );
       userService.setUserState(chatId, 'free_run_started', {
-        lastFreeRun: { startedAt: new Date().toISOString() }
+        lastFreeRun: { startedAt: new Date().toISOString(), activityId }
       });
       return;
     }
@@ -167,14 +198,36 @@ function registerBotHandlers(bot, deps) {
     }
 
     if (callbackData === 'nearby_routes') {
+      const prev = userService.getUserSession(chatId);
+      userService.setUserState(chatId, prev.state, { locationShareIntent: null });
+      await bot.api.sendMessageToChat(chatId, '📍 Выберите вид активности — подберу ближайшие маршруты с учётом этого типа:', {
+        attachments: [keyboards.nearbyActivityPickKeyboard]
+      });
+      return;
+    }
+
+    if (callbackData.startsWith('pick_nearby_activity_')) {
+      const activityId = callbackData.replace('pick_nearby_activity_', '');
+      if (!routeService.getActivityById(activityId)) return;
       const session = userService.getUserSession(chatId);
-      if (!session.lastLocation) {
-        await bot.api.sendMessageToChat(chatId, '📍 Поделитесь вашим местоположением, чтобы я нашёл ближайшие маршруты:', {
-          attachments: [keyboards.geoRequestKeyboard]
-        });
-        return;
+      userService.setUserState(chatId, 'awaiting_nearby_location', {
+        nearbyPendingActivityId: activityId,
+        locationShareIntent: null
+      });
+      if (session.lastLocation) {
+        return showNearbyRoutesForUser(
+          chatId,
+          session.lastLocation.latitude,
+          session.lastLocation.longitude,
+          activityId
+        );
       }
-      return showNearbyRoutesForUser(chatId, session.lastLocation.latitude, session.lastLocation.longitude);
+      await bot.api.sendMessageToChat(
+        chatId,
+        '📍 Поделитесь геолокацией — по ней отсортирую маршруты по расстоянию.',
+        { attachments: [keyboards.geoRequestKeyboard] }
+      );
+      return;
     }
 
     if (callbackData === 'settings') {
@@ -187,6 +240,7 @@ function registerBotHandlers(bot, deps) {
     }
 
     if (callbackData === 'change_location') {
+      userService.setUserState(chatId, 'settings', { locationShareIntent: 'update_only' });
       await bot.api.sendMessageToChat(chatId, '📍 Выберите новое местоположение:', {
         attachments: [keyboards.geoRequestKeyboard]
       });
@@ -244,9 +298,13 @@ function registerBotHandlers(bot, deps) {
       const routes = session.availableRoutes || [];
       if (!Number.isNaN(routeIndex) && routeIndex >= 0 && routeIndex < routes.length) {
         const route = routes[routeIndex];
+        const activityNameForDetails =
+          session.routeListMode === 'nearby' && session.nearbyActivityId
+            ? routeService.getActivityById(session.nearbyActivityId)?.name
+            : session.selectedActivity?.name;
         const details = formatRouteDetails(route, {
           locationName: session.selectedLocation?.name,
-          activityName: session.selectedActivity?.name
+          activityName: activityNameForDetails
         });
         await bot.api.sendMessageToChat(chatId, details, {
           attachments: [keyboards.getRouteDetailKeyboard(route.id)]
@@ -263,7 +321,12 @@ function registerBotHandlers(bot, deps) {
         return;
       }
       userService.addRouteToHistory(chatId, route.name, routeId);
-      const navUrl = buildMiniAppUrl(config, chatId, { routeId: route.id });
+      const sess = userService.getUserSession(chatId);
+      const activityForUrl = sess.nearbyActivityId || sess.selectedActivity?.id;
+      const navUrl = buildMiniAppUrl(config, chatId, {
+        routeId: route.id,
+        ...(activityForUrl ? { activityId: activityForUrl } : {})
+      });
       await bot.api.sendMessageToChat(
         chatId,
         `✅ Маршрут *${route.name}* начат!\n\nНажмите кнопку ниже, чтобы открыть навигатор.`,
@@ -315,13 +378,38 @@ function registerBotHandlers(bot, deps) {
       const locationAttachment = attachments.find((a) => a && a.type === 'location' && a.latitude && a.longitude);
 
       if (locationAttachment) {
+        const sessionBefore = userService.getUserSession(chatId);
         const lastLocation = {
           latitude: locationAttachment.latitude,
           longitude: locationAttachment.longitude,
           updatedAt: new Date().toISOString()
         };
         userService.setLastLocation(chatId, lastLocation);
-        await showNearbyRoutesForUser(chatId, lastLocation.latitude, lastLocation.longitude);
+
+        if (sessionBefore.locationShareIntent === 'update_only') {
+          userService.setUserState(chatId, sessionBefore.state, { locationShareIntent: null });
+          await bot.api.sendMessageToChat(
+            chatId,
+            '✅ Местоположение сохранено. Его можно использовать в «Рядом со мной».'
+          );
+          return;
+        }
+
+        const pendingActivity = sessionBefore.nearbyPendingActivityId;
+        if (pendingActivity) {
+          await showNearbyRoutesForUser(
+            chatId,
+            lastLocation.latitude,
+            lastLocation.longitude,
+            pendingActivity
+          );
+          return;
+        }
+
+        await bot.api.sendMessageToChat(
+          chatId,
+          '✅ Геолокация сохранена. Чтобы найти маршруты рядом: главное меню → «📍 Рядом со мной» → вид активности.'
+        );
         return;
       }
 

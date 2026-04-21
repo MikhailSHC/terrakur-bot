@@ -89,7 +89,11 @@ function createApiRouter({ userService, routeService, miniAppAuth }) {
         avgPaceSecPerKm: session.avgPaceSecPerKm,
         geojson: session.geojson,
         mode: session.mode,
-        plannedRouteId: session.plannedRouteId || null
+        plannedRouteId: session.plannedRouteId || null,
+        activityId:
+          typeof session.activityId === 'string' && session.activityId.length > 0
+            ? session.activityId
+            : null
       };
 
       userService.addSession(chatId, sessionRecord);

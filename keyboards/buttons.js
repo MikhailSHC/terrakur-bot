@@ -162,6 +162,61 @@ const settingsKeyboard = {
   }
 };
 
+/** Выбор активности перед «Рядом со мной» (payload: pick_nearby_activity_<id>) */
+const nearbyActivityPickKeyboard = {
+  type: 'inline_keyboard',
+  payload: {
+    buttons: [
+      [
+        { type: 'callback', text: '🚶 Ходьба', payload: 'pick_nearby_activity_walking' },
+        { type: 'callback', text: '🏃 Бег', payload: 'pick_nearby_activity_running' }
+      ],
+      [
+        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_nearby_activity_nordic_walking' },
+        { type: 'callback', text: '🚲 Велосипед', payload: 'pick_nearby_activity_cycling' }
+      ],
+      [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+    ]
+  }
+};
+
+/** Выбор активности перед свободным треком (payload: pick_free_activity_<id>) */
+const freeTrackActivityPickKeyboard = {
+  type: 'inline_keyboard',
+  payload: {
+    buttons: [
+      [
+        { type: 'callback', text: '🚶 Ходьба', payload: 'pick_free_activity_walking' },
+        { type: 'callback', text: '🏃 Бег', payload: 'pick_free_activity_running' }
+      ],
+      [
+        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_free_activity_nordic_walking' },
+        { type: 'callback', text: '🚲 Велосипед', payload: 'pick_free_activity_cycling' }
+      ],
+      [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+    ]
+  }
+};
+
+/** Профиль / история по виду активности */
+const profileActivityPickKeyboard = {
+  type: 'inline_keyboard',
+  payload: {
+    buttons: [
+      [{ type: 'callback', text: '📊 Все виды сразу', payload: 'pick_profile_activity_all' }],
+      [
+        { type: 'callback', text: '🚶 Ходьба', payload: 'pick_profile_activity_walking' },
+        { type: 'callback', text: '🏃 Бег', payload: 'pick_profile_activity_running' }
+      ],
+      [
+        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_profile_activity_nordic_walking' },
+        { type: 'callback', text: '🚲 Велосипед', payload: 'pick_profile_activity_cycling' }
+      ],
+      [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+    ]
+  }
+};
+
 
 module.exports = {
   mainMenuKeyboard,
@@ -170,5 +225,8 @@ module.exports = {
   getRouteKeyboard,
   getRouteDetailKeyboard,
   geoRequestKeyboard,
-  settingsKeyboard
+  settingsKeyboard,
+  nearbyActivityPickKeyboard,
+  freeTrackActivityPickKeyboard,
+  profileActivityPickKeyboard
 };

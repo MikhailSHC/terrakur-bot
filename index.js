@@ -43,7 +43,7 @@ app.listen(PORT, () => {
 });
 
 const bot = new Bot(config.BOT_TOKEN);
-const commandHandler = new CommandHandler(bot, userService);
+const commandHandler = new CommandHandler(bot, userService, routeService);
 const messageHandler = new MessageHandler(bot, userService, routeService, commandHandler);
 
 registerBotHandlers(bot, {

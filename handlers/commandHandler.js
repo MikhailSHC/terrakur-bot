@@ -1,9 +1,10 @@
 const keyboards = require('../keyboards/buttons');
 
 class CommandHandler {
-    constructor(bot, userService) {
+    constructor(bot, userService, routeService) {
         this.bot = bot;
         this.userService = userService;
+        this.routeService = routeService;
     }
 
     async handleStart(chatId) {
@@ -37,36 +38,85 @@ class CommandHandler {
         await this.bot.api.sendMessageToChat(chatId, helpText, { parse_mode: 'Markdown' });
     }
 
+    async sendProfileActivityPicker(chatId) {
+        await this.bot.api.sendMessageToChat(
+            chatId,
+            '📊 *Моя история*\n\nВыберите вид активности — покажу тренировки и завершённые маршруты только для него. Или «все виды» для общей сводки.',
+            {
+                parse_mode: 'Markdown',
+                attachments: [keyboards.profileActivityPickKeyboard]
+            }
+        );
+    }
+
     async handleProfile(chatId) {
+        await this.sendProfileActivityPicker(chatId);
+    }
+
+    /**
+     * @param {string|null} activityId — null = все виды
+     */
+    async handleProfileForActivity(chatId, activityId) {
         const session = this.userService.getUserSession(chatId);
-        const history = session.history || [];
-        const lifetime = this.userService.getLifetimeStats(chatId);
+        const historyAll = session.history || [];
+
+        let lifetime;
+        let titleScope;
+        if (activityId == null) {
+            lifetime = this.userService.getLifetimeStats(chatId);
+            titleScope = '📊 *Все виды активности*';
+        } else {
+            lifetime = this.userService.getLifetimeStatsByActivity(chatId, activityId);
+            const act = this.routeService.getActivityById(activityId);
+            const actLabel = act ? `${act.emoji} ${act.name}` : activityId;
+            titleScope = `📊 *${actLabel}*`;
+        }
+
         const totalKm = (lifetime.totalDistanceM / 1000).toFixed(2);
         const totalHours = Math.floor(lifetime.totalDurationSec / 3600);
         const totalMinutes = Math.floor((lifetime.totalDurationSec % 3600) / 60);
         const lifetimeHeader =
-            `🏁 *За всё время:*\n` +
+            `${titleScope}\n\n` +
+            `🏁 *Тренировки (трекер):*\n` +
             `• Дистанция: *${totalKm} км*\n` +
             `• Время: *${totalHours} ч ${totalMinutes} мин*\n` +
-            `• Тренировок: *${lifetime.totalSessions}*\n\n`;
-        
-        if (history.length === 0) {
-            await this.bot.api.sendMessageToChat(
-                chatId,
-                lifetimeHeader +
-                '📝 У вас пока нет записей в истории маршрутов. Начните с /start!',
-                { parse_mode: 'Markdown' }
-            );
-        } else {
-            let profileText = lifetimeHeader + '📊 *Ваша история активности:*\n\n';
-            history.slice(-5).reverse().forEach((record, index) => {
+            `• Сессий: *${lifetime.totalSessions}*\n\n`;
+
+        let historySlice = historyAll;
+        if (activityId != null) {
+            historySlice = historyAll.filter((h) => {
+                const r = this.routeService.findRouteById(h.routeId);
+                return r && Array.isArray(r.activities) && r.activities.includes(activityId);
+            });
+        }
+
+        let profileText = lifetimeHeader;
+
+        if (lifetime.totalSessions === 0 && historySlice.length === 0) {
+            profileText +=
+                '📝 Пока нет тренировок с этим видом активности в трекере и нет завершённых маршрутов в истории.\n\nГлавное меню: /start';
+            await this.bot.api.sendMessageToChat(chatId, profileText, { parse_mode: 'Markdown' });
+            return;
+        }
+
+        if (historySlice.length === 0) {
+            profileText +=
+                '🗺️ В истории завершённых маршрутов для этого вида пока пусто (есть только записи трекера выше).\n\nГлавное меню: /start';
+            await this.bot.api.sendMessageToChat(chatId, profileText, { parse_mode: 'Markdown' });
+            return;
+        }
+
+        profileText += '*Завершённые маршруты (последние 5):*\n\n';
+        historySlice
+            .slice(-5)
+            .reverse()
+            .forEach((record, index) => {
                 profileText += `${index + 1}. ${record.routeName}\n`;
                 profileText += `   📅 ${record.date}\n\n`;
             });
-            profileText += 'Используйте /start чтобы найти новые маршруты!';
-            
-            await this.bot.api.sendMessageToChat(chatId, profileText, { parse_mode: 'Markdown' });
-        }
+        profileText += 'Главное меню: /start';
+
+        await this.bot.api.sendMessageToChat(chatId, profileText, { parse_mode: 'Markdown' });
     }
 
     async handleUnknownCommand(chatId) {

@@ -72,6 +72,9 @@ class UserService {
     if (!('lastLocation' in u)) u.lastLocation = null;
     if (!u.createdAt) u.createdAt = new Date().toISOString();
     if (!u.lastUpdated) u.lastUpdated = new Date().toISOString();
+    if (!('locationShareIntent' in u)) u.locationShareIntent = null;
+    if (!('nearbyPendingActivityId' in u)) u.nearbyPendingActivityId = null;
+    if (!('nearbyActivityId' in u)) u.nearbyActivityId = null;
 
     return u;
   }
@@ -220,6 +223,22 @@ class UserService {
     };
   }
 
+  /** Суммарная статистика только по тренировкам с указанным activityId */
+  getLifetimeStatsByActivity(chatId, activityId) {
+    const sessions = this.getUserSession(chatId).sessions || [];
+    let totalDistanceM = 0;
+    let totalDurationSec = 0;
+    let totalSessions = 0;
+    for (const s of sessions) {
+      if (s && s.activityId === activityId) {
+        totalDistanceM += Number(s.distanceM) || 0;
+        totalDurationSec += Number(s.durationSec) || 0;
+        totalSessions += 1;
+      }
+    }
+    return { totalDistanceM, totalDurationSec, totalSessions };
+  }
+
   getSessions(chatId, limit = null) {
     const session = this.getUserSession(chatId);
     const sessions = Array.isArray(session.sessions) ? session.sessions : [];
@@ -227,6 +246,15 @@ class UserService {
       return sessions.slice(-limit);
     }
     return sessions;
+  }
+
+  getSessionsByActivity(chatId, activityId, limit = 50) {
+    const sessions = this.getUserSession(chatId).sessions || [];
+    const filtered = sessions.filter((s) => s && s.activityId === activityId);
+    if (limit && filtered.length > limit) {
+      return filtered.slice(-limit);
+    }
+    return filtered;
   }
 
 }
