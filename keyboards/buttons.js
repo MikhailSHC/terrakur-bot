@@ -108,11 +108,6 @@ function getRouteKeyboard(routes, options = {}) {
     ]);
   }
 
-  buttons.push([{ type: 'callback', text: backButtonText, payload: backPayload }]);
-  if (backPayload !== 'main_menu') {
-    buttons.push([{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]);
-  }
-
   return {
     type: 'inline_keyboard',
     payload: { buttons }
@@ -126,9 +121,7 @@ function getRouteDetailKeyboard(routeId) {
     type: 'inline_keyboard',
     payload: {
       buttons: [
-        [{ type: 'callback', text: '✅ Старт', payload: `start_route_${routeId}` }],
-        [{ type: 'callback', text: '⬅️ К списку маршрутов', payload: 'back_to_routes' }],
-        [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+        [{ type: 'callback', text: '✅ Начать маршрут', payload: `start_route_${routeId}` }]
       ]
     }
   };
