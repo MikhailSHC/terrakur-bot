@@ -32,17 +32,20 @@ class CommandHandler {
 
     async handleHelp(chatId) {
         const helpText = 
-            '📚 *Доступные команды:*\n' +
-            '/start - Начать поиск маршрутов\n' +
-            '/profile - Моя активность\n' +
-            '/help - Помощь\n\n' +
-            '✨ *Возможности:*\n' +
-            '• Выбор города и активности\n' +
-            '• Персональные рекомендации\n' +
-            '• История пройденных маршрутов\n\n' +
-            'Используйте кнопки для навигации!';
-        
-        await this.bot.api.sendMessageToChat(chatId, helpText, { parse_mode: 'Markdown' });
+            '❓ *Как пользоваться ботом TerraKur*\n\n' +
+            '1) Откройте *Маршруты Ставрополья* и выберите город + активность.\n' +
+            '2) Или нажмите *Рядом со мной* — бот подберёт ближайшие тропы по вашей геолокации.\n' +
+            '3) Нажмите *Старт* у маршрута и откройте карту.\n' +
+            '4) После тренировки прогресс и статистика появятся в *Моя история*.\n\n' +
+            '*Команды:*\n' +
+            '/start — главное меню\n' +
+            '/profile — история и статистика\n' +
+            '/help — эта справка';
+
+        await this.bot.api.sendMessageToChat(chatId, helpText, {
+            parse_mode: 'Markdown',
+            attachments: [keyboards.mainMenuKeyboard]
+        });
     }
 
     async sendProfileActivityPicker(chatId) {
@@ -101,15 +104,21 @@ class CommandHandler {
 
         if (lifetime.totalSessions === 0 && historySlice.length === 0) {
             profileText +=
-                '📝 Пока нет тренировок с этим видом активности в трекере и нет завершённых маршрутов в истории.\n\nГлавное меню: /start';
-            await this.bot.api.sendMessageToChat(chatId, profileText, { parse_mode: 'Markdown' });
+                '📝 Пока нет тренировок с этим видом активности в трекере и нет завершённых маршрутов в истории.';
+            await this.bot.api.sendMessageToChat(chatId, profileText, {
+                parse_mode: 'Markdown',
+                attachments: [keyboards.mainMenuKeyboard]
+            });
             return;
         }
 
         if (historySlice.length === 0) {
             profileText +=
-                '🗺️ В истории завершённых маршрутов для этого вида пока пусто (есть только записи трекера выше).\n\nГлавное меню: /start';
-            await this.bot.api.sendMessageToChat(chatId, profileText, { parse_mode: 'Markdown' });
+                '🗺️ В истории завершённых маршрутов для этого вида пока пусто (есть только записи трекера выше).';
+            await this.bot.api.sendMessageToChat(chatId, profileText, {
+                parse_mode: 'Markdown',
+                attachments: [keyboards.mainMenuKeyboard]
+            });
             return;
         }
 
@@ -121,9 +130,10 @@ class CommandHandler {
                 profileText += `${index + 1}. ${record.routeName}\n`;
                 profileText += `   📅 ${record.date}\n\n`;
             });
-        profileText += 'Главное меню: /start';
-
-        await this.bot.api.sendMessageToChat(chatId, profileText, { parse_mode: 'Markdown' });
+        await this.bot.api.sendMessageToChat(chatId, profileText, {
+            parse_mode: 'Markdown',
+            attachments: [keyboards.mainMenuKeyboard]
+        });
     }
 
     async handleUnknownCommand(chatId) {
