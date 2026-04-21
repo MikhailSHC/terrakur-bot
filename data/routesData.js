@@ -146,13 +146,13 @@ const routes = [
 
 
 
-    name: 'Холодные родники и Комсомольский пруд',
+    name: 'Холодные ручьи и Комсомольский пруд',
 
     description: 'Маршрут через Холодные родники и Комсомольский пруд',
 
 
 
-    activities: ['walking', 'nordic_walking'],
+    activities: ['running', 'cycling'],
 
 
 
