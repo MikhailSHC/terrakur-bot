@@ -301,7 +301,20 @@ function registerBotHandlers(bot, deps) {
 
       const routes = routeService.getRoutesForLocationAndActivity(session.selectedLocation.id, activity.id);
       if (!routes.length) {
-        await bot.api.sendMessageToChat(chatId, `❌ Нет маршрутов для ${activity.name} в ${session.selectedLocation.name}.`);
+        await bot.api.sendMessageToChat(
+          chatId,
+          `❌ Нет маршрутов для ${activity.name} в ${session.selectedLocation.name}.`,
+          {
+            attachments: [
+              {
+                type: 'inline_keyboard',
+                payload: {
+                  buttons: [[{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]]
+                }
+              }
+            ]
+          }
+        );
         return;
       }
 
@@ -339,8 +352,13 @@ function registerBotHandlers(bot, deps) {
           locationName: session.selectedLocation?.name,
           activityName: activityNameForDetails
         });
+        const activityForUrl = session.nearbyActivityId || session.selectedActivity?.id;
+        const navUrl = buildMiniAppUrl(config, chatId, {
+          routeId: route.id,
+          ...(activityForUrl ? { activityId: activityForUrl } : {})
+        });
         await bot.api.sendMessageToChat(chatId, details, {
-          attachments: [keyboards.getRouteDetailKeyboard(route.id)]
+          attachments: [keyboards.getRouteDetailKeyboard(route.id, { mapUrl: navUrl })]
         });
       }
       return;

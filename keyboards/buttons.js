@@ -108,6 +108,11 @@ function getRouteKeyboard(routes, options = {}) {
     ]);
   }
 
+  buttons.push([{ type: 'callback', text: backButtonText, payload: backPayload }]);
+  if (backPayload !== 'main_menu') {
+    buttons.push([{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]);
+  }
+
   return {
     type: 'inline_keyboard',
     payload: { buttons }
@@ -116,13 +121,22 @@ function getRouteKeyboard(routes, options = {}) {
 
 
 // ==================== КЛАВИАТУРА ДЛЯ ДЕТАЛЕЙ МАРШРУТА ====================
-function getRouteDetailKeyboard(routeId) {
+function getRouteDetailKeyboard(routeId, options = {}) {
+  const { mapUrl = null } = options;
+  const buttons = [];
+
+  if (mapUrl) {
+    buttons.push([{ type: 'link', text: '✅ Начать маршрут', url: mapUrl }]);
+  } else {
+    buttons.push([{ type: 'callback', text: '✅ Начать маршрут', payload: `start_route_${routeId}` }]);
+  }
+  buttons.push([{ type: 'callback', text: '⬅️ К списку маршрутов', payload: 'back_to_routes' }]);
+  buttons.push([{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]);
+
   return {
     type: 'inline_keyboard',
     payload: {
-      buttons: [
-        [{ type: 'callback', text: '✅ Начать маршрут', payload: `start_route_${routeId}` }]
-      ]
+      buttons
     }
   };
 }

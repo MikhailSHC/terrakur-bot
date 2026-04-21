@@ -179,7 +179,17 @@ class MessageHandler {
         } else {
             await this.bot.api.sendMessageToChat(
                 chatId,
-                `❌ Нет маршрутов для ${activity.name} в ${location.name}. Попробуйте другую активность.`
+                `❌ Нет маршрутов для ${activity.name} в ${location.name}. Попробуйте другую активность.`,
+                {
+                    attachments: [
+                        {
+                            type: 'inline_keyboard',
+                            payload: {
+                                buttons: [[{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]]
+                            }
+                        }
+                    ]
+                }
             );
         }
     }
