@@ -1714,7 +1714,7 @@ function animateCompletedPath(trackCoords, options = {}) {
   );
 
   // Keep room for summary panel, but avoid excessive zoom-out.
-  const replayBottomPadding = Math.max(70, Math.round(window.innerHeight * 0.12));
+  const replayBottomPadding = Math.max(48, Math.round(window.innerHeight * 0.04));
   map.fitBounds(rawBounds, {
     padding: { top: 34, right: 26, bottom: replayBottomPadding, left: 26 },
     duration: 820,
