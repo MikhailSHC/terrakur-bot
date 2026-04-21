@@ -104,6 +104,7 @@ const paceEl       = document.getElementById('pace');
 const statusDiv    = document.getElementById('status');
 
 const startBtn     = document.getElementById('startBtn');
+const stopBtnEl    = document.getElementById('stopBtn');
 
 // const routesBtn    = document.getElementById('routesBtn');
 
@@ -143,6 +144,25 @@ if (routeId) {
 function getAuthHeaders() {
   if (!authToken) return {};
   return { 'x-miniapp-auth': authToken };
+}
+
+/** Средний темп: секунды на километр → читаемая русская строка */
+function formatPaceRuSecPerKm(secPerKm) {
+  if (!Number.isFinite(secPerKm) || secPerKm <= 0) return '—';
+  const total = Math.round(secPerKm);
+  if (total < 60) return `${total} с / км`;
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  if (s === 0) return `${m} мин / км`;
+  return `${m} мин ${s} с / км`;
+}
+
+function syncStopButtonVisibility() {
+  if (!stopBtnEl) return;
+  const show =
+    isTracking &&
+    (sessionMode !== 'planned_route' || hasReachedStart);
+  stopBtnEl.classList.toggle('hidden', !show);
 }
 
 
@@ -656,12 +676,10 @@ async function loadPlannedRoute(id) {
             ? Math.round(haversineDistance(userLat, userLng, plannedStart[1], plannedStart[0]))
             : 0;
 
-        const mapCenter =
-          plannedStart != null
-            ? [(userLng + plannedStart[0]) / 2, (userLat + plannedStart[1]) / 2]
-            : [userLng, userLat];
-
-        map.flyTo({ center: mapCenter, zoom: 14 });
+        const userCenter = [userLng, userLat];
+        lastCameraCenter = userCenter;
+        isFollowingUser = true;
+        map.flyTo({ center: userCenter, zoom: 16 });
 
         updateNavToStartLineIfNeeded(userLat, userLng);
 
@@ -1484,21 +1502,9 @@ function updateStatsUI() {
 
   distanceEl.textContent = distanceKm.toFixed(2);
 
-
-
-  let pace = 0;
-
-  if (totalDistanceM > 0 && elapsedSec > 0) {
-
-    pace = (elapsedSec / 60) / (totalDistanceM / 1000);
-
-  }
-
-  const paceMin = Math.floor(pace);
-
-  const paceSec = Math.floor((pace - paceMin) * 60);
-
-  paceEl.textContent = `${paceMin}'${paceSec.toString().padStart(2, '0')}"`;
+  const secPerKm =
+    totalDistanceM > 0 && elapsedSec > 0 ? elapsedSec / (totalDistanceM / 1000) : 0;
+  paceEl.textContent = formatPaceRuSecPerKm(secPerKm);
 
 
 
@@ -1643,11 +1649,9 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, t
   const km = (distanceM / 1000).toFixed(2);
   const mins = Math.floor(elapsedSec / 60);
   const secs = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
-  const paceMin = Math.floor(avgPaceSecPerKm / 60);
-  const paceSec = Math.floor(avgPaceSecPerKm % 60).toString().padStart(2, '0');
   const paceBlock =
     distanceM > 0 && elapsedSec > 0
-      ? ` | Темп: <b>${paceMin}'${paceSec}"</b> / км`
+      ? ` | Темп: <b>${formatPaceRuSecPerKm(avgPaceSecPerKm)}</b>`
       : '';
 
   if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
@@ -1881,6 +1885,7 @@ function startRun() {
 
     statusDiv.innerText = '❌ Геолокация недоступна';
 
+    syncStopButtonVisibility();
     return;
 
   }
@@ -1898,6 +1903,7 @@ function startRun() {
       // fall through and start tracking
     } else {
       statusDiv.innerText = '🏁 Сначала подойдите к стартовому флажку на карте';
+      syncStopButtonVisibility();
       return;
     }
   }
@@ -2026,6 +2032,8 @@ function startRun() {
 
   }
 
+  syncStopButtonVisibility();
+
 }
 
 
@@ -2064,6 +2072,8 @@ function pauseResume() {
       watchId = null;
 
     }
+
+    syncStopButtonVisibility();
 
   }
 
@@ -2130,9 +2140,7 @@ async function stopAndSave() {
 
     }, 3000);
 
-    const stopBtn = document.getElementById('dynamicStopBtn');
-
-    if (stopBtn) stopBtn.remove();
+    syncStopButtonVisibility();
 
     if (uiTimerId !== null) {
 
@@ -2272,13 +2280,7 @@ async function stopAndSave() {
 
   }, 3000);
 
-
-
-  const stopBtn = document.getElementById('dynamicStopBtn');
-
-  if (stopBtn) stopBtn.remove();
-
-
+  syncStopButtonVisibility();
 
   if (uiTimerId !== null) {
 
@@ -2313,10 +2315,13 @@ async function stopAndSave() {
 
 function startTrackingFlow() {
   startRun();
-  showStopButton();
 }
 
 startBtn.onclick = () => (isTracking ? pauseResume() : startTrackingFlow());
+
+if (stopBtnEl) {
+  stopBtnEl.addEventListener('click', () => stopAndSave());
+}
 
 // routesBtn.onclick  = () => { statusDiv.innerText = 'Выберите маршрут в боте'; };
 
@@ -2324,37 +2329,8 @@ startBtn.onclick = () => (isTracking ? pauseResume() : startTrackingFlow());
 
 
 
-// Дополнительная кнопка "Стоп"
-
-function showStopButton() {
-
-  if (document.getElementById('dynamicStopBtn')) return;
-
-  const stopBtn = document.createElement('button');
-
-  stopBtn.id = 'dynamicStopBtn';
-
-  stopBtn.textContent = '⏹️ Стоп';
-
-  stopBtn.style.cssText =
-
-    'position:fixed;bottom:100px;right:16px;z-index:3;background:#e74c3c;border:none;border-radius:40px;padding:10px 20px;font-weight:600;color:white;';
-
-  document.body.appendChild(stopBtn);
-
-  stopBtn.onclick = () => {
-
-    stopAndSave();
-
-    stopBtn.remove();
-
-  };
-
-}
-
-
-
 // Старт приложения
 
 ensureUiEnhancements();
+syncStopButtonVisibility();
 initMap();

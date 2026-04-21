@@ -40,7 +40,8 @@ const locationKeyboard = {
       [
         { type: 'callback', text: 'Кисловодск', payload: 'location_kislovodsk' },
         { type: 'callback', text: 'Пятигорск', payload: 'location_pyatigorsk' }
-      ]
+      ],
+      [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
     ]
   }
 };
@@ -61,7 +62,8 @@ const activityKeyboard = {
       ],
       [
         { type: 'callback', text: '⬅️ К выбору города', payload: 'back_to_locations' }
-      ]
+      ],
+      [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
     ]
   }
 };
@@ -73,7 +75,8 @@ function getRouteKeyboard(routes, options = {}) {
     page = 0,
     pageSize = 5,
     pagePayloadPrefix = 'routes_page',
-    backPayload = 'back_to_activities'
+    backPayload = 'back_to_activities',
+    backButtonText = '⬅️ К выбору активности'
   } = options;
 
   const totalPages = Math.max(1, Math.ceil(routes.length / pageSize));
@@ -101,7 +104,10 @@ function getRouteKeyboard(routes, options = {}) {
     ]);
   }
 
-  buttons.push([{ type: 'callback', text: '⬅️ К выбору активности', payload: backPayload }]);
+  buttons.push([{ type: 'callback', text: backButtonText, payload: backPayload }]);
+  if (backPayload !== 'main_menu') {
+    buttons.push([{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]);
+  }
 
   return {
     type: 'inline_keyboard',

@@ -68,7 +68,8 @@ function registerBotHandlers(bot, deps) {
         page: currentPage,
         pageSize: ROUTES_PAGE_SIZE,
         pagePayloadPrefix: 'nearby_page',
-        backPayload: 'main_menu'
+        backPayload: 'main_menu',
+        backButtonText: '🏠 Главное меню'
       };
     } else {
       text = `📍 Найдено ${routes.length} маршрутов для ${session.selectedActivity.name} в ${session.selectedLocation.name} (${currentPage + 1}/${totalPages}):\n\n`;

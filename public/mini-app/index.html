@@ -90,7 +90,11 @@
     }
 
     .hidden {
-      display: none;
+      display: none !important;
+    }
+
+    #stopBtn {
+      background: rgba(180, 40, 40, 0.9);
     }
 
     #status {
@@ -121,13 +125,14 @@
       <span class="stat-label">км</span>
     </div>
     <div>
-      <span class="stat-value" id="pace">0'00"</span><br>
-      <span class="stat-label">темп</span>
+      <span class="stat-value" id="pace">—</span><br>
+      <span class="stat-label">мин/км</span>
     </div>
   </div>
 
   <div class="controls">
-    <button id="startBtn">▶️ Старт</button>
+    <button type="button" id="startBtn">▶️ Старт</button>
+    <button type="button" id="stopBtn" class="hidden">⏹ Стоп</button>
   </div>
 
   <div id="status"></div>
@@ -136,6 +141,6 @@
   <script src="https://unpkg.com/maplibre-gl@4.0.2/dist/maplibre-gl.js"></script>
 
   <!-- Ваш трекер -->
-  <script src="./app.js?v=20260420-1"></script>
+  <script src="./app.js?v=20260421-1"></script>
 </body>
 </html>
