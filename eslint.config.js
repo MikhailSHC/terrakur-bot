@@ -53,6 +53,7 @@ module.exports = [
       globals: {
         describe: 'readonly',
         it: 'readonly',
+        beforeEach: 'readonly',
         expect: 'readonly',
         jest: 'readonly'
       }

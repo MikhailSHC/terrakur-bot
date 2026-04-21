@@ -14,6 +14,7 @@ Node.js bot for MAX messenger with an Express API and mini-app tracker.
 2. Copy env template and fill values:
    - `copy .env.example .env` (Windows)
    - Set `BOT_TOKEN` and `MINI_APP_AUTH_SECRET`
+   - Optional: `MINI_APP_URL` — full HTTPS URL to `mini-app/index.html` (defaults to production; use a tunnel like ngrok or cloudflared when testing the messenger WebView against your laptop)
 3. (Optional) Rebuild routes GeoJSON:
    - `npm run build-data`
 

@@ -70,6 +70,12 @@ const OFF_ROUTE_RADIUS_M = 35;
 const OFF_ROUTE_GRACE_MS = 12000;
 const PROGRESS_UPDATE_INTERVAL_MS = 2000;
 
+/** Источники GeoJSON: пройденный участок (сплошной зелёный) и остаток (синий пунктир) */
+const PLANNED_ROUTE_DONE_SOURCE = 'planned-route-done';
+const PLANNED_ROUTE_REMAINING_SOURCE = 'planned-route-remaining';
+/** Зелёная «тропа» отображается после прохода хотя бы одного сегмента полилинии */
+const ROUTE_PROGRESS_MIN_VERTEX_FOR_GREEN = 1;
+
 
 const CAMERA_UPDATE_INTERVAL_MS = 2500;
 const CAMERA_MIN_MOVE_M = 8;
@@ -164,7 +170,6 @@ let lastKnownPosition = null;
 
 let autoPausedBySystem = false;
 let lastRawPoint = null;
-let idleStartedAt = null;
 let lastHeadingDeg = null;
 let replayPanelEl = null;
 
@@ -337,6 +342,101 @@ function getRouteNameSafe() {
   return 'Маршрут';
 }
 
+function removeLegacyPlannedRouteLayerIfAny() {
+  if (!map) return;
+  if (map.getLayer('planned-route-line')) {
+    map.removeLayer('planned-route-line');
+  }
+  if (map.getSource('planned-route')) {
+    map.removeSource('planned-route');
+  }
+}
+
+function ensurePlannedRouteProgressLayers() {
+  if (!map) return;
+  if (map.getSource(PLANNED_ROUTE_REMAINING_SOURCE)) return;
+
+  map.addSource(PLANNED_ROUTE_REMAINING_SOURCE, {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+  map.addSource(PLANNED_ROUTE_DONE_SOURCE, {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+
+  map.addLayer({
+    id: 'planned-route-done-line',
+    type: 'line',
+    source: PLANNED_ROUTE_DONE_SOURCE,
+    paint: {
+      'line-color': '#22c55e',
+      'line-width': 6,
+      'line-opacity': 0.92
+    }
+  });
+
+  map.addLayer({
+    id: 'planned-route-remaining-line',
+    type: 'line',
+    source: PLANNED_ROUTE_REMAINING_SOURCE,
+    paint: {
+      'line-color': '#3b82f6',
+      'line-width': 4,
+      'line-dasharray': [2, 2]
+    }
+  });
+}
+
+function setGeoJSONLineSource(sourceId, coordinates) {
+  if (!map || !map.getSource(sourceId)) return;
+  if (!coordinates || coordinates.length < 2) {
+    map.getSource(sourceId).setData({ type: 'FeatureCollection', features: [] });
+    return;
+  }
+  map.getSource(sourceId).setData({
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates },
+        properties: {}
+      }
+    ]
+  });
+}
+
+function applyPlannedRouteProgressToMap(progressVertexIndex) {
+  const coords = getRouteLineCoordinates();
+  if (coords.length < 2 || !map?.getSource(PLANNED_ROUTE_DONE_SOURCE)) return;
+
+  const idx = Math.min(Math.max(0, progressVertexIndex), coords.length - 1);
+  const showGreen = idx >= ROUTE_PROGRESS_MIN_VERTEX_FOR_GREEN;
+
+  if (!showGreen) {
+    setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, []);
+    setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, coords);
+    return;
+  }
+
+  const doneCoords = coords.slice(0, idx + 1);
+  const remainingCoords = coords.slice(idx);
+
+  setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, doneCoords.length >= 2 ? doneCoords : []);
+  if (remainingCoords.length >= 2) {
+    setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, remainingCoords);
+  } else {
+    setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, []);
+  }
+}
+
+function finalizePlannedRouteMapProgress() {
+  const coords = getRouteLineCoordinates();
+  if (coords.length < 2 || !map?.getSource(PLANNED_ROUTE_DONE_SOURCE)) return;
+  setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, coords);
+  setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, []);
+}
+
 function updateGPSQuality(_accuracy) {
   // intentionally hidden in MVP UI to reduce visual noise
 }
@@ -431,54 +531,28 @@ async function loadPlannedRoute(id) {
 
 
 
-    if (!map.getSource('planned-route')) {
-
-      map.addSource('planned-route', { type: 'geojson', data: plannedRoute });
-
-      map.addLayer({
-
-        id: 'planned-route-line',
-
-        type: 'line',
-
-        source: 'planned-route',
-
-        paint: {
-
-          'line-color': '#3b82f6',
-
-          'line-width': 4,
-
-          'line-dasharray': [2, 2]
-
-        }
-
-      });
-
-    } else {
-
-      map.getSource('planned-route').setData(plannedRoute);
-
-    }
-
-
+    removeLegacyPlannedRouteLayerIfAny();
+    ensurePlannedRouteProgressLayers();
 
     const coords = getRouteLineCoordinates();
+    if (coords.length >= 2) {
+      setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, coords);
+      setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, []);
+    }
 
-    const center = coords[Math.floor(coords.length / 2)];
+    const center = coords.length ? coords[Math.floor(coords.length / 2)] : [42.7165, 43.9071];
 
-    
+    // Старт и финиш — первая и последняя точка линии маршрута (как в GeoJSON)
+    plannedStart = coords.length ? coords[0] : null;
+    plannedFinish = coords.length >= 2 ? coords[coords.length - 1] : null;
+    if (plannedStart) {
+      setStartMarker([plannedStart[0], plannedStart[1]]);
+    }
+    if (plannedFinish) {
+      setFinishMarker([plannedFinish[0], plannedFinish[1]]);
+    }
 
-    // Находим ближайшую точку маршрута к пользователю
-
-    let nearestPoint = coords[0];
-
-    let minDistance = Infinity;
-
-    
-
-    // Получаем текущее местоположение пользователя для определения ближайшей точки
-
+    // Получаем местоположение пользователя — расстояние считаем до официального старта (первая точка)
     navigator.geolocation.getCurrentPosition(
 
       (pos) => {
@@ -487,43 +561,19 @@ async function loadPlannedRoute(id) {
 
         const userLng = pos.coords.longitude;
 
-        
+        const distanceToStart =
+          plannedStart != null
+            ? Math.round(haversineDistance(userLat, userLng, plannedStart[1], plannedStart[0]))
+            : 0;
 
-        // Ищем ближайшую точку маршрута к пользователю
-
-        for (let i = 0; i < coords.length; i++) {
-
-          const dist = haversineDistance(userLat, userLng, coords[i][1], coords[i][0]);
-
-          if (dist < minDistance) {
-
-            minDistance = dist;
-
-            nearestPoint = coords[i];
-
-          }
-
-        }
-
-        
-
-        plannedStart = nearestPoint;
-        plannedFinish = coords[coords.length - 1]; // Последняя точка - финиш
-
-        setStartMarker([plannedStart[0], plannedStart[1]]);
-        setFinishMarker([plannedFinish[0], plannedFinish[1]]);
-        
-        // Центрируем карту между пользователем и ближайшей точкой
-
-        const mapCenter = [(userLng + plannedStart[0]) / 2, (userLat + plannedStart[1]) / 2];
+        const mapCenter =
+          plannedStart != null
+            ? [(userLng + plannedStart[0]) / 2, (userLat + plannedStart[1]) / 2]
+            : [userLng, userLat];
 
         map.flyTo({ center: mapCenter, zoom: 14 });
 
-        
-
-        const distanceToStart = Math.round(minDistance);
-
-        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Ближайшая точка старта в ${distanceToStart}м. Подойдите и нажмите "Старт"`;
+        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. До старта (флажок) ≈ ${distanceToStart} м. Подойдите и нажмите «Старт»`;
 
         setTimeout(() => {
 
@@ -537,15 +587,16 @@ async function loadPlannedRoute(id) {
 
         console.error('Ошибка получения местоположения:', err);
 
-        // Если не удалось получить местоположение, используем первую точку
-
-        plannedStart = coords[0];
-
-        setStartMarker([plannedStart[0], plannedStart[1]]);
+        if (plannedStart) {
+          setStartMarker([plannedStart[0], plannedStart[1]]);
+        }
+        if (plannedFinish) {
+          setFinishMarker([plannedFinish[0], plannedFinish[1]]);
+        }
 
         map.flyTo({ center: [center[0], center[1]], zoom: 14 });
 
-        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Подойдите к точке старта и нажмите "Старт"`;
+        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Подойдите к зелёному флажку старта и нажмите «Старт»`;
 
         setTimeout(() => {
 
@@ -667,6 +718,9 @@ function initializeRouteProgress() {
   routeProgress.distanceRemainingM = totalRouteDistanceM;
   routeProgress.completionPercent = 0;
   routeProgress.offRouteSince = null;
+  routeProgress.maxClosestIndex = 0;
+
+  applyPlannedRouteProgressToMap(0);
 
   if (routeProgressEl) {
     routeProgressEl.style.display = 'block';
@@ -693,8 +747,11 @@ function updateRouteProgress(lat, lng) {
     }
   }
 
+  const progressIndex = Math.max(routeProgress.maxClosestIndex || 0, closestIndex);
+  routeProgress.maxClosestIndex = progressIndex;
+
   let distanceDoneM = 0;
-  for (let i = 1; i <= closestIndex; i += 1) {
+  for (let i = 1; i <= progressIndex; i += 1) {
     distanceDoneM += haversineDistance(
       coords[i - 1][1],
       coords[i - 1][0],
@@ -708,11 +765,13 @@ function updateRouteProgress(lat, lng) {
   const distanceRemainingM = Math.max(0, totalRouteDistanceM - distanceDoneM);
 
   routeProgress.currentIndex = closestIndex;
-  routeProgress.completedSegments = Math.max(0, closestIndex);
+  routeProgress.completedSegments = Math.max(0, progressIndex);
   routeProgress.distanceDoneM = distanceDoneM;
   routeProgress.distanceRemainingM = distanceRemainingM;
   routeProgress.completionPercent = completionPercent;
   routeProgress.lastProgressUpdate = now;
+
+  applyPlannedRouteProgressToMap(progressIndex);
 
   if (minDistance > OFF_ROUTE_RADIUS_M) {
     if (!routeProgress.offRouteSince) {
@@ -814,9 +873,9 @@ function setStartMarker(lngLat) {
   const el = document.createElement('div');
 
   el.style.cssText =
-    'width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.45);';
+    'width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:rgba(34,197,94,0.45);border:2px solid rgba(255,255,255,0.9);border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.45);';
   el.innerText = '🚩';
-  el.title = 'Точка старта';
+  el.title = 'Старт маршрута';
 
   startMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
 
@@ -837,21 +896,12 @@ function setFinishMarker(lngLat) {
   
   const el = document.createElement('div');
   el.style.cssText =
-    'width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(220,38,38,0.35);border:1px solid rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.45);';
+    'width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:rgba(220,38,38,0.5);border:2px solid rgba(255,255,255,0.9);border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.45);';
   el.innerText = '🏁';
-  el.title = 'Точка финиша';
+  el.title = 'Финиш маршрута';
   
   finishMarker = new maplibregl.Marker(el).setLngLat(lngLat).addTo(map);
 }
-
-function removeFinishMarker() {
-  if (finishMarker) {
-    finishMarker.remove();
-    finishMarker = null;
-  }
-}
-
-
 
 // === МАТЕМАТИКА ДИСТАНЦИИ ===
 
@@ -1304,21 +1354,33 @@ function animateCompletedPath(trackCoords) {
   }, frameMs);
 }
 
-function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, trackCoords }) {
+function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, trackCoords, showReplay = true }) {
   if (!replayPanelEl) return;
   const km = (distanceM / 1000).toFixed(2);
   const mins = Math.floor(elapsedSec / 60);
   const secs = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
   const paceMin = Math.floor(avgPaceSecPerKm / 60);
   const paceSec = Math.floor(avgPaceSecPerKm % 60).toString().padStart(2, '0');
+  const paceBlock =
+    distanceM > 0 && elapsedSec > 0
+      ? ` | Темп: <b>${paceMin}'${paceSec}"</b> / км`
+      : '';
+
+  if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
+    replayPanelEl.innerHTML =
+      `<div style="font-size:14px;font-weight:700;margin-bottom:6px;">Итог тренировки</div>` +
+      `<div style="font-size:12px;opacity:0.95;">Дистанция: <b>${km} км</b> | Время: <b>${mins}:${secs}</b>${paceBlock}</div>` +
+      `<div style="font-size:11px;opacity:0.75;margin-top:6px;">Воспроизведение вашего GPS-трека…</div>`;
+    replayPanelEl.style.display = 'block';
+    animateCompletedPath(trackCoords);
+    return;
+  }
 
   replayPanelEl.innerHTML =
-    `<div style="font-size:14px;font-weight:700;margin-bottom:6px;">Итог тренировки</div>` +
-    `<div style="font-size:12px;opacity:0.95;">Дистанция: <b>${km} км</b> | Время: <b>${mins}:${secs}</b> | Темп: <b>${paceMin}'${paceSec}"</b></div>` +
-    `<div style="font-size:11px;opacity:0.75;margin-top:6px;">Показываю ускоренное воспроизведение маршрута...</div>`;
+    `<div style="font-size:14px;font-weight:700;margin-bottom:6px;">Маршрут завершён</div>` +
+    `<div style="font-size:12px;opacity:0.95;">Дистанция: <b>${km} км</b> | Время: <b>${mins}:${secs}</b>${paceBlock}</div>` +
+    `<div style="font-size:11px;opacity:0.75;margin-top:8px;">Пройденная тропа на карте отмечена зелёным.</div>`;
   replayPanelEl.style.display = 'block';
-
-  animateCompletedPath(trackCoords);
 }
 
 
@@ -1388,7 +1450,9 @@ function onGPSPosition(pos) {
 
     if (distToFinish <= FINISH_RADIUS_M) {
       hasReachedFinish = true;
-      statusDiv.innerText = '🏁 Финиш! Маршрут завершен!';
+      finalizePlannedRouteMapProgress();
+      routeProgress.isOnRoute = false;
+      statusDiv.innerText = '🏁 Финиш! Маршрут завершён!';
       setTimeout(() => {
         if (statusDiv.innerText.includes('Финиш')) {
           statusDiv.innerText = '';
@@ -1558,7 +1622,6 @@ function startRun() {
 
     lastSavedPoint = null;
     lastRawPoint = null;
-    idleStartedAt = null;
     autoPausedBySystem = false;
     if (replayPanelEl) replayPanelEl.style.display = 'none';
     if (map?.getSource(REPLAY_SOURCE_ID)) {
@@ -1586,6 +1649,10 @@ function startRun() {
 
 
     redrawTrack();
+
+    if (sessionMode === 'planned_route' && plannedRoute) {
+      initializeRouteProgress();
+    }
 
 
 
@@ -1924,7 +1991,8 @@ async function stopAndSave() {
     distanceM,
     elapsedSec,
     avgPaceSecPerKm,
-    trackCoords: replayCoordinates
+    trackCoords: replayCoordinates,
+    showReplay: sessionMode !== 'planned_route'
   });
 
   ensurePassiveLocationWatch();
