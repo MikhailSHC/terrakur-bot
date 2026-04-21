@@ -146,15 +146,11 @@ function getAuthHeaders() {
   return { 'x-miniapp-auth': authToken };
 }
 
-/** Средний темп: секунды на километр → читаемая русская строка */
-function formatPaceRuSecPerKm(secPerKm) {
+/** Средняя скорость: секунды на километр -> км/ч */
+function formatSpeedKmhFromSecPerKm(secPerKm) {
   if (!Number.isFinite(secPerKm) || secPerKm <= 0) return '—';
-  const total = Math.round(secPerKm);
-  if (total < 60) return `${total} с / км`;
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  if (s === 0) return `${m} мин / км`;
-  return `${m} мин ${s} с / км`;
+  const kmh = 3600 / secPerKm;
+  return `${kmh.toFixed(1).replace('.', ',')} км/ч`;
 }
 
 function syncStopButtonVisibility() {
@@ -1512,7 +1508,7 @@ function updateStatsUI() {
 
   const secPerKm =
     totalDistanceM > 0 && elapsedSec > 0 ? elapsedSec / (totalDistanceM / 1000) : 0;
-  paceEl.textContent = formatPaceRuSecPerKm(secPerKm);
+  paceEl.textContent = formatSpeedKmhFromSecPerKm(secPerKm);
 
 
 
@@ -1669,7 +1665,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, t
   const secs = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
   const paceBlock =
     distanceM > 0 && elapsedSec > 0
-      ? ` | Темп: <b>${formatPaceRuSecPerKm(avgPaceSecPerKm)}</b>`
+      ? ` | Скорость: <b>${formatSpeedKmhFromSecPerKm(avgPaceSecPerKm)}</b>`
       : '';
 
   if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
