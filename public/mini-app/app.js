@@ -1054,6 +1054,13 @@ function setFinishMarker(lngLat) {
     .addTo(map);
 }
 
+function removeFinishMarker() {
+  if (finishMarker) {
+    finishMarker.remove();
+    finishMarker = null;
+  }
+}
+
 // === МАТЕМАТИКА ДИСТАНЦИИ ===
 
 
@@ -1517,6 +1524,16 @@ function redrawTrack() {
 
   if (!map || !map.getSource('run-track')) return;
 
+  // Для готового маршрута трек прогресса рисуется зелёной/синей линиями.
+  // Красную линию скрываем, чтобы не дублировать и не путать.
+  if (sessionMode === 'planned_route') {
+    map.getSource('run-track').setData({
+      type: 'FeatureCollection',
+      features: []
+    });
+    return;
+  }
+
 
 
   const coordinates = trackPoints.map(p => [p.lng, p.lat]);
@@ -1745,13 +1762,14 @@ function onGPSPosition(pos) {
   if (sessionMode === 'planned_route' && plannedFinish && !hasReachedFinish) {
     const distToFinish = haversineDistance(
       plannedFinish[1], plannedFinish[0],
-      longitude, latitude
+      latitude, longitude
     );
 
     if (distToFinish <= FINISH_RADIUS_M) {
       hasReachedFinish = true;
       finalizePlannedRouteMapProgress();
       routeProgress.isOnRoute = false;
+      removeFinishMarker();
       statusDiv.innerText = '🏁 Финиш! Маршрут завершён!';
       setTimeout(() => {
         if (statusDiv.innerText.includes('Финиш')) {
