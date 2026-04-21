@@ -1711,11 +1711,12 @@ function animateCompletedPath(trackCoords, options = {}) {
     [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
   );
 
-  const replayBottomPadding = Math.max(260, Math.round(window.innerHeight * 0.46));
+  // Keep room for summary panel, but avoid excessive zoom-out.
+  const replayBottomPadding = Math.max(120, Math.min(190, Math.round(window.innerHeight * 0.24)));
   map.fitBounds(rawBounds, {
-    padding: { top: 44, right: 34, bottom: replayBottomPadding, left: 34 },
+    padding: { top: 34, right: 26, bottom: replayBottomPadding, left: 26 },
     duration: 820,
-    maxZoom: 13.5
+    maxZoom: 15
   });
 
   replayTimerId = setInterval(() => {
