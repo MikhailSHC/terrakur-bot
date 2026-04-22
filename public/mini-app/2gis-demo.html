@@ -13,9 +13,40 @@
       color: #fff;
       overflow: hidden;
     }
+    body.clean-mode #topBar,
+    body.clean-mode #bottomBar,
+    body.clean-mode #status,
+    body.clean-mode #completionCard {
+      display: none !important;
+    }
     #map {
       position: fixed;
       inset: 0;
+    }
+    #cinematicOverlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 6;
+      background:
+        radial-gradient(circle at 50% 45%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.2) 100%),
+        linear-gradient(180deg, rgba(3, 7, 12, 0.24), rgba(3, 7, 12, 0.06) 42%, rgba(3, 7, 12, 0.2));
+    }
+    #filmGrain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 7;
+      opacity: 0.07;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.14) 0.6px, transparent 0.6px);
+      background-size: 3px 3px;
+      mix-blend-mode: soft-light;
+      animation: grainShift 700ms steps(2) infinite;
+    }
+    @keyframes grainShift {
+      0% { transform: translate(0, 0); }
+      50% { transform: translate(-1px, 1px); }
+      100% { transform: translate(1px, -1px); }
     }
     .glass {
       position: fixed;
@@ -136,6 +167,8 @@
 </head>
 <body>
   <div id="map"></div>
+  <div id="cinematicOverlay"></div>
+  <div id="filmGrain"></div>
   <div id="status">Подготовка 2GIS демо...</div>
   <div id="topBar" class="glass">
     <div>
@@ -163,6 +196,7 @@
       const dgisKey = (params.get('dgisKey') || '').trim();
       const qualityParam = (params.get('quality') || 'high').trim().toLowerCase();
       const quality = qualityParam === 'ultra' ? 'ultra' : 'high';
+      const cleanMode = params.get('clean') === '1';
       const durationSecRaw = Math.max(20, Number(params.get('durationSec')) || 90);
       const speedBoost = 2.5;
       const durationSec = Math.max(8, durationSecRaw / speedBoost);
@@ -173,6 +207,7 @@
       const progressInner = document.getElementById('progressInner');
       const timeText = document.getElementById('timeText');
       const completionCard = document.getElementById('completionCard');
+      if (cleanMode) document.body.classList.add('clean-mode');
 
       if (!dgisKey) {
         statusEl.textContent = 'Нет dgisKey в URL. Добавьте &dgisKey=YOUR_KEY';
@@ -188,6 +223,7 @@
       const sourceCoordinates = routePayload.coordinates;
       const qualityConfig = getQualityConfig(quality);
       const coordinates = densifyRoute(sourceCoordinates, qualityConfig.densifyStepM);
+      const routeMetrics = buildRouteMetrics(coordinates);
       if (!Array.isArray(coordinates) || coordinates.length < 2) {
         statusEl.textContent = 'Маршрут не найден или слишком короткий';
         return;
@@ -249,16 +285,24 @@
 
       let rafId = null;
       let startedAt = 0;
+      let introStartedAt = 0;
+      let outroStartedAt = 0;
       let running = false;
       let lastSmoothedBearing = 0;
+      let playbackPhase = 'idle';
+      let finalState = null;
 
       function startPlayback() {
         if (running) return;
         running = true;
-        startedAt = performance.now();
+        introStartedAt = performance.now();
+        startedAt = introStartedAt + qualityConfig.introDurationMs;
+        outroStartedAt = 0;
+        playbackPhase = 'intro';
+        finalState = null;
         startBtn.style.display = 'none';
         completionCard.classList.remove('show');
-        statusEl.textContent = `2GIS cinematic playback • quality: ${quality} • speed: x${speedBoost}`;
+        statusEl.textContent = `2GIS cinematic playback • quality: ${quality} • speed: x${speedBoost}${cleanMode ? ' • clean' : ''}`;
         lastSmoothedBearing = calcBearing(coordinates[0], coordinates[1]);
         tick();
       }
@@ -266,18 +310,34 @@
       function tick() {
         try {
           const elapsedMs = performance.now() - startedAt;
+          const introElapsedMs = performance.now() - introStartedAt;
+          if (playbackPhase === 'intro' && introElapsedMs < qualityConfig.introDurationMs) {
+            const introT = Math.min(1, introElapsedMs / qualityConfig.introDurationMs);
+            const introSmooth = easeInOutCubic(introT);
+            const introCenter = lerpPoint(center, coordinates[0], introSmooth);
+            const introZoom = qualityConfig.introZoom + (qualityConfig.baseZoom - qualityConfig.introZoom) * introSmooth;
+            const introPitch = qualityConfig.introPitch + (qualityConfig.playPitchBase - qualityConfig.introPitch) * introSmooth;
+            applyCamera(map, {
+              center: introCenter,
+              bearing: lastSmoothedBearing,
+              pitch: introPitch,
+              zoom: introZoom,
+              qualityConfig
+            });
+            progressInner.style.width = '0%';
+            timeText.textContent = '00:00';
+            rafId = requestAnimationFrame(tick);
+            return;
+          }
+          playbackPhase = playbackPhase === 'outro' ? 'outro' : 'play';
           const t = Math.min(1, elapsedMs / (durationSec * 1000));
           const smooth = cinematicProgress(t);
-          const totalSegments = coordinates.length - 1;
-          const exact = smooth * totalSegments;
-          const idx = Math.min(totalSegments - 1, Math.floor(exact));
-          const segT = exact - idx;
-          const a = coordinates[idx];
-          const b = coordinates[idx + 1];
-          const cur = [
-            a[0] + (b[0] - a[0]) * segT,
-            a[1] + (b[1] - a[1]) * segT
-          ];
+          const targetDistance = routeMetrics.totalDistanceM * smooth;
+          const snap = getPointAtDistance(coordinates, routeMetrics.cumulativeDistanceM, targetDistance);
+          const idx = snap.idx;
+          const a = snap.a;
+          const b = snap.b;
+          const cur = snap.point;
 
           const passed = coordinates.slice(0, idx + 1);
           const trailHead = pullBackFromHead(a, cur, qualityConfig.trailHeadGapM);
@@ -303,10 +363,11 @@
           const turnIntensity = Math.min(1, Math.abs(shortestAngleDelta(lastSmoothedBearing, rawBearing)) / 35);
           const zoomBreath = Math.sin(smooth * Math.PI * 2) * qualityConfig.zoomBreathAmp;
           const zoom = qualityConfig.baseZoom + zoomBreath - turnIntensity * qualityConfig.turnZoomOut;
+          const pitch = qualityConfig.playPitchBase + Math.sin(smooth * Math.PI * 2) * 1.6;
           applyCamera(map, {
             center: cur,
             bearing: lastSmoothedBearing,
-            pitch: 46 + Math.sin(smooth * Math.PI * 2) * 1.6,
+            pitch,
             zoom,
             qualityConfig
           });
@@ -319,9 +380,33 @@
             return;
           }
 
+          if (playbackPhase !== 'outro') {
+            playbackPhase = 'outro';
+            outroStartedAt = performance.now();
+            finalState = { center: cur, bearing: lastSmoothedBearing, zoom, pitch };
+          }
+          const outroElapsedMs = performance.now() - outroStartedAt;
+          const outroT = Math.min(1, outroElapsedMs / qualityConfig.outroDurationMs);
+          const outroSmooth = easeInOutCubic(outroT);
+          const outroZoom = finalState.zoom - qualityConfig.outroZoomOut * outroSmooth;
+          const outroPitch = finalState.pitch - qualityConfig.outroPitchDrop * outroSmooth;
+          applyCamera(map, {
+            center: finalState.center,
+            bearing: finalState.bearing,
+            pitch: outroPitch,
+            zoom: outroZoom,
+            qualityConfig
+          });
+          if (outroT < 1) {
+            rafId = requestAnimationFrame(tick);
+            return;
+          }
+
           running = false;
           progressInner.style.width = '100%';
-          statusEl.textContent = 'Готово для записи: дубль завершен';
+          statusEl.textContent = cleanMode
+            ? 'TerraKur demo complete'
+            : 'Готово для записи: дубль завершен';
           completionCard.classList.add('show');
         } catch (err) {
           running = false;
@@ -414,8 +499,15 @@
           bearingSmoothing: 0.92,
           trailHeadGapM: 10,
           baseZoom: 16.2,
+          introZoom: 14.6,
           zoomBreathAmp: 0.22,
           turnZoomOut: 0.65,
+          introPitch: 24,
+          playPitchBase: 46,
+          introDurationMs: 1600,
+          outroDurationMs: 1700,
+          outroZoomOut: 1.15,
+          outroPitchDrop: 16,
           centerDurationMs: 240,
           rotationDurationMs: 380,
           pitchDurationMs: 420,
@@ -429,8 +521,15 @@
         bearingSmoothing: 0.84,
         trailHeadGapM: 7,
         baseZoom: 15.8,
+        introZoom: 14.5,
         zoomBreathAmp: 0.16,
         turnZoomOut: 0.48,
+        introPitch: 25,
+        playPitchBase: 46,
+        introDurationMs: 1300,
+        outroDurationMs: 1400,
+        outroZoomOut: 0.95,
+        outroPitchDrop: 13,
         centerDurationMs: 190,
         rotationDurationMs: 260,
         pitchDurationMs: 320,
@@ -516,6 +615,52 @@
       return [
         fromPoint[0] + (headPoint[0] - fromPoint[0]) * t,
         fromPoint[1] + (headPoint[1] - fromPoint[1]) * t
+      ];
+    }
+
+    function buildRouteMetrics(coords) {
+      const cumulativeDistanceM = [0];
+      let sum = 0;
+      for (let i = 1; i < coords.length; i += 1) {
+        sum += distanceM(coords[i - 1], coords[i]);
+        cumulativeDistanceM.push(sum);
+      }
+      return { cumulativeDistanceM, totalDistanceM: sum };
+    }
+
+    function getPointAtDistance(coords, cumulativeDistanceM, targetDistanceM) {
+      if (targetDistanceM <= 0) {
+        return { idx: 0, a: coords[0], b: coords[1], point: coords[0] };
+      }
+      const maxDistance = cumulativeDistanceM[cumulativeDistanceM.length - 1];
+      if (targetDistanceM >= maxDistance) {
+        const n = coords.length - 1;
+        return { idx: n - 1, a: coords[n - 1], b: coords[n], point: coords[n] };
+      }
+      let lo = 0;
+      let hi = cumulativeDistanceM.length - 1;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (cumulativeDistanceM[mid] < targetDistanceM) lo = mid + 1;
+        else hi = mid;
+      }
+      const idx = Math.max(0, lo - 1);
+      const segStart = cumulativeDistanceM[idx];
+      const segEnd = cumulativeDistanceM[idx + 1];
+      const segT = segEnd > segStart ? (targetDistanceM - segStart) / (segEnd - segStart) : 0;
+      const a = coords[idx];
+      const b = coords[idx + 1];
+      const point = [
+        a[0] + (b[0] - a[0]) * segT,
+        a[1] + (b[1] - a[1]) * segT
+      ];
+      return { idx, a, b, point };
+    }
+
+    function lerpPoint(a, b, t) {
+      return [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t
       ];
     }
 
