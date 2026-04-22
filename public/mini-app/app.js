@@ -213,6 +213,7 @@ const REPLAY_SOURCE_ID = 'run-replay-source';
 const REPLAY_LAYER_ID = 'run-replay-line';
 let redrawQueued = false;
 let replayTimerId = null;
+let cinematicPlaybackRafId = null;
 
 
 
@@ -634,6 +635,11 @@ function smoothCameraFollow(center, now) {
 }
 
 function processStartProximity(latitude, longitude) {
+  if (cinematicDemoEnabled && sessionMode === 'planned_route') {
+    hasReachedStart = true;
+    lastStartStatus = null;
+    return;
+  }
   if (sessionMode === 'planned_route' && plannedStart && !isTracking) {
     const distToStart = haversineDistance(
       plannedStart[1],
@@ -658,6 +664,71 @@ function processStartProximity(latitude, longitude) {
       }
     }
   }
+}
+
+function emitSyntheticGpsPoint(latitude, longitude, accuracy = 4) {
+  const now = Date.now();
+  applyPassiveUserPosition(latitude, longitude, accuracy, now);
+  if (!isTracking) return;
+  onGPSPosition({
+    coords: {
+      latitude,
+      longitude,
+      accuracy,
+      altitude: null,
+      altitudeAccuracy: null,
+      heading: null,
+      speed: null
+    },
+    timestamp: now
+  });
+}
+
+function stopCinematicRoutePlayback() {
+  if (cinematicPlaybackRafId && typeof window !== 'undefined' && window.cancelAnimationFrame) {
+    window.cancelAnimationFrame(cinematicPlaybackRafId);
+  }
+  cinematicPlaybackRafId = null;
+}
+
+function startCinematicRoutePlayback() {
+  if (!cinematicDemoEnabled || sessionMode !== 'planned_route') return;
+  const coords = getRouteLineCoordinates();
+  if (!coords || coords.length < 2) return;
+  stopCinematicRoutePlayback();
+
+  const totalDurationMs = 26000;
+  const startTs = Date.now();
+
+  const tick = () => {
+    if (!isTracking || isPaused) {
+      cinematicPlaybackRafId = null;
+      return;
+    }
+    const now = Date.now();
+    const progress = Math.min(1, (now - startTs) / totalDurationMs);
+    const exactIndex = progress * (coords.length - 1);
+    const baseIndex = Math.floor(exactIndex);
+    const frac = exactIndex - baseIndex;
+    const base = coords[Math.min(baseIndex, coords.length - 1)];
+    const next = coords[Math.min(baseIndex + 1, coords.length - 1)];
+    const lon = base[0] + (next[0] - base[0]) * frac;
+    const lat = base[1] + (next[1] - base[1]) * frac;
+    emitSyntheticGpsPoint(lat, lon, 4);
+
+    if (progress >= 1) {
+      cinematicPlaybackRafId = null;
+      if (isTracking) {
+        stopAndSave();
+      }
+      return;
+    }
+    cinematicPlaybackRafId = window.requestAnimationFrame(tick);
+  };
+
+  // Start exactly at route start for presentation consistency.
+  emitSyntheticGpsPoint(coords[0][1], coords[0][0], 4);
+  cinematicPlaybackRafId = window.requestAnimationFrame(tick);
 }
 
 function applyPassiveUserPosition(latitude, longitude, accuracy, now) {
@@ -2159,7 +2230,8 @@ function startRun() {
 
 
 
-  if (!navigator.geolocation) {
+  const needsRealGps = !(cinematicDemoEnabled && sessionMode === 'planned_route');
+  if (needsRealGps && !navigator.geolocation) {
 
     statusDiv.innerText = '❌ Геолокация недоступна';
 
@@ -2171,6 +2243,11 @@ function startRun() {
   // Для готового маршрута: требуем дойти до старта
 
   if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart) {
+    if (cinematicDemoEnabled) {
+      hasReachedStart = true;
+      removeStartMarker();
+      clearNavToStartLine();
+    }
     if (lastKnownPosition) {
       processStartProximity(
         lastKnownPosition.latitude,
@@ -2249,17 +2326,16 @@ function startRun() {
 
 
 
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-
-    watchId = navigator.geolocation.watchPosition(
-
-      onGPSPosition,
-
-      (err) => console.error(err),
-
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
-
-    );
+    if (!cinematicDemoEnabled || sessionMode !== 'planned_route') {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      watchId = navigator.geolocation.watchPosition(
+        onGPSPosition,
+        (err) => console.error(err),
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+      );
+    } else {
+      startCinematicRoutePlayback();
+    }
 
 
 
@@ -2299,7 +2375,7 @@ function startRun() {
 
 
 
-    if (watchId === null) {
+    if (watchId === null && (!cinematicDemoEnabled || sessionMode !== 'planned_route')) {
 
       watchId = navigator.geolocation.watchPosition(
 
@@ -2355,6 +2431,9 @@ function pauseResume() {
       watchId = null;
 
     }
+    if (cinematicDemoEnabled && sessionMode === 'planned_route') {
+      stopCinematicRoutePlayback();
+    }
 
     syncStopButtonVisibility();
 
@@ -2377,6 +2456,7 @@ async function stopAndSave() {
     watchId = null;
 
   }
+  stopCinematicRoutePlayback();
 
 
 
