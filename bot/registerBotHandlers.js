@@ -7,6 +7,9 @@ function buildMiniAppUrl(config, chatId, extraParams = {}) {
     chatId: String(chatId),
     ...extraParams
   };
+  if (typeof config?.DGIS_API_KEY === 'string' && config.DGIS_API_KEY.trim()) {
+    paramsObject.dgisKey = config.DGIS_API_KEY.trim();
+  }
 
   if (config.MINI_APP_AUTH_SECRET) {
     paramsObject.authToken = createMiniAppToken(chatId, config.MINI_APP_AUTH_SECRET);
