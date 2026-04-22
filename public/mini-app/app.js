@@ -2351,7 +2351,13 @@ function hideLiveMarkerForReplay() {
 
 function animateCompletedPath(trackCoords, options = {}) {
   const { onProgress, onDone } = options;
-  if (!Array.isArray(trackCoords) || trackCoords.length < 2 || !map) return;
+  if (!Array.isArray(trackCoords) || trackCoords.length < 2 || !map) {
+    isReplayRunning = false;
+    isReplayViewLocked = false;
+    setReplayMapStatic(false);
+    if (typeof onDone === 'function') onDone();
+    return;
+  }
   if (replayTimerId) {
     if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
       window.cancelAnimationFrame(replayTimerId);
@@ -2397,48 +2403,62 @@ function animateCompletedPath(trackCoords, options = {}) {
     maxZoom: 17
   });
 
-  const tick = () => {
-    const nowTs = Date.now();
-    const progress = Math.min(1, (nowTs - startTs) / totalDurationMs);
-    const exactIndex = progress * (totalPoints - 1);
-    const baseIndex = Math.floor(exactIndex);
-    const frac = exactIndex - baseIndex;
-    const base = trackCoords[Math.min(baseIndex, totalPoints - 1)];
-    const next = trackCoords[Math.min(baseIndex + 1, totalPoints - 1)];
-    const interpolated = [
-      base[0] + (next[0] - base[0]) * frac,
-      base[1] + (next[1] - base[1]) * frac
-    ];
-    const replayCoords = trackCoords.slice(0, Math.max(1, baseIndex + 1));
-    replayCoords.push(interpolated);
-    setReplayCoordinates(replayCoords);
-    if (map && interpolated) {
-      if (cinematicDemoEnabled) {
-        map.easeTo({
-          center: interpolated,
-          duration: 120,
-          pitch: 44,
-          bearing: typeof lastHeadingDeg === 'number' ? lastHeadingDeg : map.getBearing(),
-          easing: (t) => t
-        });
-      } else {
-        map.jumpTo({ center: interpolated });
-      }
+  const scheduleNext = (fn) => {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      return window.requestAnimationFrame(fn);
     }
-    if (typeof onProgress === 'function') onProgress(Math.round(progress * 100));
+    return setTimeout(fn, 16);
+  };
+  const tick = () => {
+    try {
+      const nowTs = Date.now();
+      const progress = Math.min(1, (nowTs - startTs) / totalDurationMs);
+      const exactIndex = progress * (totalPoints - 1);
+      const baseIndex = Math.floor(exactIndex);
+      const frac = exactIndex - baseIndex;
+      const base = trackCoords[Math.min(baseIndex, totalPoints - 1)];
+      const next = trackCoords[Math.min(baseIndex + 1, totalPoints - 1)];
+      const interpolated = [
+        base[0] + (next[0] - base[0]) * frac,
+        base[1] + (next[1] - base[1]) * frac
+      ];
+      const replayCoords = trackCoords.slice(0, Math.max(1, baseIndex + 1));
+      replayCoords.push(interpolated);
+      setReplayCoordinates(replayCoords);
+      if (map && interpolated) {
+        if (cinematicDemoEnabled) {
+          map.easeTo({
+            center: interpolated,
+            duration: 120,
+            pitch: 44,
+            bearing: typeof lastHeadingDeg === 'number' ? lastHeadingDeg : (typeof map.getBearing === 'function' ? map.getBearing() : 0),
+            easing: (t) => t
+          });
+        } else {
+          map.jumpTo({ center: interpolated });
+        }
+      }
+      if (typeof onProgress === 'function') onProgress(Math.round(progress * 100));
 
-    if (progress >= 1) {
+      if (progress >= 1) {
+        replayTimerId = null;
+        setReplayCoordinates(trackCoords);
+        isReplayRunning = false;
+        isReplayViewLocked = false;
+        setReplayMapStatic(false);
+        if (typeof onDone === 'function') onDone();
+        return;
+      }
+      replayTimerId = scheduleNext(tick);
+    } catch (err) {
       replayTimerId = null;
-      setReplayCoordinates(trackCoords);
       isReplayRunning = false;
       isReplayViewLocked = false;
       setReplayMapStatic(false);
-      if (typeof onDone === 'function') onDone();
-      return;
+      if (typeof onDone === 'function') onDone(err);
     }
-    replayTimerId = window.requestAnimationFrame(tick);
   };
-  replayTimerId = window.requestAnimationFrame(tick);
+  replayTimerId = scheduleNext(tick);
 }
 
 function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showReplay = true, isSaved = false }) {
@@ -3078,16 +3098,19 @@ async function stopAndSave() {
   let saveSucceeded = false;
   try {
     statusDiv.innerText = 'Сохранение...';
-
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort('save-timeout'), 9000);
     const res  = await fetch('/api/sessions', {
 
       method: 'POST',
 
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
 
-      body: JSON.stringify({ chatId, authToken, session })
+      body: JSON.stringify({ chatId, authToken, session }),
+      signal: controller.signal
 
     });
+    clearTimeout(timeoutId);
 
     const data = await res.json();
 
@@ -3136,7 +3159,7 @@ async function stopAndSave() {
   setPostRunUiMode(true);
 
   const replayCoordinates = trackPoints.map((p) => [p.lng, p.lat]);
-  await new Promise((resolve) => setTimeout(resolve, saveSucceeded ? 1200 : 300));
+  await new Promise((resolve) => setTimeout(resolve, saveSucceeded ? 120 : 80));
   if (!saveSucceeded) {
     statusDiv.innerText = 'Подготовка воспроизведения...';
   }
