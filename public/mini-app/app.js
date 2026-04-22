@@ -412,7 +412,13 @@ let lastStartStatus = null;   // последнее текстовое сост�
 
 
 function initMap() {
-  isNativeMapGl = dgisRequested && Boolean(dgisApiKey) && typeof mapgl !== 'undefined';
+  // Native MapGL is temporarily limited to non-constructor flows.
+  // Custom-route constructor keeps stable MapLibre rendering with 2GIS raster tiles.
+  isNativeMapGl =
+    dgisRequested &&
+    Boolean(dgisApiKey) &&
+    typeof mapgl !== 'undefined' &&
+    !customRouteMode;
   const rasterTiles = dgisRasterEnabled
     ? [
         `https://tile0.maps.2gis.com/v2/tiles/online_hd/{z}/{x}/{y}.png?key=${encodeURIComponent(dgisApiKey)}`,
