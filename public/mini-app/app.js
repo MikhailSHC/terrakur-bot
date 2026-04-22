@@ -2351,7 +2351,7 @@ function setReplayMapStatic(enabled) {
 
 function hideLiveMarkerForReplay() {
   if (userMarker) {
-    userMarker.remove();
+    destroyMapEntity(userMarker);
     userMarker = null;
     userMarkerEl = null;
   }
@@ -2372,6 +2372,7 @@ function animateCompletedPath(trackCoords, options = {}) {
     if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
       window.cancelAnimationFrame(replayTimerId);
     }
+    clearTimeout(replayTimerId);
     replayTimerId = null;
   }
   isReplayRunning = true;
@@ -2419,12 +2420,7 @@ function animateCompletedPath(trackCoords, options = {}) {
     // fitBounds can fail in some WebView/MapGL states; replay should still continue.
   }
 
-  const scheduleNext = (fn) => {
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-      return window.requestAnimationFrame(fn);
-    }
-    return setTimeout(fn, 16);
-  };
+  const scheduleNext = (fn) => setTimeout(fn, 16);
   const tick = () => {
     try {
       const nowTs = Date.now();
@@ -2442,17 +2438,14 @@ function animateCompletedPath(trackCoords, options = {}) {
       replayCoords.push(interpolated);
       setReplayCoordinates(replayCoords);
       if (map && interpolated) {
-        if (cinematicDemoEnabled) {
-          map.easeTo({
-            center: interpolated,
-            duration: 120,
-            pitch: 44,
-            bearing: typeof lastHeadingDeg === 'number' ? lastHeadingDeg : (typeof map.getBearing === 'function' ? map.getBearing() : 0),
-            easing: (t) => t
-          });
-        } else {
-          map.jumpTo({ center: interpolated });
-        }
+        // Replay camera must be deterministic in WebView; avoid queueing many ease animations.
+        map.jumpTo({
+          center: interpolated,
+          pitch: cinematicDemoEnabled ? 44 : 0,
+          bearing: cinematicDemoEnabled
+            ? (typeof lastHeadingDeg === 'number' ? lastHeadingDeg : (typeof map.getBearing === 'function' ? map.getBearing() : 0))
+            : 0
+        });
       }
       if (typeof onProgress === 'function') onProgress(Math.round(progress * 100));
       if (progress === 0) debugReplay('animate:first_tick');
@@ -2509,12 +2502,19 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
       `<div id="replayPhase" style="font-size:11px;opacity:0.75;margin-top:6px;">Подготовка воспроизведения...</div>`;
     replayPanelEl.style.display = 'block';
     const phaseEl = replayPanelEl.querySelector('#replayPhase');
+    const replayWatchdogId = setTimeout(() => {
+      if (phaseEl && /Подготовка/.test(phaseEl.textContent || '')) {
+        phaseEl.textContent = 'Запуск воспроизведения занял слишком долго. Показан итог тренировки.';
+      }
+    }, 2500);
     try {
       animateCompletedPath(trackCoords, {
         onProgress: (percent) => {
+          clearTimeout(replayWatchdogId);
           if (phaseEl) phaseEl.textContent = `Воспроизведение ${percent}%`;
         },
         onDone: (err) => {
+          clearTimeout(replayWatchdogId);
           debugReplay('ui:replay_onDone', err ? String(err.message || err) : 'ok');
           if (phaseEl) {
             if (err) phaseEl.textContent = 'Воспроизведение недоступно, показан итог тренировки.';
@@ -2525,6 +2525,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
         }
       });
     } catch (_err) {
+      clearTimeout(replayWatchdogId);
       debugReplay('ui:replay_start_failed', _err.message || 'unknown');
       if (phaseEl) {
         phaseEl.textContent = 'Не удалось запустить воспроизведение, показан итог тренировки.';
