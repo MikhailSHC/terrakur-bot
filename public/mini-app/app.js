@@ -123,6 +123,7 @@ const urlParams   = new URLSearchParams(window.location.search);
 
 const routeId     = urlParams.get('routeId');       // системный маршрут
 const customRouteMode = urlParams.get('customRoute') === '1' || urlParams.get('mode') === 'custom';
+const replayDebugEnabled = urlParams.get('replayDebug') === '1';
 
 const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
@@ -302,6 +303,13 @@ const mapglCompat = {
   sources: {},
   layers: {}
 };
+
+function debugReplay(stage, extra = '') {
+  if (!replayDebugEnabled) return;
+  const msg = `[replay] ${stage}${extra ? ` | ${extra}` : ''}`;
+  console.log(msg);
+  if (statusDiv) statusDiv.innerText = msg;
+}
 
 function normalizeLayerPaint(paint = {}) {
   return {
@@ -2351,7 +2359,9 @@ function hideLiveMarkerForReplay() {
 
 function animateCompletedPath(trackCoords, options = {}) {
   const { onProgress, onDone } = options;
+  debugReplay('animate:start', `points=${Array.isArray(trackCoords) ? trackCoords.length : 0}`);
   if (!Array.isArray(trackCoords) || trackCoords.length < 2 || !map) {
+    debugReplay('animate:skip', 'insufficient points or map missing');
     isReplayRunning = false;
     isReplayViewLocked = false;
     setReplayMapStatic(false);
@@ -2396,12 +2406,18 @@ function animateCompletedPath(trackCoords, options = {}) {
   );
 
   // Keep room for summary panel, but avoid excessive zoom-out.
-  const replayBottomPadding = Math.max(12, Math.round(window.innerHeight * 0.01));
-  map.fitBounds(rawBounds, {
-    padding: { top: 8, right: 6, bottom: replayBottomPadding, left: 6 },
-    duration: 820,
-    maxZoom: 17
-  });
+  try {
+    const replayBottomPadding = Math.max(12, Math.round(window.innerHeight * 0.01));
+    debugReplay('animate:fitBounds');
+    map.fitBounds(rawBounds, {
+      padding: { top: 8, right: 6, bottom: replayBottomPadding, left: 6 },
+      duration: 820,
+      maxZoom: 17
+    });
+  } catch (_err) {
+    debugReplay('animate:fitBounds_failed');
+    // fitBounds can fail in some WebView/MapGL states; replay should still continue.
+  }
 
   const scheduleNext = (fn) => {
     if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
@@ -2439,8 +2455,10 @@ function animateCompletedPath(trackCoords, options = {}) {
         }
       }
       if (typeof onProgress === 'function') onProgress(Math.round(progress * 100));
+      if (progress === 0) debugReplay('animate:first_tick');
 
       if (progress >= 1) {
+        debugReplay('animate:done');
         replayTimerId = null;
         setReplayCoordinates(trackCoords);
         isReplayRunning = false;
@@ -2451,6 +2469,7 @@ function animateCompletedPath(trackCoords, options = {}) {
       }
       replayTimerId = scheduleNext(tick);
     } catch (err) {
+      debugReplay('animate:error', err.message || 'unknown');
       replayTimerId = null;
       isReplayRunning = false;
       isReplayViewLocked = false;
@@ -2484,21 +2503,33 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
     `</div>`;
 
   if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
+    debugReplay('ui:prepare_replay', `saved=${isSaved}`);
     replayPanelEl.innerHTML =
       summaryCard +
       `<div id="replayPhase" style="font-size:11px;opacity:0.75;margin-top:6px;">Подготовка воспроизведения...</div>`;
     replayPanelEl.style.display = 'block';
     const phaseEl = replayPanelEl.querySelector('#replayPhase');
-    animateCompletedPath(trackCoords, {
-      onProgress: (percent) => {
-        if (phaseEl) phaseEl.textContent = `Воспроизведение ${percent}%`;
-      },
-      onDone: () => {
-        if (phaseEl) phaseEl.remove();
-        removeStartMarker();
-        removeFinishMarker();
+    try {
+      animateCompletedPath(trackCoords, {
+        onProgress: (percent) => {
+          if (phaseEl) phaseEl.textContent = `Воспроизведение ${percent}%`;
+        },
+        onDone: (err) => {
+          debugReplay('ui:replay_onDone', err ? String(err.message || err) : 'ok');
+          if (phaseEl) {
+            if (err) phaseEl.textContent = 'Воспроизведение недоступно, показан итог тренировки.';
+            else phaseEl.remove();
+          }
+          removeStartMarker();
+          removeFinishMarker();
+        }
+      });
+    } catch (_err) {
+      debugReplay('ui:replay_start_failed', _err.message || 'unknown');
+      if (phaseEl) {
+        phaseEl.textContent = 'Не удалось запустить воспроизведение, показан итог тренировки.';
       }
-    });
+    }
     return;
   }
 
@@ -3098,6 +3129,7 @@ async function stopAndSave() {
   let saveSucceeded = false;
   try {
     statusDiv.innerText = 'Сохранение...';
+    debugReplay('save:start', `points=${trackPoints.length}`);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort('save-timeout'), 9000);
     const res  = await fetch('/api/sessions', {
@@ -3116,12 +3148,14 @@ async function stopAndSave() {
 
     statusDiv.innerText = data.ok ? '' : '⚠️ Ошибка сохранения';
     saveSucceeded = Boolean(data.ok);
+    debugReplay('save:response', `ok=${saveSucceeded}`);
 
   } catch (err) {
 
     console.error(err);
 
     statusDiv.innerText = '❌ Не удалось сохранить';
+    debugReplay('save:error', err.message || 'unknown');
 
   }
 
@@ -3159,6 +3193,7 @@ async function stopAndSave() {
   setPostRunUiMode(true);
 
   const replayCoordinates = trackPoints.map((p) => [p.lng, p.lat]);
+  debugReplay('save:after', `replayPoints=${replayCoordinates.length}`);
   await new Promise((resolve) => setTimeout(resolve, saveSucceeded ? 120 : 80));
   if (!saveSucceeded) {
     statusDiv.innerText = 'Подготовка воспроизведения...';
