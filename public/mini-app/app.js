@@ -175,13 +175,39 @@ let customWaypoints = [];
 
 async function ensureDgisApiKeyLoaded() {
   if (!dgisRequested || dgisApiKey) return;
+  const tryExtractFromRuntimeScript = (text) => {
+    if (!text || text.includes('<!DOCTYPE') || text.includes('<html')) return '';
+    const match = text.match(/window\.__MINI_APP_RUNTIME__\s*=\s*(\{[\s\S]*?\})\s*;/);
+    if (!match) return '';
+    try {
+      const parsed = JSON.parse(match[1]);
+      const apiKey = typeof parsed?.DGIS_API_KEY === 'string' ? parsed.DGIS_API_KEY.trim() : '';
+      return apiKey;
+    } catch (_err) {
+      return '';
+    }
+  };
   try {
     const res = await fetch('/api/runtime-config', { cache: 'no-store' });
-    if (!res.ok) return;
-    const data = await res.json();
-    const apiKey = typeof data?.DGIS_API_KEY === 'string' ? data.DGIS_API_KEY.trim() : '';
-    if (!apiKey) return;
-    dgisApiKey = apiKey;
+    if (res.ok) {
+      const data = await res.json();
+      const apiKey = typeof data?.DGIS_API_KEY === 'string' ? data.DGIS_API_KEY.trim() : '';
+      if (apiKey) {
+        dgisApiKey = apiKey;
+        dgisRasterEnabled = true;
+        return;
+      }
+    }
+  } catch (_err) {
+    // Continue with fallback source below.
+  }
+  try {
+    const runtimeRes = await fetch(`/mini-app/runtime-config.js?v=${Date.now()}`, { cache: 'no-store' });
+    if (!runtimeRes.ok) return;
+    const runtimeText = await runtimeRes.text();
+    const runtimeKey = tryExtractFromRuntimeScript(runtimeText);
+    if (!runtimeKey) return;
+    dgisApiKey = runtimeKey;
     dgisRasterEnabled = true;
   } catch (_err) {
     // Keep silent fallback: map continues with standard tiles if API key is unavailable.
