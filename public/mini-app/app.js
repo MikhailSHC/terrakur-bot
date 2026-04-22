@@ -69,17 +69,21 @@ let routeProgress = {
 
   isOnRoute: false,        // находится ли пользователь на маршруте
 
-  lastProgressUpdate: 0   // время последнего обновления прогресса
+  lastProgressUpdate: 0,  // время последнего обновления прогресса
+  passedCoords: [],
+  offtrackCoords: [],
+  wasOffRoute: false
 
 };
 
-const OFF_ROUTE_RADIUS_M = 35;
-const OFF_ROUTE_GRACE_MS = 12000;
-const PROGRESS_UPDATE_INTERVAL_MS = 1000;
+const OFF_ROUTE_RADIUS_M = 10;
+const OFF_ROUTE_GRACE_MS = 2500;
+const PROGRESS_UPDATE_INTERVAL_MS = 350;
 
 /** Источники GeoJSON: пройденный участок (сплошной зелёный) и остаток (синий пунктир) */
 const PLANNED_ROUTE_DONE_SOURCE = 'planned-route-done';
 const PLANNED_ROUTE_REMAINING_SOURCE = 'planned-route-remaining';
+const PLANNED_ROUTE_OFFTRACK_SOURCE = 'planned-route-offtrack';
 /** Зелёная «тропа» отображается после прохода хотя бы одного сегмента полилинии */
 const ROUTE_PROGRESS_MIN_VERTEX_FOR_GREEN = 1;
 
@@ -128,7 +132,12 @@ const authToken   = urlParams.get('authToken') || '';
 const activityIdFromUrl = urlParams.get('activityId');
 
 /** Тест без прогулки: добавьте в URL `&simulate=1` (вместе с routeId). */
-const simulateEnabled = urlParams.get('simulate') === '1';
+const simulateEnabled = (() => {
+  if (typeof TerraSimHelpers !== 'undefined' && TerraSimHelpers.resolveSimulateEnabled) {
+    return TerraSimHelpers.resolveSimulateEnabled(window.location.search);
+  }
+  return urlParams.get('simulate') === '1';
+})();
 let simulatedGeo = null; // { lat, lng } — подмена позиции, пока включена симуляция
 let simRouteStepIndex = 0;
 
@@ -361,6 +370,9 @@ function setPostRunUiMode(enabled) {
   if (recenterBtn) {
     recenterBtn.style.display = enabled ? 'none' : '';
   }
+  if (statusDiv) {
+    statusDiv.style.display = enabled ? 'none' : '';
+  }
 }
 
 function getRouteLineCoordinates() {
@@ -407,6 +419,10 @@ function ensurePlannedRouteProgressLayers() {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] }
   });
+  map.addSource(PLANNED_ROUTE_OFFTRACK_SOURCE, {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
 
   map.addLayer({
     id: 'planned-route-done-line',
@@ -427,6 +443,16 @@ function ensurePlannedRouteProgressLayers() {
       'line-color': '#3b82f6',
       'line-width': 4,
       'line-dasharray': [2, 2]
+    }
+  });
+  map.addLayer({
+    id: 'planned-route-offtrack-line',
+    type: 'line',
+    source: PLANNED_ROUTE_OFFTRACK_SOURCE,
+    paint: {
+      'line-color': '#facc15',
+      'line-width': 5,
+      'line-opacity': 0.95
     }
   });
 }
@@ -478,6 +504,7 @@ function finalizePlannedRouteMapProgress() {
   if (coords.length < 2 || !map?.getSource(PLANNED_ROUTE_DONE_SOURCE)) return;
   setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, coords);
   setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, []);
+  setGeoJSONLineSource(PLANNED_ROUTE_OFFTRACK_SOURCE, []);
   clearNavToStartLine();
 }
 
@@ -850,8 +877,12 @@ function initializeRouteProgress() {
   routeProgress.completionPercent = 0;
   routeProgress.offRouteSince = null;
   routeProgress.maxClosestIndex = 0;
+  routeProgress.passedCoords = [];
+  routeProgress.offtrackCoords = [];
+  routeProgress.wasOffRoute = false;
 
   applyPlannedRouteProgressToMap(0);
+  setGeoJSONLineSource(PLANNED_ROUTE_OFFTRACK_SOURCE, []);
 
   if (routeProgressEl) {
     routeProgressEl.style.display = 'block';
@@ -904,17 +935,30 @@ function updateRouteProgress(lat, lng) {
 
   applyPlannedRouteProgressToMap(progressIndex);
 
-  if (minDistance > OFF_ROUTE_RADIUS_M) {
-    if (!routeProgress.offRouteSince) {
-      routeProgress.offRouteSince = now;
-    } else if (now - routeProgress.offRouteSince > OFF_ROUTE_GRACE_MS) {
-      statusDiv.innerText = '⚠️ Вы отклонились от маршрута. Вернитесь к синей линии.';
+  const currentCoord = [lng, lat];
+  const isFarFromRoute = minDistance > OFF_ROUTE_RADIUS_M;
+  if (isFarFromRoute) {
+    if (!routeProgress.offRouteSince) routeProgress.offRouteSince = now;
+    routeProgress.offtrackCoords.push(currentCoord);
+    if (routeProgress.offtrackCoords.length > 1200) {
+      routeProgress.offtrackCoords = routeProgress.offtrackCoords.slice(-1200);
+    }
+    setGeoJSONLineSource(PLANNED_ROUTE_OFFTRACK_SOURCE, routeProgress.offtrackCoords);
+    if (!routeProgress.wasOffRoute && now - routeProgress.offRouteSince >= OFF_ROUTE_GRACE_MS) {
+      statusDiv.innerText = '⚠️ Вы отклонились от маршрута';
+      routeProgress.wasOffRoute = true;
     }
   } else {
-    if (routeProgress.offRouteSince && now - routeProgress.offRouteSince > OFF_ROUTE_GRACE_MS) {
+    routeProgress.passedCoords.push(currentCoord);
+    if (routeProgress.passedCoords.length > 1200) {
+      routeProgress.passedCoords = routeProgress.passedCoords.slice(-1200);
+    }
+    setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, routeProgress.passedCoords);
+    if (routeProgress.wasOffRoute) {
       statusDiv.innerText = '✅ Вы снова на маршруте';
     }
     routeProgress.offRouteSince = null;
+    routeProgress.wasOffRoute = false;
   }
 
   if (routeProgressEl) {
@@ -1209,7 +1253,11 @@ function ensureSimulatePanel() {
   addBtn('+1 вершина трека', () => {
     const coords = getRouteLineCoordinates();
     if (!coords.length) return;
-    simRouteStepIndex = Math.min(simRouteStepIndex + 1, coords.length - 1);
+    if (typeof TerraSimHelpers !== 'undefined' && TerraSimHelpers.nextRouteStepIndex) {
+      simRouteStepIndex = TerraSimHelpers.nextRouteStepIndex(simRouteStepIndex, coords.length, 1);
+    } else {
+      simRouteStepIndex = Math.min(simRouteStepIndex + 1, coords.length - 1);
+    }
     const c = coords[simRouteStepIndex];
     setSimulatedPosition(c[1], c[0]);
   });
@@ -1763,6 +1811,8 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
       },
       onDone: () => {
         if (phaseEl) phaseEl.remove();
+        removeStartMarker();
+        removeFinishMarker();
       }
     });
     return;
@@ -1816,6 +1866,7 @@ function getSmoothedPosition() {
 
 function onGPSPosition(pos) {
   if (!isTracking) return;
+  isFollowingUser = true;
 
 
 
@@ -2024,6 +2075,8 @@ function startRun() {
     // Первый запуск тренировки
 
     isTracking     = true;
+    isFollowingUser = true;
+    lastCameraCenter = null;
     setPostRunUiMode(false);
     isReplayViewLocked = false;
     setReplayMapStatic(false);
@@ -2412,7 +2465,7 @@ async function stopAndSave() {
     distanceM,
     elapsedSec,
     trackCoords: replayCoordinates,
-    showReplay: sessionMode !== 'planned_route',
+    showReplay: true,
     isSaved: saveSucceeded
   });
 

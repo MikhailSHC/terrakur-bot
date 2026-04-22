@@ -36,6 +36,7 @@ module.exports = [
         document: 'readonly',
         navigator: 'readonly',
         maplibregl: 'readonly',
+        TerraSimHelpers: 'readonly',
         fetch: 'readonly',
         setTimeout: 'readonly',
         clearInterval: 'readonly',
