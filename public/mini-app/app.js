@@ -138,6 +138,7 @@ const dgisExplicitByUrl = mapProvider === '2gis';
 const dgisPlannedRoutesDefault = Boolean(routeId) && !dgisDisabledByUrl;
 const dgisRequested = dgisExplicitByUrl || dgisPlannedRoutesDefault;
 let dgisRasterEnabled = dgisRequested && Boolean(dgisApiKey);
+let isNativeMapGl = false;
 
 /** Тест без прогулки: добавьте в URL `&simulate=1` (вместе с routeId). */
 const simulateEnabled = (() => {
@@ -241,6 +242,136 @@ const REPLAY_LAYER_ID = 'run-replay-line';
 let redrawQueued = false;
 let replayTimerId = null;
 let cinematicPlaybackRafId = null;
+const mapglCompat = {
+  sources: {},
+  layers: {}
+};
+
+function normalizeLayerPaint(paint = {}) {
+  return {
+    color: paint['line-color'] || '#3b82f6',
+    width: Number(paint['line-width']) || 4,
+    opacity: typeof paint['line-opacity'] === 'number' ? paint['line-opacity'] : 1
+  };
+}
+
+function geoJsonLineCoordinates(data) {
+  const feature = data?.features?.[0];
+  const coords = feature?.geometry?.type === 'LineString' ? feature.geometry.coordinates : [];
+  return Array.isArray(coords) ? coords : [];
+}
+
+function destroyMapEntity(entity) {
+  if (!entity) return;
+  if (typeof entity.remove === 'function') entity.remove();
+  else if (typeof entity.destroy === 'function') entity.destroy();
+}
+
+function renderMapglSource(sourceId) {
+  const sourceState = mapglCompat.sources[sourceId];
+  if (!sourceState) return;
+  const coords = geoJsonLineCoordinates(sourceState.data);
+  const style = sourceState.paint || { color: '#3b82f6', width: 4, opacity: 1 };
+
+  if (!coords.length) {
+    destroyMapEntity(sourceState.polyline);
+    sourceState.polyline = null;
+    return;
+  }
+
+  if (sourceState.polyline && typeof sourceState.polyline.setCoordinates === 'function') {
+    sourceState.polyline.setCoordinates(coords);
+    return;
+  }
+  if (sourceState.polyline && typeof sourceState.polyline.setOptions === 'function') {
+    sourceState.polyline.setOptions({ ...style, coordinates: coords });
+    return;
+  }
+
+  destroyMapEntity(sourceState.polyline);
+  sourceState.polyline = new mapgl.Polyline(map, {
+    coordinates: coords,
+    color: style.color,
+    width: style.width,
+    opacity: style.opacity
+  });
+}
+
+function installMapglCompat() {
+  map.addSource = (sourceId, _def) => {
+    if (!mapglCompat.sources[sourceId]) {
+      mapglCompat.sources[sourceId] = {
+        data: { type: 'FeatureCollection', features: [] },
+        paint: null,
+        polyline: null
+      };
+    }
+  };
+  map.getSource = (sourceId) => {
+    const src = mapglCompat.sources[sourceId];
+    if (!src) return null;
+    return {
+      setData(data) {
+        src.data = data;
+        renderMapglSource(sourceId);
+      }
+    };
+  };
+  map.addLayer = (layerDef) => {
+    mapglCompat.layers[layerDef.id] = layerDef;
+    const sourceId = layerDef.source;
+    if (!sourceId) return;
+    if (!mapglCompat.sources[sourceId]) {
+      map.addSource(sourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    }
+    mapglCompat.sources[sourceId].paint = normalizeLayerPaint(layerDef.paint);
+    renderMapglSource(sourceId);
+  };
+  map.getLayer = (layerId) => mapglCompat.layers[layerId] || null;
+  map.removeLayer = (layerId) => {
+    delete mapglCompat.layers[layerId];
+  };
+  map.removeSource = (sourceId) => {
+    const src = mapglCompat.sources[sourceId];
+    if (!src) return;
+    destroyMapEntity(src.polyline);
+    delete mapglCompat.sources[sourceId];
+  };
+  map.easeTo = ({ center, zoom, pitch, bearing, duration }) => {
+    if (center) map.setCenter(center, { duration: duration || 0 });
+    if (typeof zoom === 'number' && typeof map.setZoom === 'function') map.setZoom(zoom, { duration: duration || 0 });
+    if (typeof pitch === 'number' && typeof map.setPitch === 'function') map.setPitch(pitch, { duration: duration || 0 });
+    if (typeof bearing === 'number') {
+      if (typeof map.setRotation === 'function') map.setRotation(bearing, { duration: duration || 0 });
+      else if (typeof map.setBearing === 'function') map.setBearing(bearing, { duration: duration || 0 });
+    }
+  };
+  map.jumpTo = ({ center, zoom, pitch, bearing }) => {
+    if (center) map.setCenter(center, { duration: 0 });
+    if (typeof zoom === 'number' && typeof map.setZoom === 'function') map.setZoom(zoom, { duration: 0 });
+    if (typeof pitch === 'number' && typeof map.setPitch === 'function') map.setPitch(pitch, { duration: 0 });
+    if (typeof bearing === 'number') {
+      if (typeof map.setRotation === 'function') map.setRotation(bearing, { duration: 0 });
+      else if (typeof map.setBearing === 'function') map.setBearing(bearing, { duration: 0 });
+    }
+  };
+  map.flyTo = ({ center, zoom, pitch, bearing, duration }) => {
+    map.easeTo({ center, zoom, pitch, bearing, duration: duration || 0 });
+  };
+  map.fitBounds = (bounds, opts = {}) => {
+    const ne = bounds?.[1];
+    const sw = bounds?.[0];
+    if (!ne || !sw || typeof map.fitBounds !== 'function') return;
+    mapgl.Map.prototype.fitBounds.call(map, { northEast: ne, southWest: sw }, { padding: opts.padding || 40 });
+  };
+  map.dragPan = { enable() {}, disable() {} };
+  map.scrollZoom = { enable() {}, disable() {} };
+  map.boxZoom = { enable() {}, disable() {} };
+  map.dragRotate = { enable() {}, disable() {} };
+  map.keyboard = { enable() {}, disable() {} };
+  map.doubleClickZoom = { enable() {}, disable() {} };
+  map.touchZoomRotate = { enable() {}, disable() {} };
+}
 
 
 
@@ -255,6 +386,7 @@ let lastStartStatus = null;   // последнее текстовое сост�
 
 
 function initMap() {
+  isNativeMapGl = dgisRequested && Boolean(dgisApiKey) && typeof mapgl !== 'undefined';
   const rasterTiles = dgisRasterEnabled
     ? [
         `https://tile0.maps.2gis.com/v2/tiles/online_hd/{z}/{x}/{y}.png?key=${encodeURIComponent(dgisApiKey)}`,
@@ -262,58 +394,49 @@ function initMap() {
         `https://tile2.maps.2gis.com/v2/tiles/online_hd/{z}/{x}/{y}.png?key=${encodeURIComponent(dgisApiKey)}`
       ]
     : ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'];
-
-  map = new maplibregl.Map({
-
-    container: 'map',
-    antialias: cinematicDemoEnabled,
-
-    style: {
-
-      version: 8,
-
-      sources: {
-
-        osm: {
-
-          type: 'raster',
-
-          tiles: rasterTiles,
-
-          tileSize: 256
-
-        }
-
+  if (isNativeMapGl) {
+    map = new mapgl.Map('map', {
+      key: dgisApiKey,
+      center: [42.7165, 43.9071],
+      zoom: 13,
+      pitch: cinematicDemoEnabled ? 42 : 0
+    });
+    installMapglCompat();
+  } else {
+    map = new maplibregl.Map({
+      container: 'map',
+      antialias: cinematicDemoEnabled,
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: 'raster',
+            tiles: rasterTiles,
+            tileSize: 256
+          }
+        },
+        layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
       },
-
-      layers: [
-
-        { id: 'osm', type: 'raster', source: 'osm' }
-
-      ]
-
-    },
-
-    center: [42.7165, 43.9071],
-
-    zoom: 13,
-    pitch: cinematicDemoEnabled ? 42 : 0,
-    bearing: 0
-
-  });
+      center: [42.7165, 43.9071],
+      zoom: 13,
+      pitch: cinematicDemoEnabled ? 42 : 0,
+      bearing: 0
+    });
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  }
+  if (typeof map.on === 'function') {
+    map.on('dragstart', () => {
+      isFollowingUser = false;
+    });
+  }
 
 
 
-  map.addControl(new maplibregl.NavigationControl(), 'top-right');
-  map.on('dragstart', () => {
-    isFollowingUser = false;
-  });
-
-
-
-  map.on('load', () => {
+  const onMapReady = () => {
     if (dgisRequested && !dgisRasterEnabled) {
       statusDiv.innerText = '2GIS карта для маршрута не включена: ключ не найден (DGIS_API_KEY/dgisKey). Используется стандартная карта.';
+    } else if (isNativeMapGl) {
+      statusDiv.innerText = 'Native 2GIS MapGL включен';
     } else if (dgisRasterEnabled) {
       statusDiv.innerText = '2GIS карта маршрута включена';
     }
@@ -378,7 +501,12 @@ function initMap() {
 
     }
 
-  });
+  };
+  if (isNativeMapGl && typeof map.once === 'function') {
+    map.once('idle', onMapReady);
+  } else {
+    map.on('load', onMapReady);
+  }
 
 }
 
@@ -1140,7 +1268,16 @@ function updateRouteProgress(lat, lng) {
 
 function addUserMarker(lngLat) {
 
-  if (userMarker) userMarker.remove();
+  if (userMarker) destroyMapEntity(userMarker);
+
+  if (isNativeMapGl) {
+    userMarker = new mapgl.Marker(map, {
+      coordinates: lngLat,
+      icon: makeMapglIcon('user')
+    });
+    userMarkerEl = null;
+    return;
+  }
 
   const el = document.createElement('div');
   if (cinematicDemoEnabled) el.classList.add('terra-user-marker-core');
@@ -1184,7 +1321,10 @@ function addUserMarker(lngLat) {
 function updateUserMarker(lngLat, headingDeg = null) {
   if (isReplayRunning || isReplayViewLocked) return;
 
-  if (userMarker) userMarker.setLngLat(lngLat);
+  if (userMarker) {
+    if (isNativeMapGl && typeof userMarker.setCoordinates === 'function') userMarker.setCoordinates(lngLat);
+    else userMarker.setLngLat(lngLat);
+  }
 
   else addUserMarker(lngLat);
 
@@ -1206,11 +1346,17 @@ function updateUserMarker(lngLat, headingDeg = null) {
 function setStartMarker(lngLat) {
 
   if (startMarker) {
-
-    startMarker.setLngLat(lngLat);
-
+    if (isNativeMapGl && typeof startMarker.setCoordinates === 'function') startMarker.setCoordinates(lngLat);
+    else startMarker.setLngLat(lngLat);
     return;
+  }
 
+  if (isNativeMapGl) {
+    startMarker = new mapgl.Marker(map, {
+      coordinates: lngLat,
+      icon: makeMapglIcon('start')
+    });
+    return;
   }
 
   const wrap = document.createElement('div');
@@ -1239,14 +1385,23 @@ function setStartMarker(lngLat) {
 
 function removeStartMarker() {
   if (startMarker) {
-    startMarker.remove();
+    destroyMapEntity(startMarker);
     startMarker = null;
   }
 }
 
 function setFinishMarker(lngLat) {
   if (finishMarker) {
-    finishMarker.setLngLat(lngLat);
+    if (isNativeMapGl && typeof finishMarker.setCoordinates === 'function') finishMarker.setCoordinates(lngLat);
+    else finishMarker.setLngLat(lngLat);
+    return;
+  }
+
+  if (isNativeMapGl) {
+    finishMarker = new mapgl.Marker(map, {
+      coordinates: lngLat,
+      icon: makeMapglIcon('finish')
+    });
     return;
   }
 
@@ -1275,9 +1430,26 @@ function setFinishMarker(lngLat) {
 
 function removeFinishMarker() {
   if (finishMarker) {
-    finishMarker.remove();
+    destroyMapEntity(finishMarker);
     finishMarker = null;
   }
+}
+
+function makeMapglIcon(type) {
+  let fill = '#22d3ee';
+  let text = '●';
+  if (type === 'start') {
+    fill = '#2b95ff';
+    text = 'S';
+  } else if (type === 'finish') {
+    fill = '#0f3a67';
+    text = 'F';
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
+    <circle cx="28" cy="28" r="21" fill="${fill}" stroke="rgba(255,255,255,0.92)" stroke-width="3"/>
+    <text x="28" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">${text}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 // === МАТЕМАТИКА ДИСТАНЦИИ ===
