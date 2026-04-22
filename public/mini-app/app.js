@@ -132,9 +132,12 @@ const miniAppRuntime = window.__MINI_APP_RUNTIME__ || {};
 const dgisApiKeyFromRuntime = typeof miniAppRuntime.DGIS_API_KEY === 'string'
   ? miniAppRuntime.DGIS_API_KEY.trim()
   : '';
-const dgisApiKey = dgisApiKeyFromRuntime || dgisKeyFromUrl;
-const dgisPilotRequested = mapProvider === '2gis' && routeId === 'kholodnye-rodniki';
-const dgisRasterEnabled = dgisPilotRequested && Boolean(dgisApiKey);
+let dgisApiKey = dgisApiKeyFromRuntime || dgisKeyFromUrl;
+const dgisDisabledByUrl = mapProvider === 'maplibre' || mapProvider === 'osm';
+const dgisExplicitByUrl = mapProvider === '2gis';
+const dgisPlannedRoutesDefault = Boolean(routeId) && !dgisDisabledByUrl;
+const dgisRequested = dgisExplicitByUrl || dgisPlannedRoutesDefault;
+let dgisRasterEnabled = dgisRequested && Boolean(dgisApiKey);
 
 /** Тест без прогулки: добавьте в URL `&simulate=1` (вместе с routeId). */
 const simulateEnabled = (() => {
@@ -158,6 +161,21 @@ if (routeId) {
 
   sessionMode = 'free_run';
 
+}
+
+async function ensureDgisApiKeyLoaded() {
+  if (!dgisRequested || dgisApiKey) return;
+  try {
+    const res = await fetch('/api/runtime-config', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const apiKey = typeof data?.DGIS_API_KEY === 'string' ? data.DGIS_API_KEY.trim() : '';
+    if (!apiKey) return;
+    dgisApiKey = apiKey;
+    dgisRasterEnabled = true;
+  } catch (_err) {
+    // Keep silent fallback: map continues with standard tiles if API key is unavailable.
+  }
 }
 
 function getAuthHeaders() {
@@ -294,10 +312,10 @@ function initMap() {
 
 
   map.on('load', () => {
-    if (dgisPilotRequested && !dgisRasterEnabled) {
-      statusDiv.innerText = '2GIS не включен: ключ не найден (DGIS_API_KEY/dgisKey). Используется стандартная карта.';
+    if (dgisRequested && !dgisRasterEnabled) {
+      statusDiv.innerText = '2GIS карта для маршрута не включена: ключ не найден (DGIS_API_KEY/dgisKey). Используется стандартная карта.';
     } else if (dgisRasterEnabled) {
-      statusDiv.innerText = '2GIS pilot mode enabled';
+      statusDiv.innerText = '2GIS карта маршрута включена';
     }
 
     map.addSource('run-track', {
@@ -2765,4 +2783,6 @@ if (stopBtnEl) {
 ensureCinematicStyles();
 ensureUiEnhancements();
 syncStopButtonVisibility();
-initMap();
+ensureDgisApiKeyLoaded().finally(() => {
+  initMap();
+});

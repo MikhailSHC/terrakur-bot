@@ -26,6 +26,14 @@ function createApp({ userService, routeService, miniAppAuth, config }) {
     res.setHeader('Pragma', 'no-cache');
     res.send(`window.__MINI_APP_RUNTIME__ = ${JSON.stringify(runtimeConfig)};`);
   });
+  app.get('/api/runtime-config', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.json({
+      ok: true,
+      DGIS_API_KEY: config?.DGIS_API_KEY || ''
+    });
+  });
   const publicRoot = path.join(__dirname, '..', 'public');
   app.use(
     express.static(publicRoot, {
