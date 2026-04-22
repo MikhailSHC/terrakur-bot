@@ -33,8 +33,9 @@ let lastSavedPoint = null;
 /** Сглаженная позиция конца трека только для отрисовки (дистанция — по trackPoints) */
 let trailDisplayLat = null;
 let trailDisplayLng = null;
-const TRAIL_DISPLAY_SMOOTH_ALPHA = 0.38;
-const TRAIL_DISPLAY_MAX_LAG_M = 42;
+// Smoothness tuning (prev: alpha=0.38, lag=42) kept for quick rollback.
+const TRAIL_DISPLAY_SMOOTH_ALPHA = 0.52;
+const TRAIL_DISPLAY_MAX_LAG_M = 24;
 
 let startMarker = null;    // маркер точки старта маршрута
 let finishMarker = null;   // маркер точки финиша маршрута
@@ -86,8 +87,11 @@ const ROUTE_PROGRESS_MIN_VERTEX_FOR_GREEN = 1;
 const NAV_TO_START_SOURCE = 'nav-to-start-line';
 
 
-const CAMERA_UPDATE_INTERVAL_MS = 2500;
-const CAMERA_MIN_MOVE_M = 8;
+// Camera tuning (prev: interval=2500, minMove=8) kept for quick rollback.
+const CAMERA_UPDATE_INTERVAL_MS = 1200;
+const CAMERA_MIN_MOVE_M = 4;
+// Replay tuning (prev: duration=6000, step interval=60ms) kept for quick rollback.
+const REPLAY_DURATION_MS = 7600;
 
 
 
@@ -1647,7 +1651,9 @@ function animateCompletedPath(trackCoords, options = {}) {
   const { onProgress, onDone } = options;
   if (!Array.isArray(trackCoords) || trackCoords.length < 2 || !map) return;
   if (replayTimerId) {
-    clearInterval(replayTimerId);
+    if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(replayTimerId);
+    }
     replayTimerId = null;
   }
   isReplayRunning = true;
@@ -1666,10 +1672,8 @@ function animateCompletedPath(trackCoords, options = {}) {
   hideLiveMarkerForReplay();
 
   const totalPoints = trackCoords.length;
-  const totalDurationMs = 6000;
-  const frameMs = 60;
-  const steps = Math.max(1, Math.round(totalDurationMs / frameMs));
-  let step = 1;
+  const totalDurationMs = REPLAY_DURATION_MS;
+  const startTs = Date.now();
 
   setReplayCoordinates([trackCoords[0]]);
   const rawBounds = trackCoords.reduce(
@@ -1691,20 +1695,38 @@ function animateCompletedPath(trackCoords, options = {}) {
     maxZoom: 17
   });
 
-  replayTimerId = setInterval(() => {
-    const progress = Math.min(1, step / steps);
-    const sliceEnd = Math.max(2, Math.floor(progress * totalPoints));
-    setReplayCoordinates(trackCoords.slice(0, sliceEnd));
+  const tick = () => {
+    const nowTs = Date.now();
+    const progress = Math.min(1, (nowTs - startTs) / totalDurationMs);
+    const exactIndex = progress * (totalPoints - 1);
+    const baseIndex = Math.floor(exactIndex);
+    const frac = exactIndex - baseIndex;
+    const base = trackCoords[Math.min(baseIndex, totalPoints - 1)];
+    const next = trackCoords[Math.min(baseIndex + 1, totalPoints - 1)];
+    const interpolated = [
+      base[0] + (next[0] - base[0]) * frac,
+      base[1] + (next[1] - base[1]) * frac
+    ];
+    const replayCoords = trackCoords.slice(0, Math.max(1, baseIndex + 1));
+    replayCoords.push(interpolated);
+    setReplayCoordinates(replayCoords);
+    if (map && interpolated) {
+      map.jumpTo({ center: interpolated });
+    }
     if (typeof onProgress === 'function') onProgress(Math.round(progress * 100));
-    step += 1;
-    if (step > steps) {
-      clearInterval(replayTimerId);
+
+    if (progress >= 1) {
       replayTimerId = null;
       setReplayCoordinates(trackCoords);
       isReplayRunning = false;
+      isReplayViewLocked = false;
+      setReplayMapStatic(false);
       if (typeof onDone === 'function') onDone();
+      return;
     }
-  }, frameMs);
+    replayTimerId = window.requestAnimationFrame(tick);
+  };
+  replayTimerId = window.requestAnimationFrame(tick);
 }
 
 function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showReplay = true, isSaved = false }) {
@@ -1740,7 +1762,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
         if (phaseEl) phaseEl.textContent = `Воспроизведение ${percent}%`;
       },
       onDone: () => {
-        if (phaseEl) phaseEl.textContent = 'Готово';
+        if (phaseEl) phaseEl.remove();
       }
     });
     return;
@@ -2337,11 +2359,7 @@ async function stopAndSave() {
 
     const data = await res.json();
 
-    statusDiv.innerText = data.ok
-
-      ? '✅ Тренировка сохранена!'
-
-      : '⚠️ Ошибка сохранения';
+    statusDiv.innerText = data.ok ? '' : '⚠️ Ошибка сохранения';
     saveSucceeded = Boolean(data.ok);
 
   } catch (err) {

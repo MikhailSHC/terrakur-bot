@@ -344,7 +344,8 @@ async function init() {
     return;
   }
 
-  let sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  const allSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  let listSessions = [...allSessions];
   let selectedActivity = 'all';
   let selectedPeriodDays = 7;
   let selectedMetric = 'km';
@@ -354,19 +355,22 @@ async function init() {
   let isSummaryOpen = true;
 
   function render() {
-    const filtered = selectedActivity === 'all'
-      ? sessions
-      : sessions.filter((s) => s.activityId === selectedActivity);
+    const metricsFiltered = selectedActivity === 'all'
+      ? allSessions
+      : allSessions.filter((s) => s.activityId === selectedActivity);
+    const listFiltered = selectedActivity === 'all'
+      ? listSessions
+      : listSessions.filter((s) => s.activityId === selectedActivity);
 
-    const distanceM = filtered.reduce((sum, s) => sum + (Number(s.distanceM) || 0), 0);
-    const durationSec = filtered.reduce((sum, s) => sum + (Number(s.durationSec) || 0), 0);
+    const distanceM = metricsFiltered.reduce((sum, s) => sum + (Number(s.distanceM) || 0), 0);
+    const durationSec = metricsFiltered.reduce((sum, s) => sum + (Number(s.durationSec) || 0), 0);
 
     document.getElementById('totalKm').textContent = (distanceM / 1000).toFixed(2);
     document.getElementById('totalTime').textContent = formatDuration(durationSec);
     document.getElementById('totalSessions').textContent = String(filtered.length);
     document.getElementById('estCalories').textContent = formatTotalCaloriesSummary(durationSec, distanceM);
 
-    const bestSession = filtered.reduce((best, s) => {
+    const bestSession = metricsFiltered.reduce((best, s) => {
       const dist = Number(s.distanceM) || 0;
       if (!best || dist > (Number(best.distanceM) || 0)) return s;
       return best;
@@ -381,18 +385,18 @@ async function init() {
     if (chartTitleEl) {
       chartTitleEl.textContent = getChartTitle(selectedMetric);
     }
-    currentPoints = buildMetricSeries(filtered, selectedPeriodDays, selectedMetric);
+    currentPoints = buildMetricSeries(metricsFiltered, selectedPeriodDays, selectedMetric);
     currentHitBoxes = drawChart(canvas, currentPoints, selectedMetric, selectedDayIndex);
     renderDayDetails(
       dayDetailsEl,
       Number.isInteger(selectedDayIndex) ? currentPoints[selectedDayIndex] || null : null
     );
-    renderSessions(listEl, filtered, async (session) => {
+    renderSessions(listEl, listFiltered, async (session) => {
       const confirmed = window.confirm('Удалить тренировку из истории?');
       if (!confirmed) return;
       try {
         await deleteSession(chatId, authToken, session.id);
-        sessions = sessions.filter((s) => String(s.id) !== String(session.id));
+        listSessions = listSessions.filter((s) => String(s.id) !== String(session.id));
         selectedDayIndex = null;
         render();
       } catch (err) {
