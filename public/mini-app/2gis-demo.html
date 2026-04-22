@@ -197,6 +197,7 @@
       const qualityParam = (params.get('quality') || 'high').trim().toLowerCase();
       const quality = qualityParam === 'ultra' ? 'ultra' : 'high';
       const cleanMode = params.get('clean') === '1';
+      const export60 = params.get('fps') === '60' || params.get('export') === '60fps';
       const durationSecRaw = Math.max(20, Number(params.get('durationSec')) || 90);
       const speedBoost = 2.5;
       const durationSec = Math.max(8, durationSecRaw / speedBoost);
@@ -279,38 +280,43 @@
 
       const marker = new mapgl.Marker(map, {
         coordinates: coordinates[0],
-        icon: 'https://docs.2gis.com/img/mapgl/marker.svg',
+        icon: makeHeroMarkerIcon(),
         zIndex: 5000,
       });
 
       let rafId = null;
       let startedAt = 0;
       let introStartedAt = 0;
-      let outroStartedAt = 0;
+      let outroStartedAtMs = 0;
+      let timelineMs = 0;
       let running = false;
       let lastSmoothedBearing = 0;
       let playbackPhase = 'idle';
       let finalState = null;
+      const fixedFrameMs = 1000 / 60;
 
       function startPlayback() {
         if (running) return;
         running = true;
         introStartedAt = performance.now();
         startedAt = introStartedAt + qualityConfig.introDurationMs;
-        outroStartedAt = 0;
+        outroStartedAtMs = 0;
+        timelineMs = 0;
         playbackPhase = 'intro';
         finalState = null;
         startBtn.style.display = 'none';
         completionCard.classList.remove('show');
-        statusEl.textContent = `2GIS cinematic playback • quality: ${quality} • speed: x${speedBoost}${cleanMode ? ' • clean' : ''}`;
+        statusEl.textContent = `2GIS cinematic playback • quality: ${quality} • speed: x${speedBoost}${cleanMode ? ' • clean' : ''}${export60 ? ' • 60fps' : ''}`;
         lastSmoothedBearing = calcBearing(coordinates[0], coordinates[1]);
         tick();
       }
 
       function tick() {
         try {
-          const elapsedMs = performance.now() - startedAt;
-          const introElapsedMs = performance.now() - introStartedAt;
+          if (export60) timelineMs += fixedFrameMs;
+          else timelineMs = performance.now() - introStartedAt;
+          const elapsedMs = timelineMs - qualityConfig.introDurationMs;
+          const introElapsedMs = timelineMs;
           if (playbackPhase === 'intro' && introElapsedMs < qualityConfig.introDurationMs) {
             const introT = Math.min(1, introElapsedMs / qualityConfig.introDurationMs);
             const introSmooth = easeInOutCubic(introT);
@@ -382,10 +388,10 @@
 
           if (playbackPhase !== 'outro') {
             playbackPhase = 'outro';
-            outroStartedAt = performance.now();
+            outroStartedAtMs = timelineMs;
             finalState = { center: cur, bearing: lastSmoothedBearing, zoom, pitch };
           }
-          const outroElapsedMs = performance.now() - outroStartedAt;
+          const outroElapsedMs = timelineMs - outroStartedAtMs;
           const outroT = Math.min(1, outroElapsedMs / qualityConfig.outroDurationMs);
           const outroSmooth = easeInOutCubic(outroT);
           const outroZoom = finalState.zoom - qualityConfig.outroZoomOut * outroSmooth;
@@ -424,8 +430,8 @@
       });
 
       statusEl.textContent = autoStart
-        ? `Запуск демо... (${quality}, x${speedBoost})`
-        : `Нажмите "Старт" (${quality}, x${speedBoost})`;
+        ? `Запуск демо... (${quality}, x${speedBoost}${export60 ? ', 60fps' : ''})`
+        : `Нажмите "Старт" (${quality}, x${speedBoost}${export60 ? ', 60fps' : ''})`;
     })().catch((err) => {
       const statusEl = document.getElementById('status');
       if (statusEl) statusEl.textContent = `Ошибка демо: ${err.message}`;
@@ -698,6 +704,23 @@
         polyline.destroy();
       }
       return new mapgl.Polyline(map, { ...style, coordinates });
+    }
+
+    function makeHeroMarkerIcon() {
+      const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#9ce6ff" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#2a96ff" stop-opacity="0.98"/>
+    </radialGradient>
+  </defs>
+  <circle cx="32" cy="32" r="23" fill="rgba(20,111,255,0.30)"/>
+  <circle cx="32" cy="32" r="18" fill="url(#g)" stroke="#ffffff" stroke-opacity="0.82" stroke-width="2.8"/>
+  <circle cx="32" cy="32" r="5.6" fill="#ffffff"/>
+  <path d="M32 9 L37 20 L32 17 L27 20 Z" fill="#ffffff" fill-opacity="0.92"/>
+</svg>`;
+      return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
     }
 
     function toRad(d) { return d * Math.PI / 180; }
