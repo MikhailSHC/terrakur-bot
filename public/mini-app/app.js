@@ -70,32 +70,28 @@ let routeProgress = {
   isOnRoute: false,        // находится ли пользователь на маршруте
 
   lastProgressUpdate: 0,  // время последнего обновления прогресса
-  passedCoords: [],
-  offtrackCoords: [],
-  wasOffRoute: false
+  passedCoords: []
 
 };
 
-const OFF_ROUTE_RADIUS_M = 10;
-const OFF_ROUTE_GRACE_MS = 2500;
 const PROGRESS_UPDATE_INTERVAL_MS = 350;
 
 /** Источники GeoJSON: пройденный участок (сплошной зелёный) и остаток (синий пунктир) */
 const PLANNED_ROUTE_DONE_SOURCE = 'planned-route-done';
 const PLANNED_ROUTE_REMAINING_SOURCE = 'planned-route-remaining';
-const PLANNED_ROUTE_OFFTRACK_SOURCE = 'planned-route-offtrack';
 /** Зелёная «тропа» отображается после прохода хотя бы одного сегмента полилинии */
 const ROUTE_PROGRESS_MIN_VERTEX_FOR_GREEN = 1;
 
 /** Пунктир от текущей позиции до точки старта (скрывается в зоне старта) */
 const NAV_TO_START_SOURCE = 'nav-to-start-line';
+const cinematicDemoEnabled = /(?:\?|&)demo=(?:cinematic|1|true)(?:&|$)/i.test(window.location.search);
 
 
 // Camera tuning (prev: interval=2500, minMove=8) kept for quick rollback.
-const CAMERA_UPDATE_INTERVAL_MS = 1200;
-const CAMERA_MIN_MOVE_M = 4;
+const CAMERA_UPDATE_INTERVAL_MS = cinematicDemoEnabled ? 700 : 1200;
+const CAMERA_MIN_MOVE_M = cinematicDemoEnabled ? 2 : 4;
 // Replay tuning (prev: duration=6000, step interval=60ms) kept for quick rollback.
-const REPLAY_DURATION_MS = 7600;
+const REPLAY_DURATION_MS = cinematicDemoEnabled ? 9800 : 7600;
 
 
 
@@ -235,6 +231,7 @@ function initMap() {
   map = new maplibregl.Map({
 
     container: 'map',
+    antialias: cinematicDemoEnabled,
 
     style: {
 
@@ -264,7 +261,9 @@ function initMap() {
 
     center: [42.7165, 43.9071],
 
-    zoom: 13
+    zoom: 13,
+    pitch: cinematicDemoEnabled ? 42 : 0,
+    bearing: 0
 
   });
 
@@ -301,11 +300,25 @@ function initMap() {
 
         'line-color': '#ff4d4d',
 
-        'line-width': 8
+        'line-width': cinematicDemoEnabled ? 10 : 8,
+        'line-opacity': cinematicDemoEnabled ? 0.96 : 0.92
 
       }
 
     });
+    if (cinematicDemoEnabled) {
+      map.addLayer({
+        id: 'run-line-glow',
+        type: 'line',
+        source: 'run-track',
+        paint: {
+          'line-color': '#f97316',
+          'line-width': 16,
+          'line-opacity': 0.2,
+          'line-blur': 0.9
+        }
+      }, 'run-line');
+    }
 
     ensureNavToStartLayer();
 
@@ -329,12 +342,37 @@ function initMap() {
 
 }
 
+function ensureCinematicStyles() {
+  if (!cinematicDemoEnabled || document.getElementById('terraCinematicStyles')) return;
+  const style = document.createElement('style');
+  style.id = 'terraCinematicStyles';
+  style.textContent = `
+    @keyframes terraPulse {
+      0% { transform: scale(0.9); opacity: 0.52; }
+      70% { transform: scale(1.7); opacity: 0; }
+      100% { transform: scale(1.7); opacity: 0; }
+    }
+    .terra-user-marker-core { position: relative; }
+    .terra-user-marker-core::before {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 2px solid rgba(74, 222, 128, 0.85);
+      animation: terraPulse 1.6s ease-out infinite;
+      pointer-events: none;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function ensureUiEnhancements() {
   if (!routeProgressEl) {
     routeProgressEl = document.createElement('div');
     routeProgressEl.id = 'routeProgress';
-    routeProgressEl.style.cssText =
-      'position:fixed;top:104px;left:16px;right:16px;z-index:3;background:rgba(0,0,0,0.72);color:#fff;padding:8px 12px;border-radius:16px;font-size:12px;display:none;';
+    routeProgressEl.style.cssText = cinematicDemoEnabled
+      ? 'position:fixed;top:96px;left:14px;right:14px;z-index:3;background:rgba(8,14,22,0.62);backdrop-filter:blur(8px);color:#fff;padding:10px 13px;border-radius:18px;font-size:12px;display:none;border:1px solid rgba(255,255,255,0.16);'
+      : 'position:fixed;top:104px;left:16px;right:16px;z-index:3;background:rgba(0,0,0,0.72);color:#fff;padding:8px 12px;border-radius:16px;font-size:12px;display:none;';
     document.body.appendChild(routeProgressEl);
   }
 
@@ -342,13 +380,20 @@ function ensureUiEnhancements() {
     recenterBtn = document.createElement('button');
     recenterBtn.id = 'recenterBtn';
     recenterBtn.textContent = '📍 Центр';
-    recenterBtn.style.cssText =
-      'position:fixed;bottom:160px;right:16px;z-index:3;background:rgba(0,0,0,0.75);border:none;border-radius:28px;padding:8px 14px;font-size:13px;font-weight:600;color:#fff;';
+    recenterBtn.style.cssText = cinematicDemoEnabled
+      ? 'position:fixed;bottom:172px;right:16px;z-index:3;background:rgba(12,18,28,0.72);border:1px solid rgba(255,255,255,0.2);backdrop-filter:blur(8px);border-radius:28px;padding:9px 14px;font-size:13px;font-weight:600;color:#fff;'
+      : 'position:fixed;bottom:160px;right:16px;z-index:3;background:rgba(0,0,0,0.75);border:none;border-radius:28px;padding:8px 14px;font-size:13px;font-weight:600;color:#fff;';
     recenterBtn.onclick = () => {
       isFollowingUser = true;
       if (lastKnownPosition) {
         const center = [lastKnownPosition.longitude, lastKnownPosition.latitude];
-        map.easeTo({ center, zoom: 17, duration: 550 });
+        map.easeTo({
+          center,
+          zoom: cinematicDemoEnabled ? 17.2 : 17,
+          duration: cinematicDemoEnabled ? 760 : 550,
+          pitch: cinematicDemoEnabled ? 46 : 0,
+          bearing: cinematicDemoEnabled && typeof lastHeadingDeg === 'number' ? lastHeadingDeg : 0
+        });
       }
     };
     document.body.appendChild(recenterBtn);
@@ -357,8 +402,9 @@ function ensureUiEnhancements() {
   if (!replayPanelEl) {
     replayPanelEl = document.createElement('div');
     replayPanelEl.id = 'replayPanel';
-    replayPanelEl.style.cssText =
-      'position:fixed;left:0;right:0;bottom:0;z-index:5;background:rgba(8,10,14,0.92);color:#fff;border-radius:18px 18px 0 0;padding:14px 14px calc(16px + env(safe-area-inset-bottom));display:none;box-shadow:0 -8px 26px rgba(0,0,0,0.45);max-height:46vh;overflow:auto;';
+    replayPanelEl.style.cssText = cinematicDemoEnabled
+      ? 'position:fixed;left:0;right:0;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(12,18,30,0.82) 0%,rgba(8,10,14,0.92) 100%);backdrop-filter:blur(10px);color:#fff;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));display:none;box-shadow:0 -14px 40px rgba(0,0,0,0.5);max-height:52vh;overflow:auto;border-top:1px solid rgba(255,255,255,0.12);'
+      : 'position:fixed;left:0;right:0;bottom:0;z-index:5;background:rgba(8,10,14,0.92);color:#fff;border-radius:18px 18px 0 0;padding:14px 14px calc(16px + env(safe-area-inset-bottom));display:none;box-shadow:0 -8px 26px rgba(0,0,0,0.45);max-height:46vh;overflow:auto;';
     document.body.appendChild(replayPanelEl);
   }
 }
@@ -419,10 +465,6 @@ function ensurePlannedRouteProgressLayers() {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] }
   });
-  map.addSource(PLANNED_ROUTE_OFFTRACK_SOURCE, {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] }
-  });
 
   map.addLayer({
     id: 'planned-route-done-line',
@@ -443,16 +485,6 @@ function ensurePlannedRouteProgressLayers() {
       'line-color': '#3b82f6',
       'line-width': 4,
       'line-dasharray': [2, 2]
-    }
-  });
-  map.addLayer({
-    id: 'planned-route-offtrack-line',
-    type: 'line',
-    source: PLANNED_ROUTE_OFFTRACK_SOURCE,
-    paint: {
-      'line-color': '#facc15',
-      'line-width': 5,
-      'line-opacity': 0.95
     }
   });
 }
@@ -502,8 +534,6 @@ function applyPlannedRouteProgressToMap(progressVertexIndex) {
 function finalizePlannedRouteMapProgress() {
   if (!map?.getSource(PLANNED_ROUTE_DONE_SOURCE)) return;
   const hasActualPassed = Array.isArray(routeProgress.passedCoords) && routeProgress.passedCoords.length >= 2;
-  const hasActualOfftrack =
-    Array.isArray(routeProgress.offtrackCoords) && routeProgress.offtrackCoords.length >= 2;
 
   if (hasActualPassed) {
     setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, routeProgress.passedCoords);
@@ -512,10 +542,6 @@ function finalizePlannedRouteMapProgress() {
     setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, coords);
   }
   setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, []);
-  setGeoJSONLineSource(
-    PLANNED_ROUTE_OFFTRACK_SOURCE,
-    hasActualOfftrack ? routeProgress.offtrackCoords : []
-  );
   clearNavToStartLine();
 }
 
@@ -575,8 +601,16 @@ function updateGPSQuality(_accuracy) {
 
 function smoothCameraFollow(center, now) {
   if (!map || !isFollowingUser) return;
+  const cinematicBearing = typeof lastHeadingDeg === 'number' ? lastHeadingDeg : 0;
   if (!lastCameraCenter) {
-    map.easeTo({ center, zoom: 17, duration: 500 });
+    map.easeTo({
+      center,
+      zoom: cinematicDemoEnabled ? 17.2 : 17,
+      duration: cinematicDemoEnabled ? 780 : 500,
+      pitch: cinematicDemoEnabled ? 46 : 0,
+      bearing: cinematicDemoEnabled ? cinematicBearing : 0,
+      easing: (t) => (cinematicDemoEnabled ? 1 - Math.pow(1 - t, 3) : t)
+    });
     lastCameraCenter = center;
     lastFlyTime = now;
     return;
@@ -587,7 +621,14 @@ function smoothCameraFollow(center, now) {
     return;
   }
 
-  map.easeTo({ center, zoom: 17, duration: 450 });
+  map.easeTo({
+    center,
+    zoom: cinematicDemoEnabled ? 17.2 : 17,
+    duration: cinematicDemoEnabled ? 620 : 450,
+    pitch: cinematicDemoEnabled ? 46 : 0,
+    bearing: cinematicDemoEnabled ? cinematicBearing : 0,
+    easing: (t) => (cinematicDemoEnabled ? 1 - Math.pow(1 - t, 3) : t)
+  });
   lastCameraCenter = center;
   lastFlyTime = now;
 }
@@ -734,7 +775,12 @@ async function loadPlannedRoute(id) {
         const userCenter = [userLng, userLat];
         lastCameraCenter = userCenter;
         isFollowingUser = true;
-        map.jumpTo({ center: userCenter, zoom: 17 });
+        map.jumpTo({
+          center: userCenter,
+          zoom: cinematicDemoEnabled ? 17.2 : 17,
+          pitch: cinematicDemoEnabled ? 46 : 0,
+          bearing: 0
+        });
 
         updateNavToStartLineIfNeeded(userLat, userLng);
 
@@ -757,10 +803,20 @@ async function loadPlannedRoute(id) {
             const c = [lastKnownPosition.longitude, lastKnownPosition.latitude];
             lastCameraCenter = c;
             isFollowingUser = true;
-            map.flyTo({ center: c, zoom: 17 });
+            map.flyTo({
+              center: c,
+              zoom: cinematicDemoEnabled ? 17.2 : 17,
+              pitch: cinematicDemoEnabled ? 46 : 0,
+              duration: cinematicDemoEnabled ? 1300 : 900
+            });
             statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. До «СТАРТ» см. маркер и оранжевую линию.`;
           } else {
-            map.flyTo({ center: [center[0], center[1]], zoom: 15 });
+            map.flyTo({
+              center: [center[0], center[1]],
+              zoom: cinematicDemoEnabled ? 15.5 : 15,
+              pitch: cinematicDemoEnabled ? 38 : 0,
+              duration: cinematicDemoEnabled ? 1200 : 900
+            });
             statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Подойдите к маркеру «СТАРТ» и нажмите «Старт»`;
           }
           setTimeout(() => {
@@ -832,7 +888,12 @@ function getUserLocation() {
       }
       applyPassiveUserPosition(latitude, longitude, accuracy, now);
 
-      map.flyTo({ center: [longitude, latitude], zoom: 16 });
+      map.flyTo({
+        center: [longitude, latitude],
+        zoom: cinematicDemoEnabled ? 16.6 : 16,
+        pitch: cinematicDemoEnabled ? 42 : 0,
+        duration: cinematicDemoEnabled ? 1100 : 900
+      });
 
       statusDiv.innerText = '✅ GPS готов, можно стартовать';
 
@@ -889,11 +950,8 @@ function initializeRouteProgress() {
   routeProgress.offRouteSince = null;
   routeProgress.maxClosestIndex = 0;
   routeProgress.passedCoords = [];
-  routeProgress.offtrackCoords = [];
-  routeProgress.wasOffRoute = false;
 
   applyPlannedRouteProgressToMap(0);
-  setGeoJSONLineSource(PLANNED_ROUTE_OFFTRACK_SOURCE, []);
 
   if (routeProgressEl) {
     routeProgressEl.style.display = 'block';
@@ -917,18 +975,6 @@ function updateRouteProgress(lat, lng) {
     if (d < minDistanceToVertex) {
       minDistanceToVertex = d;
       closestIndex = i;
-    }
-  }
-
-  // For off-route detection use distance to the whole polyline (segment projection),
-  // not just to route vertices, to avoid false positives on long segments.
-  let minDistanceToRouteLine = Infinity;
-  for (let i = 1; i < coords.length; i += 1) {
-    const a = coords[i - 1];
-    const b = coords[i];
-    const d = pointToSegmentDistanceMeters(lat, lng, a[1], a[0], b[1], b[0]);
-    if (d < minDistanceToRouteLine) {
-      minDistanceToRouteLine = d;
     }
   }
 
@@ -959,30 +1005,11 @@ function updateRouteProgress(lat, lng) {
   applyPlannedRouteProgressToMap(progressIndex);
 
   const currentCoord = [lng, lat];
-  const isFarFromRoute = minDistanceToRouteLine > OFF_ROUTE_RADIUS_M;
-  if (isFarFromRoute) {
-    if (!routeProgress.offRouteSince) routeProgress.offRouteSince = now;
-    routeProgress.offtrackCoords.push(currentCoord);
-    if (routeProgress.offtrackCoords.length > 1200) {
-      routeProgress.offtrackCoords = routeProgress.offtrackCoords.slice(-1200);
-    }
-    setGeoJSONLineSource(PLANNED_ROUTE_OFFTRACK_SOURCE, routeProgress.offtrackCoords);
-    if (!routeProgress.wasOffRoute && now - routeProgress.offRouteSince >= OFF_ROUTE_GRACE_MS) {
-      statusDiv.innerText = '⚠️ Вы отклонились от маршрута';
-      routeProgress.wasOffRoute = true;
-    }
-  } else {
-    routeProgress.passedCoords.push(currentCoord);
-    if (routeProgress.passedCoords.length > 1200) {
-      routeProgress.passedCoords = routeProgress.passedCoords.slice(-1200);
-    }
-    setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, routeProgress.passedCoords);
-    if (routeProgress.wasOffRoute) {
-      statusDiv.innerText = '✅ Вы снова на маршруте';
-    }
-    routeProgress.offRouteSince = null;
-    routeProgress.wasOffRoute = false;
+  routeProgress.passedCoords.push(currentCoord);
+  if (routeProgress.passedCoords.length > 1200) {
+    routeProgress.passedCoords = routeProgress.passedCoords.slice(-1200);
   }
+  setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, routeProgress.passedCoords);
 
   if (routeProgressEl) {
     routeProgressEl.style.display = 'block';
@@ -1000,9 +1027,10 @@ function addUserMarker(lngLat) {
   if (userMarker) userMarker.remove();
 
   const el = document.createElement('div');
+  if (cinematicDemoEnabled) el.classList.add('terra-user-marker-core');
 
   el.style.cssText =
-    'width:40px;height:40px;background:rgba(0,0,0,0.2);border:2px solid rgba(255,255,255,0.85);border-radius:50%;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);';
+    `width:${cinematicDemoEnabled ? 44 : 40}px;height:${cinematicDemoEnabled ? 44 : 40}px;background:rgba(0,0,0,0.2);border:2px solid rgba(255,255,255,0.85);border-radius:50%;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);`;
 
   const arrowWrapEl = document.createElement('div');
   arrowWrapEl.style.cssText =
@@ -1162,37 +1190,6 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-}
-
-function toLocalMeters(lat, lon, originLat, originLon) {
-  const mPerDegLat = 111320;
-  const mPerDegLon = 111320 * Math.cos((originLat * Math.PI) / 180);
-  return {
-    x: (lon - originLon) * mPerDegLon,
-    y: (lat - originLat) * mPerDegLat
-  };
-}
-
-function pointToSegmentDistanceMeters(pointLat, pointLon, aLat, aLon, bLat, bLon) {
-  const p = toLocalMeters(pointLat, pointLon, pointLat, pointLon);
-  const a = toLocalMeters(aLat, aLon, pointLat, pointLon);
-  const b = toLocalMeters(bLat, bLon, pointLat, pointLon);
-
-  const abx = b.x - a.x;
-  const aby = b.y - a.y;
-  const apx = p.x - a.x;
-  const apy = p.y - a.y;
-  const abLen2 = abx * abx + aby * aby;
-
-  if (abLen2 <= 1e-9) {
-    return Math.hypot(apx, apy);
-  }
-
-  const tRaw = (apx * abx + apy * aby) / abLen2;
-  const t = Math.min(1, Math.max(0, tRaw));
-  const projX = a.x + abx * t;
-  const projY = a.y + aby * t;
-  return Math.hypot(p.x - projX, p.y - projY);
 }
 
 function destinationPointLatLon(latDeg, lonDeg, bearingDeg, distanceM) {
@@ -1769,8 +1766,9 @@ function ensureReplayLayer() {
       source: REPLAY_SOURCE_ID,
       paint: {
         'line-color': '#22c55e',
-        'line-width': 6,
-        'line-opacity': 0.95
+        'line-width': cinematicDemoEnabled ? 8 : 6,
+        'line-opacity': cinematicDemoEnabled ? 0.98 : 0.95,
+        'line-blur': cinematicDemoEnabled ? 0.3 : 0
       }
     });
   }
@@ -1874,7 +1872,17 @@ function animateCompletedPath(trackCoords, options = {}) {
     replayCoords.push(interpolated);
     setReplayCoordinates(replayCoords);
     if (map && interpolated) {
-      map.jumpTo({ center: interpolated });
+      if (cinematicDemoEnabled) {
+        map.easeTo({
+          center: interpolated,
+          duration: 120,
+          pitch: 44,
+          bearing: typeof lastHeadingDeg === 'number' ? lastHeadingDeg : map.getBearing(),
+          easing: (t) => t
+        });
+      } else {
+        map.jumpTo({ center: interpolated });
+      }
     }
     if (typeof onProgress === 'function') onProgress(Math.round(progress * 100));
 
@@ -2612,6 +2620,7 @@ if (stopBtnEl) {
 
 // Старт приложения
 
+ensureCinematicStyles();
 ensureUiEnhancements();
 syncStopButtonVisibility();
 initMap();
