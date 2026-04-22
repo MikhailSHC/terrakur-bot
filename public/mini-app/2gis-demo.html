@@ -255,46 +255,55 @@
       }
 
       function tick() {
-        const elapsedMs = performance.now() - startedAt;
-        const t = Math.min(1, elapsedMs / (durationSec * 1000));
-        const smooth = easeInOutCubic(t);
-        const totalSegments = coordinates.length - 1;
-        const exact = smooth * totalSegments;
-        const idx = Math.min(totalSegments - 1, Math.floor(exact));
-        const segT = exact - idx;
-        const a = coordinates[idx];
-        const b = coordinates[idx + 1];
-        const cur = [
-          a[0] + (b[0] - a[0]) * segT,
-          a[1] + (b[1] - a[1]) * segT
-        ];
+        try {
+          const elapsedMs = performance.now() - startedAt;
+          const t = Math.min(1, elapsedMs / (durationSec * 1000));
+          const smooth = cinematicProgress(t);
+          const totalSegments = coordinates.length - 1;
+          const exact = smooth * totalSegments;
+          const idx = Math.min(totalSegments - 1, Math.floor(exact));
+          const segT = exact - idx;
+          const a = coordinates[idx];
+          const b = coordinates[idx + 1];
+          const cur = [
+            a[0] + (b[0] - a[0]) * segT,
+            a[1] + (b[1] - a[1]) * segT
+          ];
 
-        const passed = coordinates.slice(0, idx + 1);
-        passed.push(cur);
-        marker.setCoordinates(cur);
-        passedLine.setCoordinates(passed);
-        glowLine.setCoordinates(passed);
+          const passed = coordinates.slice(0, idx + 1);
+          passed.push(cur);
+          marker.setCoordinates(cur);
+          passedLine.setCoordinates(passed);
+          glowLine.setCoordinates(passed);
 
-        const forwardA = coordinates[Math.max(0, idx - qualityConfig.bearingLookBehind)];
-        const forwardB = coordinates[Math.min(coordinates.length - 1, idx + qualityConfig.bearingLookAhead)];
-        const rawBearing = calcBearing(forwardA, forwardB);
-        lastSmoothedBearing = smoothBearing(lastSmoothedBearing, rawBearing, qualityConfig.bearingSmoothing);
-        map.setCenter(cur, { duration: qualityConfig.centerDurationMs });
-        map.setRotation(lastSmoothedBearing, { duration: qualityConfig.rotationDurationMs });
-        map.setPitch(46 + Math.sin(smooth * Math.PI * 2) * 1.6, { duration: qualityConfig.pitchDurationMs });
+          const forwardA = coordinates[Math.max(0, idx - qualityConfig.bearingLookBehind)];
+          const forwardB = coordinates[Math.min(coordinates.length - 1, idx + qualityConfig.bearingLookAhead)];
+          const rawBearing = calcBearing(forwardA, forwardB);
+          lastSmoothedBearing = smoothBearing(lastSmoothedBearing, rawBearing, qualityConfig.bearingSmoothing);
+          applyCamera(map, {
+            center: cur,
+            bearing: lastSmoothedBearing,
+            pitch: 46 + Math.sin(smooth * Math.PI * 2) * 1.6,
+            qualityConfig
+          });
 
-        progressInner.style.width = `${(smooth * 100).toFixed(2)}%`;
-        timeText.textContent = formatTime(Math.floor(elapsedMs / 1000));
+          progressInner.style.width = `${(smooth * 100).toFixed(2)}%`;
+          timeText.textContent = formatTime(Math.floor(elapsedMs / 1000));
 
-        if (t < 1) {
-          rafId = requestAnimationFrame(tick);
-          return;
+          if (t < 1) {
+            rafId = requestAnimationFrame(tick);
+            return;
+          }
+
+          running = false;
+          progressInner.style.width = '100%';
+          statusEl.textContent = 'Готово для записи: дубль завершен';
+          completionCard.classList.add('show');
+        } catch (err) {
+          running = false;
+          statusEl.textContent = `Ошибка playback: ${err.message}`;
+          startBtn.style.display = '';
         }
-
-        running = false;
-        progressInner.style.width = '100%';
-        statusEl.textContent = 'Готово для записи: дубль завершен';
-        completionCard.classList.add('show');
       }
 
       startBtn.addEventListener('click', startPlayback);
@@ -444,6 +453,12 @@
       return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
 
+    function cinematicProgress(t) {
+      // Keep cinematic acceleration but avoid "frozen" first seconds on long takes.
+      const eased = easeInOutCubic(t);
+      return Math.min(1, 0.22 * t + 0.78 * eased);
+    }
+
     function calcBearing(a, b) {
       const lon1 = toRad(a[0]);
       const lat1 = toRad(a[1]);
@@ -458,6 +473,20 @@
     function smoothBearing(prevDeg, targetDeg, alpha) {
       const delta = ((((targetDeg - prevDeg) % 360) + 540) % 360) - 180;
       return (prevDeg + delta * (1 - alpha) + 360) % 360;
+    }
+
+    function applyCamera(map, { center, bearing, pitch, qualityConfig }) {
+      if (typeof map.setCenter === 'function') {
+        map.setCenter(center, { duration: qualityConfig.centerDurationMs });
+      }
+      if (typeof map.setRotation === 'function') {
+        map.setRotation(bearing, { duration: qualityConfig.rotationDurationMs });
+      } else if (typeof map.setBearing === 'function') {
+        map.setBearing(bearing, { duration: qualityConfig.rotationDurationMs });
+      }
+      if (typeof map.setPitch === 'function') {
+        map.setPitch(pitch, { duration: qualityConfig.pitchDurationMs });
+      }
     }
 
     function toRad(d) { return d * Math.PI / 180; }
