@@ -1079,7 +1079,18 @@ async function loadPlannedRoute(id) {
       cache: 'no-store'
     });
 
-    const data = await res.json();
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    const rawText = await res.text();
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Сервер вернул не JSON (content-type: ${contentType || 'unknown'})`);
+    }
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (_err) {
+      throw new Error('Некорректный JSON от сервера');
+    }
 
     if (!res.ok || !data.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
