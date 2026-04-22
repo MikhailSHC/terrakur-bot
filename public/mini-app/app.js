@@ -127,8 +127,12 @@ const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
 const activityIdFromUrl = urlParams.get('activityId');
 const mapProvider = (urlParams.get('mapProvider') || '').toLowerCase();
+const dgisKeyFromUrl = (urlParams.get('dgisKey') || '').trim();
 const miniAppRuntime = window.__MINI_APP_RUNTIME__ || {};
-const dgisApiKey = typeof miniAppRuntime.DGIS_API_KEY === 'string' ? miniAppRuntime.DGIS_API_KEY.trim() : '';
+const dgisApiKeyFromRuntime = typeof miniAppRuntime.DGIS_API_KEY === 'string'
+  ? miniAppRuntime.DGIS_API_KEY.trim()
+  : '';
+const dgisApiKey = dgisApiKeyFromRuntime || dgisKeyFromUrl;
 const dgisPilotRequested = mapProvider === '2gis' && routeId === 'kholodnye-rodniki';
 const dgisRasterEnabled = dgisPilotRequested && Boolean(dgisApiKey);
 
@@ -291,7 +295,9 @@ function initMap() {
 
   map.on('load', () => {
     if (dgisPilotRequested && !dgisRasterEnabled) {
-      statusDiv.innerText = '2GIS pilot requested, but DGIS_API_KEY is missing. Using default map.';
+      statusDiv.innerText = '2GIS не включен: ключ не найден (DGIS_API_KEY/dgisKey). Используется стандартная карта.';
+    } else if (dgisRasterEnabled) {
+      statusDiv.innerText = '2GIS pilot mode enabled';
     }
 
     map.addSource('run-track', {
