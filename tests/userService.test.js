@@ -43,7 +43,7 @@ describe('UserService activity stats', () => {
       id: '2',
       distanceM: 500,
       durationSec: 50,
-      activityId: 'walking',
+      activityId: 'nordic_walking',
       mode: 'free_run'
     });
 
@@ -51,8 +51,8 @@ describe('UserService activity stats', () => {
     expect(run.totalDistanceM).toBe(1000);
     expect(run.totalSessions).toBe(1);
 
-    const walk = userService.getLifetimeStatsByActivity(chatId, 'walking');
-    expect(walk.totalDistanceM).toBe(500);
-    expect(walk.totalSessions).toBe(1);
+    const nordic = userService.getLifetimeStatsByActivity(chatId, 'nordic_walking');
+    expect(nordic.totalDistanceM).toBe(500);
+    expect(nordic.totalSessions).toBe(1);
   });
 });

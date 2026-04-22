@@ -51,34 +51,35 @@ function formatRouteDetails(route, options = {}) {
 
   const name = route.name || 'Маршрут';
   lines.push(name);
+  lines.push('');
 
   if (locationName) {
-    lines.push(`📍 Локация: ${locationName}`);
+    lines.push(`Локация: ${locationName}`);
   }
 
   if (activityName) {
-    lines.push(`🏃 Активность: ${activityName}`);
+    lines.push(`Активность: ${activityName}`);
   }
 
   if (route.distance) {
-    lines.push(`📏 Дистанция: ${route.distance}`);
+    lines.push(`Дистанция: ${route.distance}`);
   }
 
   if (route.duration) {
-    lines.push(`⏱ Время: ${route.duration}`);
+    lines.push(`Время: ${route.duration}`);
   }
 
   if (route.difficulty !== undefined) {
-    lines.push(`⭐️ Сложность: ${difficultyLabel(route.difficulty)}`);
+    lines.push(`Сложность: ${difficultyLabel(route.difficulty)}`);
   }
 
   if (Array.isArray(route.target_audience) && route.target_audience.length > 0) {
-    lines.push(`👥 Для кого: ${route.target_audience.join(', ')}`);
+    lines.push(`Для кого: ${route.target_audience.join(', ')}`);
   }
 
   if (Array.isArray(route.points) && route.points.length > 0) {
     lines.push('');
-    lines.push('📌 Основные точки маршрута:');
+    lines.push('Основные точки маршрута:');
     route.points.forEach((p, idx) => {
       lines.push(`  ${idx + 1}. ${p}`);
     });

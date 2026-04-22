@@ -105,6 +105,7 @@ const statusDiv    = document.getElementById('status');
 
 const startBtn     = document.getElementById('startBtn');
 const stopBtnEl    = document.getElementById('stopBtn');
+const controlsEl   = document.querySelector('.controls');
 
 // const routesBtn    = document.getElementById('routesBtn');
 
@@ -146,13 +147,6 @@ function getAuthHeaders() {
   return { 'x-miniapp-auth': authToken };
 }
 
-/** Средняя скорость: секунды на километр -> км/ч */
-function formatSpeedKmhFromSecPerKm(secPerKm) {
-  if (!Number.isFinite(secPerKm) || secPerKm <= 0) return '—';
-  const kmh = 3600 / secPerKm;
-  return `${kmh.toFixed(1).replace('.', ',')} км/ч`;
-}
-
 function syncStopButtonVisibility() {
   if (!stopBtnEl) return;
   const show =
@@ -185,7 +179,7 @@ let recentSpeeds = [];          // last few speed measurements for averaging
 
 const SPEED_HISTORY_SIZE = 5;   // how many recent speeds to average
 
-const WALKING_SPEED_THRESHOLD = 2; // m/s - below this is considered walking
+const LOW_SPEED_THRESHOLD_M_S = 2; // m/s - low-speed profile for stricter GPS filtering
 
 // Таймер для UI
 
@@ -353,6 +347,15 @@ function ensureUiEnhancements() {
     replayPanelEl.style.cssText =
       'position:fixed;left:0;right:0;bottom:0;z-index:5;background:rgba(8,10,14,0.92);color:#fff;border-radius:18px 18px 0 0;padding:14px 14px calc(16px + env(safe-area-inset-bottom));display:none;box-shadow:0 -8px 26px rgba(0,0,0,0.45);max-height:46vh;overflow:auto;';
     document.body.appendChild(replayPanelEl);
+  }
+}
+
+function setPostRunUiMode(enabled) {
+  if (controlsEl) {
+    controlsEl.style.display = enabled ? 'none' : '';
+  }
+  if (recenterBtn) {
+    recenterBtn.style.display = enabled ? 'none' : '';
   }
 }
 
@@ -1256,21 +1259,21 @@ function getAdaptiveFilters() {
 
   const avgSpeed = getAverageSpeed();
 
-  const isWalking = avgSpeed < WALKING_SPEED_THRESHOLD;
+  const isLowSpeed = avgSpeed < LOW_SPEED_THRESHOLD_M_S;
 
   
 
   return {
 
-    maxAccuracy: isWalking ? 20 : BASE_MAX_ACCURACY_METERS,  // stricter for walking
+    maxAccuracy: isLowSpeed ? 20 : BASE_MAX_ACCURACY_METERS,  // stricter in low-speed mode
 
-    maxJump: isWalking ? 30 : BASE_MAX_JUMP_METERS,           // smaller jumps for walking
+    maxJump: isLowSpeed ? 30 : BASE_MAX_JUMP_METERS,           // smaller jumps in low-speed mode
 
-    minDistance: isWalking ? 2 : BASE_MIN_DISTANCE_METERS,
+    minDistance: isLowSpeed ? 2 : BASE_MIN_DISTANCE_METERS,
 
-    maxSpeed: isWalking ? 4 : BASE_MAX_SPEED_M_S,             // lower max for walking
+    maxSpeed: isLowSpeed ? 4 : BASE_MAX_SPEED_M_S,             // lower max in low-speed mode
 
-    minTime: isWalking ? 1000 : 800
+    minTime: isLowSpeed ? 1000 : 800
 
   };
 
@@ -1620,49 +1623,6 @@ function setReplayCoordinates(coords) {
   });
 }
 
-function closeMiniAppToBot() {
-  const closeCandidates = [
-    window?.MAX?.WebApp?.close,
-    window?.Max?.WebApp?.close,
-    window?.max?.WebApp?.close,
-    window?.MAX?.MiniApp?.close,
-    window?.Max?.MiniApp?.close,
-    window?.max?.MiniApp?.close,
-    window?.Telegram?.WebApp?.close
-  ];
-  try {
-    for (const closeFn of closeCandidates) {
-      if (typeof closeFn === 'function') {
-        closeFn.call(window);
-        return;
-      }
-    }
-  } catch {
-    // noop
-  }
-  // Работает только для окон, открытых через window.open; в MAX WebView обычно перехватывают раньше.
-  try {
-    if (window.opener) {
-      window.close();
-      return;
-    }
-  } catch {
-    // noop
-  }
-  try {
-    window.close();
-  } catch {
-    // noop
-  }
-  if (window.history.length > 1) {
-    window.history.back();
-    return;
-  }
-  const hint =
-    'Во встроенном приложении MAX эта кнопка закрывает WebView. В обычном браузере вкладка не закрывается: вернитесь в чат вручную или нажмите «Назад».';
-  if (statusDiv) statusDiv.innerText = hint;
-}
-
 function setReplayMapStatic(enabled) {
   if (!map) return;
   const method = enabled ? 'disable' : 'enable';
@@ -1724,11 +1684,11 @@ function animateCompletedPath(trackCoords, options = {}) {
   );
 
   // Keep room for summary panel, but avoid excessive zoom-out.
-  const replayBottomPadding = Math.max(24, Math.round(window.innerHeight * 0.02));
+  const replayBottomPadding = Math.max(12, Math.round(window.innerHeight * 0.01));
   map.fitBounds(rawBounds, {
-    padding: { top: 17, right: 13, bottom: replayBottomPadding, left: 13 },
+    padding: { top: 8, right: 6, bottom: replayBottomPadding, left: 6 },
     duration: 820,
-    maxZoom: 16
+    maxZoom: 17
   });
 
   replayTimerId = setInterval(() => {
@@ -1747,15 +1707,20 @@ function animateCompletedPath(trackCoords, options = {}) {
   }, frameMs);
 }
 
-function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, trackCoords, showReplay = true }) {
+function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showReplay = true, isSaved = false }) {
   if (!replayPanelEl) return;
   const km = (distanceM / 1000).toFixed(2);
   const mins = Math.floor(elapsedSec / 60);
   const secs = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
-  const avgSpeed = formatSpeedKmhFromSecPerKm(avgPaceSecPerKm);
+  const speedKmh = elapsedSec > 0 ? (distanceM / 1000) / (elapsedSec / 3600) : 0;
+  const avgSpeed = Number.isFinite(speedKmh) && speedKmh > 0 ? `${speedKmh.toFixed(1).replace('.', ',')} км/ч` : '—';
   const kcal = formatCaloriesKcalShort(estimateWorkoutCaloriesKcal(distanceM, elapsedSec));
   const kcalSub = 'при весе 70 кг';
+  const saveBadge = isSaved
+    ? `<div style="background:rgba(34,197,94,0.16);border:1px solid rgba(34,197,94,0.45);color:#d9ffe8;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:600;margin-bottom:8px;">✅ Маршрут сохранен в истории</div>`
+    : '';
   const summaryCard =
+    saveBadge +
     `<div style="font-size:14px;font-weight:700;margin-bottom:8px;">Итог тренировки</div>` +
     `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">` +
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Км</div><div style="font-size:20px;font-weight:700;">${km}</div></div>` +
@@ -1767,12 +1732,9 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, t
   if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
     replayPanelEl.innerHTML =
       summaryCard +
-      `<div id="replayPhase" style="font-size:11px;opacity:0.75;margin-top:6px;">Подготовка воспроизведения...</div>` +
-      `<div style="margin-top:10px;"><button type="button" id="backToBotBtn" style="width:100%;background:#1f7a46;color:#fff;border:none;border-radius:10px;padding:10px 12px;font-size:13px;cursor:pointer;">Вернуться в приложение</button></div>`;
+      `<div id="replayPhase" style="font-size:11px;opacity:0.75;margin-top:6px;">Подготовка воспроизведения...</div>`;
     replayPanelEl.style.display = 'block';
     const phaseEl = replayPanelEl.querySelector('#replayPhase');
-    const backBtn = replayPanelEl.querySelector('#backToBotBtn');
-    if (backBtn) backBtn.onclick = closeMiniAppToBot;
     animateCompletedPath(trackCoords, {
       onProgress: (percent) => {
         if (phaseEl) phaseEl.textContent = `Воспроизведение ${percent}%`;
@@ -1786,11 +1748,8 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, t
 
   replayPanelEl.innerHTML =
     summaryCard +
-    `<div style="font-size:11px;opacity:0.75;margin-top:8px;">Пройденная тропа на карте отмечена зелёным.</div>` +
-    `<div style="margin-top:10px;"><button type="button" id="backToBotBtn" style="width:100%;background:#1f7a46;color:#fff;border:none;border-radius:10px;padding:10px 12px;font-size:13px;cursor:pointer;">Вернуться в приложение</button></div>`;
+    `<div style="font-size:11px;opacity:0.75;margin-top:8px;">Пройденная тропа на карте отмечена зелёным.</div>`;
   replayPanelEl.style.display = 'block';
-  const backBtn = replayPanelEl.querySelector('#backToBotBtn');
-  if (backBtn) backBtn.onclick = closeMiniAppToBot;
 }
 
 
@@ -2043,6 +2002,7 @@ function startRun() {
     // Первый запуск тренировки
 
     isTracking     = true;
+    setPostRunUiMode(false);
     isReplayViewLocked = false;
     setReplayMapStatic(false);
     hasReachedFinish = false; // Сбрасываем состояние финиша
@@ -2361,6 +2321,7 @@ async function stopAndSave() {
 
 
 
+  let saveSucceeded = false;
   try {
     statusDiv.innerText = 'Сохранение...';
 
@@ -2381,6 +2342,7 @@ async function stopAndSave() {
       ? '✅ Тренировка сохранена!'
 
       : '⚠️ Ошибка сохранения';
+    saveSucceeded = Boolean(data.ok);
 
   } catch (err) {
 
@@ -2421,15 +2383,19 @@ async function stopAndSave() {
   if (routeProgressEl) {
     routeProgressEl.style.display = 'none';
   }
+  setPostRunUiMode(true);
 
   const replayCoordinates = trackPoints.map((p) => [p.lng, p.lat]);
-  statusDiv.innerText = 'Подготовка воспроизведения...';
+  await new Promise((resolve) => setTimeout(resolve, saveSucceeded ? 1200 : 300));
+  if (!saveSucceeded) {
+    statusDiv.innerText = 'Подготовка воспроизведения...';
+  }
   showWorkoutSummaryAndReplay({
     distanceM,
     elapsedSec,
-    avgPaceSecPerKm,
     trackCoords: replayCoordinates,
-    showReplay: sessionMode !== 'planned_route'
+    showReplay: sessionMode !== 'planned_route',
+    isSaved: saveSucceeded
   });
 
   ensurePassiveLocationWatch();

@@ -18,7 +18,7 @@ describe('RouteService', () => {
 
   it('sorts routes by distance and applies limit filter', () => {
     const nearest = routeService.getRoutesSortedByDistance(45.04, 41.97, {
-      activityId: 'walking',
+      activityId: 'nordic_walking',
       limit: 3
     });
 

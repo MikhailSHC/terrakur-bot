@@ -1,4 +1,3 @@
-/* global: estimateWorkoutCaloriesKcal, formatCaloriesKcalShort */
 const TERRAKUR_DEFAULT_WEIGHT_KG = 70;
 
 function terrakurMetFromSpeedKmh(v) {
@@ -13,7 +12,7 @@ function terrakurMetFromSpeedKmh(v) {
   return 15;
 }
 
-function estimateWorkoutCaloriesKcal(distanceM, durationSec, weightKg = TERRAKUR_DEFAULT_WEIGHT_KG) {
+function createEstimateWorkoutCaloriesKcal(distanceM, durationSec, weightKg = TERRAKUR_DEFAULT_WEIGHT_KG) {
   const d = Number(distanceM) || 0;
   const t = Number(durationSec) || 0;
   if (d <= 0 || t <= 0) return 0;
@@ -21,7 +20,10 @@ function estimateWorkoutCaloriesKcal(distanceM, durationSec, weightKg = TERRAKUR
   return terrakurMetFromSpeedKmh(kmh) * weightKg * (t / 3600);
 }
 
-function formatCaloriesKcalShort(kcal) {
+function createFormatCaloriesKcalShort(kcal) {
   if (!Number.isFinite(kcal) || kcal <= 0) return '—';
   return `≈ ${Math.round(kcal)}`;
 }
+
+window.estimateWorkoutCaloriesKcal = createEstimateWorkoutCaloriesKcal;
+window.formatCaloriesKcalShort = createFormatCaloriesKcalShort;

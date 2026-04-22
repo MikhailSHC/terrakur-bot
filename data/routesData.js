@@ -20,7 +20,7 @@ const routes = [
 
 
 
-    activities: ['walking', 'running', 'nordic_walking'],
+    activities: ['running', 'nordic_walking'],
 
 
 
@@ -86,7 +86,7 @@ const routes = [
 
 
 
-    activities: ['walking', 'running', 'nordic_walking'],
+    activities: ['running', 'nordic_walking'],
 
 
 
@@ -637,7 +637,7 @@ const routes = [
 
 
 
-    activities: ['walking', 'running', 'nordic_walking'],
+    activities: ['running', 'nordic_walking'],
 
 
 
@@ -707,7 +707,7 @@ const routes = [
 
 
 
-    activities: ['walking', 'nordic_walking'],
+    activities: ['nordic_walking'],
 
 
 
@@ -775,7 +775,7 @@ const routes = [
 
 
 
-    activities: ['walking', 'nordic_walking'],
+    activities: ['nordic_walking'],
 
 
 
@@ -859,7 +859,7 @@ const routes = [
 
 
 
-    activities: ['walking', 'running'],
+    activities: ['running'],
 
 
 
@@ -927,7 +927,7 @@ const routes = [
 
 
 
-    activities: ['walking', 'running', 'nordic_walking'],
+    activities: ['running', 'nordic_walking'],
 
 
 
@@ -991,7 +991,7 @@ const routes = [
 
 
 
-    activities: ['walking', 'running', 'cycling'],
+    activities: ['running', 'cycling'],
 
 
 

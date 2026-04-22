@@ -19,6 +19,7 @@ module.exports = [
         module: 'readonly',
         require: 'readonly',
         __dirname: 'readonly',
+        URL: 'readonly',
         URLSearchParams: 'readonly',
         Buffer: 'readonly'
       }

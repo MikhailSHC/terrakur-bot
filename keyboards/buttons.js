@@ -57,11 +57,10 @@ const activityKeyboard = {
   payload: {
     buttons: [
       [
-        { type: 'callback', text: '🚶 Ходьба', payload: 'activity_walking' },
+        { type: 'callback', text: '🥾 Скандинавская ходьба', payload: 'activity_nordic_walking' },
         { type: 'callback', text: '🏃 Бег', payload: 'activity_running' }
       ],
       [
-        { type: 'callback', text: '🥾 Скандинавская ходьба', payload: 'activity_nordic_walking' },
         { type: 'callback', text: '🚲 Велосипед', payload: 'activity_cycling' }
       ],
       [
@@ -185,11 +184,10 @@ const nearbyActivityPickKeyboard = {
   payload: {
     buttons: [
       [
-        { type: 'callback', text: '🚶 Ходьба', payload: 'pick_nearby_activity_walking' },
+        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_nearby_activity_nordic_walking' },
         { type: 'callback', text: '🏃 Бег', payload: 'pick_nearby_activity_running' }
       ],
       [
-        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_nearby_activity_nordic_walking' },
         { type: 'callback', text: '🚲 Велосипед', payload: 'pick_nearby_activity_cycling' }
       ],
       [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
@@ -203,11 +201,10 @@ const freeTrackActivityPickKeyboard = {
   payload: {
     buttons: [
       [
-        { type: 'callback', text: '🚶 Ходьба', payload: 'pick_free_activity_walking' },
+        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_free_activity_nordic_walking' },
         { type: 'callback', text: '🏃 Бег', payload: 'pick_free_activity_running' }
       ],
       [
-        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_free_activity_nordic_walking' },
         { type: 'callback', text: '🚲 Велосипед', payload: 'pick_free_activity_cycling' }
       ],
       [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
@@ -222,11 +219,10 @@ const profileActivityPickKeyboard = {
     buttons: [
       [{ type: 'callback', text: '📊 Все виды сразу', payload: 'pick_profile_activity_all' }],
       [
-        { type: 'callback', text: '🚶 Ходьба', payload: 'pick_profile_activity_walking' },
+        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_profile_activity_nordic_walking' },
         { type: 'callback', text: '🏃 Бег', payload: 'pick_profile_activity_running' }
       ],
       [
-        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_profile_activity_nordic_walking' },
         { type: 'callback', text: '🚲 Велосипед', payload: 'pick_profile_activity_cycling' }
       ],
       [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]

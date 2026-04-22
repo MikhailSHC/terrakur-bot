@@ -311,6 +311,19 @@ class UserService {
     return record;
   }
 
+  removeSessionById(chatId, sessionId) {
+    const session = this.getUserSession(chatId);
+    if (!Array.isArray(session.sessions) || !session.sessions.length) return false;
+    const beforeLen = session.sessions.length;
+    session.sessions = session.sessions.filter((s) => String(s?.id || '') !== String(sessionId));
+    const removed = session.sessions.length !== beforeLen;
+    if (!removed) return false;
+    // По договоренности продукта lifetime-метрики архивные: удаление из истории их не меняет.
+    session.lastUpdated = new Date().toISOString();
+    this.saveData();
+    return true;
+  }
+
   getLifetimeStats(chatId) {
     const session = this.getUserSession(chatId);
     return {

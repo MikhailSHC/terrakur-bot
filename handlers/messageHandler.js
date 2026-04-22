@@ -134,9 +134,7 @@ class MessageHandler {
         }
         
         let activity = null;
-        if (messageText === '🚶 Walking') {
-            activity = this.routeService.getActivityById('walking');
-        } else if (messageText === '🏃 Running') {
+        if (messageText === '🏃 Running') {
             activity = this.routeService.getActivityById('running');
         } else if (messageText === '🥾 Nordic Walking') {
             activity = this.routeService.getActivityById('nordic_walking');

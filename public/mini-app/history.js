@@ -1,6 +1,5 @@
 const ACTIVITY_LABELS = {
   all: 'Все',
-  walking: 'Ходьба',
   running: 'Бег',
   nordic_walking: 'Скандинавская',
   cycling: 'Велосипед'
@@ -13,7 +12,8 @@ const PERIOD_LABELS = {
 
 const METRIC_LABELS = {
   km: 'Км',
-  time: 'Время'
+  time: 'Время',
+  calories: 'Ккал'
 };
 
 function getParams() {
@@ -22,47 +22,6 @@ function getParams() {
     chatId: params.get('chatId'),
     authToken: params.get('authToken')
   };
-}
-
-function closeMiniAppToBot(statusEl) {
-  const closeCandidates = [
-    window?.MAX?.WebApp?.close,
-    window?.Max?.WebApp?.close,
-    window?.max?.WebApp?.close,
-    window?.MAX?.MiniApp?.close,
-    window?.Max?.MiniApp?.close,
-    window?.max?.MiniApp?.close,
-    window?.Telegram?.WebApp?.close
-  ];
-  try {
-    for (const closeFn of closeCandidates) {
-      if (typeof closeFn === 'function') {
-        closeFn.call(window);
-        return;
-      }
-    }
-  } catch {
-    // noop
-  }
-  try {
-    if (window.opener) {
-      window.close();
-      return;
-    }
-  } catch {
-    // noop
-  }
-  try {
-    window.close();
-  } catch {
-    // noop
-  }
-  if (window.history.length > 1) {
-    window.history.back();
-  } else if (statusEl) {
-    statusEl.textContent =
-      'Во встроенном приложении MAX кнопка закрывает WebView. В обычном браузере закройте вкладку или вернитесь в чат вручную.';
-  }
 }
 
 function formatDuration(totalSec) {
@@ -103,10 +62,13 @@ function buildMetricSeries(sessions, periodDays, metric) {
   sessions.forEach((s) => {
     const key = getDayKey(s.finishedAt || s.startedAt);
     if (!key) return;
-    if (!map.has(key)) map.set(key, { distanceM: 0, durationSec: 0, activities: {} });
+    if (!map.has(key)) map.set(key, { distanceM: 0, durationSec: 0, estCaloriesKcal: 0, activities: {} });
     const agg = map.get(key);
     agg.distanceM += Number(s.distanceM) || 0;
     agg.durationSec += Number(s.durationSec) || 0;
+    const bySession = Number(s.estCaloriesKcal);
+    const fallbackCalories = estimateWorkoutCaloriesKcal(s.distanceM, s.durationSec);
+    agg.estCaloriesKcal += Number.isFinite(bySession) && bySession > 0 ? bySession : fallbackCalories;
     const activityId = s.activityId || 'unknown';
     if (!agg.activities[activityId]) agg.activities[activityId] = 0;
     agg.activities[activityId] += Number(s.distanceM) || 0;
@@ -120,19 +82,22 @@ function buildMetricSeries(sessions, periodDays, metric) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     const key = getDayKey(d);
-    const dayAgg = map.get(key) || { distanceM: 0, durationSec: 0, activities: {} };
+    const dayAgg = map.get(key) || { distanceM: 0, durationSec: 0, estCaloriesKcal: 0, activities: {} };
     const activityEntries = Object.entries(dayAgg.activities);
     const activityId =
       activityEntries.length === 0
         ? null
         : activityEntries.sort((a, b) => b[1] - a[1])[0][0];
-    const value = metric === 'time' ? dayAgg.durationSec / 3600 : dayAgg.distanceM / 1000;
+    let value = dayAgg.distanceM / 1000;
+    if (metric === 'time') value = dayAgg.durationSec / 3600;
+    if (metric === 'calories') value = dayAgg.estCaloriesKcal;
     points.push({
       key,
       date: formatShortDate(key),
       value,
       distanceM: dayAgg.distanceM,
       durationSec: dayAgg.durationSec,
+      estCaloriesKcal: dayAgg.estCaloriesKcal,
       activityId
     });
   }
@@ -142,11 +107,14 @@ function buildMetricSeries(sessions, periodDays, metric) {
 
 function formatMetricValue(value, metric) {
   if (metric === 'time') return `${value.toFixed(1)} ч`;
+  if (metric === 'calories') return `${Math.round(value)} ккал`;
   return `${value.toFixed(1)} км`;
 }
 
 function getChartTitle(metric) {
-  return metric === 'time' ? 'Динамика времени тренировок' : 'Динамика километража';
+  if (metric === 'time') return 'Динамика времени тренировок';
+  if (metric === 'calories') return 'Динамика калорий';
+  return 'Динамика километража';
 }
 
 function getActivityLabel(activityId) {
@@ -250,6 +218,7 @@ function renderDayDetails(container, point) {
     <div class="row-title">Тип тренировки: ${getActivityLabel(point.activityId)}</div>
     <div class="row-meta">Расстояние: ${(point.distanceM / 1000).toFixed(2)} км</div>
     <div class="row-meta">Время: ${formatDuration(point.durationSec)}</div>
+    <div class="row-meta">Калории: ${Math.round(point.estCaloriesKcal || 0)} ккал</div>
   `;
 }
 
@@ -289,7 +258,7 @@ function renderMetricFilters(container, selected, onSelect) {
   });
 }
 
-function renderSessions(container, sessions) {
+function renderSessions(container, sessions, onDelete) {
   container.innerHTML = '';
   if (!sessions.length) {
     const row = document.createElement('div');
@@ -307,10 +276,21 @@ function renderSessions(container, sessions) {
       const row = document.createElement('div');
       row.className = 'row';
       const km = ((Number(s.distanceM) || 0) / 1000).toFixed(2);
+      const activityLabel = ACTIVITY_LABELS[s.activityId] || 'Активность';
+      const kcal = Number(s.estCaloriesKcal) > 0
+        ? Number(s.estCaloriesKcal)
+        : estimateWorkoutCaloriesKcal(s.distanceM, s.durationSec);
       row.innerHTML = `
-        <div class="row-title">${ACTIVITY_LABELS[s.activityId] || 'Активность'} - ${km} км</div>
-        <div class="row-meta">${formatDate(s.finishedAt || s.startedAt)} · ${formatDuration(s.durationSec)}</div>
+        <div class="row-head">
+          <div class="row-title">${activityLabel} - ${km} км</div>
+          <button type="button" class="row-delete-btn" data-session-id="${s.id}">Удалить</button>
+        </div>
+        <div class="row-meta">${formatDate(s.finishedAt || s.startedAt)} · ${formatDuration(s.durationSec)} · ${Math.round(kcal)} ккал</div>
       `;
+      const deleteBtn = row.querySelector('.row-delete-btn');
+      if (deleteBtn && typeof onDelete === 'function') {
+        deleteBtn.addEventListener('click', () => onDelete(s));
+      }
       container.appendChild(row);
     });
 }
@@ -321,6 +301,17 @@ async function fetchSessions(chatId, authToken) {
   const resp = await fetch(`/api/sessions?${query.toString()}`);
   const json = await resp.json();
   if (!resp.ok || !json.ok) throw new Error(json.error || 'Не удалось загрузить историю');
+  return json;
+}
+
+async function deleteSession(chatId, authToken, sessionId) {
+  const query = new URLSearchParams({ chatId });
+  if (authToken) query.set('authToken', authToken);
+  const resp = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?${query.toString()}`, {
+    method: 'DELETE'
+  });
+  const json = await resp.json();
+  if (!resp.ok || !json.ok) throw new Error(json.error || 'Не удалось удалить тренировку');
   return json;
 }
 
@@ -337,7 +328,6 @@ async function init() {
   const chartTitleEl = document.querySelector('.chart-title');
   const summaryPanelEl = document.getElementById('summaryPanel');
   const summaryToggleEl = document.getElementById('summaryToggle');
-  const backToBotBtnEl = document.getElementById('backToBotBtn');
 
   if (!chatId) {
     errorBox.textContent = 'Отсутствует chatId в ссылке mini-app.';
@@ -354,7 +344,7 @@ async function init() {
     return;
   }
 
-  const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  let sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
   let selectedActivity = 'all';
   let selectedPeriodDays = 7;
   let selectedMetric = 'km';
@@ -397,7 +387,18 @@ async function init() {
       dayDetailsEl,
       Number.isInteger(selectedDayIndex) ? currentPoints[selectedDayIndex] || null : null
     );
-    renderSessions(listEl, filtered);
+    renderSessions(listEl, filtered, async (session) => {
+      const confirmed = window.confirm('Удалить тренировку из истории?');
+      if (!confirmed) return;
+      try {
+        await deleteSession(chatId, authToken, session.id);
+        sessions = sessions.filter((s) => String(s.id) !== String(session.id));
+        selectedDayIndex = null;
+        render();
+      } catch (err) {
+        errorBox.textContent = err.message;
+      }
+    });
     renderFilters(filtersEl, selectedActivity, (id) => {
       selectedActivity = id;
       selectedDayIndex = null;
@@ -417,9 +418,6 @@ async function init() {
   }
 
   render();
-  if (backToBotBtnEl) {
-    backToBotBtnEl.addEventListener('click', () => closeMiniAppToBot(statusEl));
-  }
   if (summaryToggleEl && summaryPanelEl) {
     summaryToggleEl.addEventListener('click', () => {
       isSummaryOpen = !isSummaryOpen;
@@ -434,9 +432,22 @@ async function init() {
     const hit = currentHitBoxes.find(
       (box) => x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height
     );
-    if (!hit) return;
+    if (!hit) {
+      if (selectedDayIndex !== null) {
+        selectedDayIndex = null;
+        render();
+      }
+      return;
+    }
+    event.stopPropagation();
     selectedDayIndex = hit.index;
     render();
+  });
+  document.addEventListener('click', () => {
+    if (selectedDayIndex !== null) {
+      selectedDayIndex = null;
+      render();
+    }
   });
   window.addEventListener('resize', render);
 }

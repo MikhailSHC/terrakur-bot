@@ -17,7 +17,18 @@ function createApp({ userService, routeService, miniAppAuth }) {
     })
   );
   app.use(express.json());
-  app.use(express.static(path.join(__dirname, '..', 'public')));
+  const publicRoot = path.join(__dirname, '..', 'public');
+  app.use(
+    express.static(publicRoot, {
+      setHeaders(res, filePath) {
+        const rel = path.relative(publicRoot, filePath);
+        if (rel.startsWith(`mini-app${path.sep}`) && /\.(html|js)$/.test(filePath)) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+          res.setHeader('Pragma', 'no-cache');
+        }
+      }
+    })
+  );
 
   app.use(
     '/api',

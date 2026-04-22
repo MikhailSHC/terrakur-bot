@@ -126,6 +126,22 @@ function createApiRouter({ userService, routeService, miniAppAuth }) {
     }
   });
 
+  router.delete('/sessions/:id', miniAppAuth, (req, res) => {
+    try {
+      const sessionId = req.params.id;
+      if (!sessionId) {
+        return res.status(400).json({ ok: false, error: 'Session id is required' });
+      }
+      const removed = userService.removeSessionById(req.chatId, sessionId);
+      if (!removed) {
+        return res.status(404).json({ ok: false, error: 'Session not found' });
+      }
+      return res.json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   return router;
 }
 

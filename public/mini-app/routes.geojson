@@ -37,7 +37,6 @@
         "difficulty": 1,
         "locationId": "stavropol",
         "activities": [
-          "walking",
           "running",
           "nordic_walking"
         ]
@@ -79,7 +78,6 @@
         "difficulty": 2,
         "locationId": "stavropol",
         "activities": [
-          "walking",
           "running",
           "nordic_walking"
         ]
@@ -1314,7 +1312,6 @@
         "difficulty": 3,
         "locationId": "kavminvody",
         "activities": [
-          "walking",
           "running",
           "nordic_walking"
         ]
@@ -1356,7 +1353,6 @@
         "difficulty": 2,
         "locationId": "kavminvody",
         "activities": [
-          "walking",
           "nordic_walking"
         ]
       }
@@ -1389,7 +1385,6 @@
         "difficulty": 1,
         "locationId": "kislovodsk",
         "activities": [
-          "walking",
           "nordic_walking"
         ]
       }
@@ -1430,7 +1425,6 @@
         "difficulty": 2,
         "locationId": "kislovodsk",
         "activities": [
-          "walking",
           "running"
         ]
       }
@@ -1471,7 +1465,6 @@
         "difficulty": 2,
         "locationId": "pyatigorsk",
         "activities": [
-          "walking",
           "running",
           "nordic_walking"
         ]
@@ -1513,7 +1506,6 @@
         "difficulty": 1,
         "locationId": "pyatigorsk",
         "activities": [
-          "walking",
           "running",
           "cycling"
         ]

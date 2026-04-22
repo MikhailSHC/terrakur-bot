@@ -47,6 +47,12 @@ function registerBotHandlers(bot, deps) {
     messageHandler
   } = deps;
   const ROUTES_PAGE_SIZE = 5;
+  const difficultyLabel = (difficulty) => {
+    if (difficulty === 1) return 'Легкий';
+    if (difficulty === 2) return 'Средний';
+    if (difficulty === 3) return 'Сложный';
+    return String(difficulty);
+  };
 
   async function sendRoutesPage(chatId, session, page = 0) {
     const routes = session.availableRoutes || [];
@@ -63,14 +69,16 @@ function registerBotHandlers(bot, deps) {
     if (session.routeListMode === 'nearby') {
       const act = session.nearbyActivityId ? routeService.getActivityById(session.nearbyActivityId) : null;
       const actHint = act ? ` — ${act.emoji} ${act.name}` : '';
-      text = `📍 Ближайшие маршруты к вам${actHint} (стр. ${currentPage + 1}/${totalPages}):\n\n`;
+      text = `Ближайшие маршруты${actHint}\nСтраница ${currentPage + 1} из ${totalPages}\n\n`;
       pageRoutes.forEach((route, idx) => {
         const globalNumber = start + idx + 1;
-        const routeLengthText = route.distanceText || (route.distanceKm ? `~${route.distanceKm} км` : 'нет данных');
+        const routeLengthText = route.distanceText || (route.distanceKm ? `~${route.distanceKm} км` : '—');
         const distanceKm = typeof route.nearbyDistanceKm === 'number' ? route.nearbyDistanceKm.toFixed(1) : '?';
-        text += `${globalNumber}. ${route.name} — ${distanceKm} км от вас\n`;
-        text += `   🧭 Длина маршрута: ${routeLengthText}\n`;
-        text += `   (${route.nearbyLocationEmoji || ''} ${route.nearbyLocationName || 'Локация не указана'})\n`;
+        const location = route.nearbyLocationName || 'Локация не указана';
+        text += `${globalNumber}. ${route.name}\n`;
+        text += `   • До вас: ${distanceKm} км\n`;
+        text += `   • Длина маршрута: ${routeLengthText}\n`;
+        text += `   • Локация: ${location}\n\n`;
       });
       text += '\nВыберите маршрут (кнопкой ниже):';
       keyboardOptions = {
@@ -81,21 +89,22 @@ function registerBotHandlers(bot, deps) {
         backButtonText: '🏠 Главное меню'
       };
     } else {
-      text = `📍 Найдено ${routes.length} маршрутов для ${session.selectedActivity.name} в ${session.selectedLocation.name} (${currentPage + 1}/${totalPages}):\n\n`;
+      text =
+        `Маршруты Ставрополья\n` +
+        `Активность: ${session.selectedActivity.name}\n` +
+        `Локация: ${session.selectedLocation.name}\n` +
+        `Страница ${currentPage + 1} из ${totalPages}\n\n`;
       pageRoutes.forEach((route, idx) => {
         const globalNumber = start + idx + 1;
         const name = route.name || `Маршрут ${globalNumber}`;
-        const distance = route.distance || route.distanceText || (route.distanceKm ? `${route.distanceKm} км` : null);
-        const duration = route.duration;
+        const distance = route.distance || route.distanceText || (route.distanceKm ? `${route.distanceKm} км` : '—');
+        const duration = route.duration || '—';
         const difficulty = route.difficulty;
-        let line = `${globalNumber}. ${name}`;
-        if (distance) line += ` — ${distance}`;
-        if (duration) line += `, ${duration}`;
-        if (difficulty !== undefined) {
-          const difficultyLabel = difficulty === 1 ? 'легкий' : difficulty === 2 ? 'средний' : difficulty === 3 ? 'сложный' : String(difficulty);
-          line += ` (сложность: ${difficultyLabel})`;
-        }
-        text += `${line}\n`;
+        const routeDifficulty = difficulty !== undefined ? difficultyLabel(difficulty) : '—';
+        text += `${globalNumber}. ${name}\n`;
+        text += `   • Дистанция: ${distance}\n`;
+        text += `   • Время: ${duration}\n`;
+        text += `   • Сложность: ${routeDifficulty}\n\n`;
       });
       text += '\nВыберите маршрут (кнопкой ниже):';
       keyboardOptions = {
