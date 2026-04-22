@@ -122,7 +122,7 @@ const controlsEl   = document.querySelector('.controls');
 const urlParams   = new URLSearchParams(window.location.search);
 
 const routeId     = urlParams.get('routeId');       // системный маршрут
-const customRouteMode = false;
+const customRouteMode = urlParams.get('customRoute') === '1' || urlParams.get('mode') === 'custom';
 
 const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
@@ -172,6 +172,10 @@ if (routeId) {
 let customRouteBuilderEl = null;
 let customSearchInputEl = null;
 let customWaypoints = [];
+
+function isCustomPlannedRoute() {
+  return sessionMode === 'planned_route' && plannedRoute?.properties?.id === 'custom-user-route';
+}
 
 async function ensureDgisApiKeyLoaded() {
   if (!dgisRequested || dgisApiKey) return;
@@ -911,6 +915,12 @@ function smoothCameraFollow(center, now) {
 }
 
 function processStartProximity(latitude, longitude) {
+  if (isCustomPlannedRoute()) {
+    hasReachedStart = true;
+    lastStartStatus = null;
+    clearNavToStartLine();
+    return;
+  }
   if (cinematicDemoEnabled && sessionMode === 'planned_route') {
     hasReachedStart = true;
     lastStartStatus = null;
@@ -1057,13 +1067,9 @@ async function loadPlannedRoute(id) {
   try {
 
     statusDiv.innerText = 'Загрузка маршрута...';
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
     const res  = await fetch(`/api/routes/${id}/geojson`, {
-      signal: controller.signal,
       cache: 'no-store'
     });
-    clearTimeout(timeoutId);
 
     const data = await res.json();
 
@@ -1174,7 +1180,8 @@ async function loadPlannedRoute(id) {
   } catch (err) {
 
     console.error(err);
-    statusDiv.innerText = `❌ Ошибка загрузки маршрута: ${err.message}`;
+    const msg = (err && typeof err.message === 'string') ? err.message : 'unknown error';
+    statusDiv.innerText = `❌ Ошибка загрузки маршрута: ${msg}`;
 
   }
 
@@ -1880,7 +1887,11 @@ async function buildCustomRouteFromWaypoints() {
       name: 'Собственный маршрут'
     };
     applyPlannedRouteFeature(feature);
-    statusDiv.innerText = '✅ Пользовательский маршрут готов. Подойдите к старту.';
+    // Custom user route should start tracking immediately from current position.
+    hasReachedStart = true;
+    clearNavToStartLine();
+    removeStartMarker();
+    statusDiv.innerText = '✅ Пользовательский маршрут готов. Можно сразу нажимать "Старт".';
     if (customRouteBuilderEl) {
       customRouteBuilderEl.style.display = 'none';
     }
@@ -2140,7 +2151,7 @@ function addFilteredPoint(lat, lng, timestamp, accuracy) {
 
   // Для готового маршрута – не пишем трек, пока не достигнут старт
 
-  if (sessionMode === 'planned_route' && plannedRoute && !hasReachedStart) {
+  if (sessionMode === 'planned_route' && plannedRoute && !hasReachedStart && !isCustomPlannedRoute()) {
 
     return false;
 
@@ -2617,7 +2628,7 @@ function onGPSPosition(pos) {
 
 
 
-  if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart) {
+  if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart && !isCustomPlannedRoute()) {
 
     const distToStart = haversineDistance(
 
@@ -2707,7 +2718,7 @@ function startRun() {
     return;
   }
 
-  if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart) {
+  if (sessionMode === 'planned_route' && plannedRoute && plannedStart && !hasReachedStart && !isCustomPlannedRoute()) {
     if (cinematicDemoEnabled) {
       hasReachedStart = true;
       removeStartMarker();
@@ -2785,7 +2796,7 @@ function startRun() {
 
     redrawTrack();
 
-    if (sessionMode === 'planned_route' && plannedRoute) {
+  if (sessionMode === 'planned_route' && plannedRoute) {
       initializeRouteProgress();
     }
 
