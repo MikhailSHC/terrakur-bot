@@ -298,8 +298,20 @@ function renderSessions(container, sessions, onDelete) {
 async function fetchSessions(chatId, authToken) {
   const query = new URLSearchParams({ chatId });
   if (authToken) query.set('authToken', authToken);
-  const resp = await fetch(`/api/sessions?${query.toString()}`);
-  const json = await resp.json();
+  const resp = await fetch(`/api/sessions?${query.toString()}`, {
+    headers: authToken ? { 'x-miniapp-auth': authToken } : {}
+  });
+  const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+  const rawText = await resp.text();
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Сервер истории вернул не JSON (content-type: ${contentType || 'unknown'})`);
+  }
+  let json;
+  try {
+    json = JSON.parse(rawText);
+  } catch (_err) {
+    throw new Error('Некорректный JSON от /api/sessions');
+  }
   if (!resp.ok || !json.ok) throw new Error(json.error || 'Не удалось загрузить историю');
   return json;
 }
@@ -308,9 +320,20 @@ async function deleteSession(chatId, authToken, sessionId) {
   const query = new URLSearchParams({ chatId });
   if (authToken) query.set('authToken', authToken);
   const resp = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?${query.toString()}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: authToken ? { 'x-miniapp-auth': authToken } : {}
   });
-  const json = await resp.json();
+  const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+  const rawText = await resp.text();
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Сервер удаления вернул не JSON (content-type: ${contentType || 'unknown'})`);
+  }
+  let json;
+  try {
+    json = JSON.parse(rawText);
+  } catch (_err) {
+    throw new Error('Некорректный JSON от DELETE /api/sessions/:id');
+  }
   if (!resp.ok || !json.ok) throw new Error(json.error || 'Не удалось удалить тренировку');
   return json;
 }
@@ -367,7 +390,7 @@ async function init() {
 
     document.getElementById('totalKm').textContent = (distanceM / 1000).toFixed(2);
     document.getElementById('totalTime').textContent = formatDuration(durationSec);
-    document.getElementById('totalSessions').textContent = String(filtered.length);
+    document.getElementById('totalSessions').textContent = String(metricsFiltered.length);
     document.getElementById('estCalories').textContent = formatTotalCaloriesSummary(durationSec, distanceM);
 
     const bestSession = metricsFiltered.reduce((best, s) => {
