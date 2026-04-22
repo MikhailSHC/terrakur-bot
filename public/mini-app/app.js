@@ -99,7 +99,7 @@ const timeEl       = document.getElementById('time');
 
 const distanceEl   = document.getElementById('distance');
 
-const paceEl       = document.getElementById('pace');
+const estCaloriesEl = document.getElementById('estCalories');
 
 const statusDiv    = document.getElementById('status');
 
@@ -294,7 +294,7 @@ function initMap() {
 
         'line-color': '#ff4d4d',
 
-        'line-width': 5
+        'line-width': 8
 
       }
 
@@ -341,7 +341,7 @@ function ensureUiEnhancements() {
       isFollowingUser = true;
       if (lastKnownPosition) {
         const center = [lastKnownPosition.longitude, lastKnownPosition.latitude];
-        map.easeTo({ center, zoom: 16, duration: 550 });
+        map.easeTo({ center, zoom: 17, duration: 550 });
       }
     };
     document.body.appendChild(recenterBtn);
@@ -531,7 +531,7 @@ function updateGPSQuality(_accuracy) {
 function smoothCameraFollow(center, now) {
   if (!map || !isFollowingUser) return;
   if (!lastCameraCenter) {
-    map.easeTo({ center, zoom: 16, duration: 500 });
+    map.easeTo({ center, zoom: 17, duration: 500 });
     lastCameraCenter = center;
     lastFlyTime = now;
     return;
@@ -542,7 +542,7 @@ function smoothCameraFollow(center, now) {
     return;
   }
 
-  map.easeTo({ center, zoom: 16, duration: 450 });
+  map.easeTo({ center, zoom: 17, duration: 450 });
   lastCameraCenter = center;
   lastFlyTime = now;
 }
@@ -689,7 +689,7 @@ async function loadPlannedRoute(id) {
         const userCenter = [userLng, userLat];
         lastCameraCenter = userCenter;
         isFollowingUser = true;
-        map.jumpTo({ center: userCenter, zoom: 16 });
+        map.jumpTo({ center: userCenter, zoom: 17 });
 
         updateNavToStartLineIfNeeded(userLat, userLng);
 
@@ -712,10 +712,10 @@ async function loadPlannedRoute(id) {
             const c = [lastKnownPosition.longitude, lastKnownPosition.latitude];
             lastCameraCenter = c;
             isFollowingUser = true;
-            map.flyTo({ center: c, zoom: 16 });
+            map.flyTo({ center: c, zoom: 17 });
             statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. До «СТАРТ» см. маркер и оранжевую линию.`;
           } else {
-            map.flyTo({ center: [center[0], center[1]], zoom: 14 });
+            map.flyTo({ center: [center[0], center[1]], zoom: 15 });
             statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. Подойдите к маркеру «СТАРТ» и нажмите «Старт»`;
           }
           setTimeout(() => {
@@ -787,7 +787,7 @@ function getUserLocation() {
       }
       applyPassiveUserPosition(latitude, longitude, accuracy, now);
 
-      map.flyTo({ center: [longitude, latitude], zoom: 15 });
+      map.flyTo({ center: [longitude, latitude], zoom: 16 });
 
       statusDiv.innerText = '✅ GPS готов, можно стартовать';
 
@@ -1511,9 +1511,11 @@ function updateStatsUI() {
 
   distanceEl.textContent = distanceKm.toFixed(2);
 
-  const secPerKm =
-    totalDistanceM > 0 && elapsedSec > 0 ? elapsedSec / (totalDistanceM / 1000) : 0;
-  paceEl.textContent = formatSpeedKmhFromSecPerKm(secPerKm);
+  if (estCaloriesEl) {
+    estCaloriesEl.textContent = formatCaloriesKcalShort(
+      estimateWorkoutCaloriesKcal(totalDistanceM, elapsedSec)
+    );
+  }
 
 
 
@@ -1638,11 +1640,27 @@ function closeMiniAppToBot() {
   } catch {
     // noop
   }
+  // Работает только для окон, открытых через window.open; в MAX WebView обычно перехватывают раньше.
+  try {
+    if (window.opener) {
+      window.close();
+      return;
+    }
+  } catch {
+    // noop
+  }
+  try {
+    window.close();
+  } catch {
+    // noop
+  }
   if (window.history.length > 1) {
     window.history.back();
-  } else {
-    statusDiv.innerText = 'Вернитесь в бот вручную (кнопка Назад в приложении).';
+    return;
   }
+  const hint =
+    'Во встроенном приложении MAX эта кнопка закрывает WebView. В обычном браузере вкладка не закрывается: вернитесь в чат вручную или нажмите «Назад».';
+  if (statusDiv) statusDiv.innerText = hint;
 }
 
 function setReplayMapStatic(enabled) {
@@ -1663,14 +1681,6 @@ function hideLiveMarkerForReplay() {
     userMarker = null;
     userMarkerEl = null;
   }
-}
-
-function formatPaceRuSecPerKm(secPerKm) {
-  if (!Number.isFinite(secPerKm) || secPerKm <= 0) return '—';
-  const total = Math.round(secPerKm);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 function animateCompletedPath(trackCoords, options = {}) {
@@ -1714,11 +1724,11 @@ function animateCompletedPath(trackCoords, options = {}) {
   );
 
   // Keep room for summary panel, but avoid excessive zoom-out.
-  const replayBottomPadding = Math.max(48, Math.round(window.innerHeight * 0.04));
+  const replayBottomPadding = Math.max(24, Math.round(window.innerHeight * 0.02));
   map.fitBounds(rawBounds, {
-    padding: { top: 34, right: 26, bottom: replayBottomPadding, left: 26 },
+    padding: { top: 17, right: 13, bottom: replayBottomPadding, left: 13 },
     duration: 820,
-    maxZoom: 15
+    maxZoom: 16
   });
 
   replayTimerId = setInterval(() => {
@@ -1743,14 +1753,15 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, avgPaceSecPerKm, t
   const mins = Math.floor(elapsedSec / 60);
   const secs = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
   const avgSpeed = formatSpeedKmhFromSecPerKm(avgPaceSecPerKm);
-  const avgPace = formatPaceRuSecPerKm(avgPaceSecPerKm);
+  const kcal = formatCaloriesKcalShort(estimateWorkoutCaloriesKcal(distanceM, elapsedSec));
+  const kcalSub = 'при весе 70 кг';
   const summaryCard =
     `<div style="font-size:14px;font-weight:700;margin-bottom:8px;">Итог тренировки</div>` +
     `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">` +
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Км</div><div style="font-size:20px;font-weight:700;">${km}</div></div>` +
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Мин : Сек</div><div style="font-size:20px;font-weight:700;">${mins}:${secs}</div></div>` +
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Скорость</div><div style="font-size:18px;font-weight:700;">${avgSpeed}</div></div>` +
-    `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Средний темп</div><div style="font-size:18px;font-weight:700;">${avgPace}</div></div>` +
+    `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Ккал (оценка)</div><div style="font-size:18px;font-weight:700;">${kcal}</div><div style="font-size:10px;opacity:0.6;margin-top:2px;">${kcalSub}</div></div>` +
     `</div>`;
 
   if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
@@ -2315,6 +2326,8 @@ async function stopAndSave() {
     distanceM,
 
     avgPaceSecPerKm,
+
+    estCaloriesKcal: Math.round(estimateWorkoutCaloriesKcal(distanceM, elapsedSec)),
 
     geojson: geojsonTrack,
 

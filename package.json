@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js",
-    "lint": "eslint index.js config.js app bot handlers keyboards middleware routes services utils tests public/mini-app/app.js",
+    "lint": "eslint index.js config.js app bot handlers keyboards middleware routes services utils tests public/mini-app/app.js public/mini-app/estimateCalories.js",
     "format": "prettier --write .",
     "test": "jest --runInBand",
     "build-data": "node scripts/convertRoutesToGeoJSON.js"

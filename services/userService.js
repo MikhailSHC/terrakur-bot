@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('../config');
+const { estimateWorkoutCaloriesKcal } = require('../utils/estimateCalories');
 
 class UserService {
   constructor() {
@@ -11,13 +12,20 @@ class UserService {
 
   sanitizeSessionRecord(record) {
     if (!record || typeof record !== 'object') return null;
+    const distanceM = Number(record.distanceM) || 0;
+    const durationSec = Number(record.durationSec) || 0;
+    const fromRecord = Number(record.estCaloriesKcal);
+    const estCaloriesKcal = Number.isFinite(fromRecord) && fromRecord > 0
+      ? Math.round(fromRecord)
+      : Math.round(estimateWorkoutCaloriesKcal(distanceM, durationSec));
     return {
       id: record.id || Date.now().toString(),
       startedAt: record.startedAt || null,
       finishedAt: record.finishedAt || null,
-      durationSec: Number(record.durationSec) || 0,
-      distanceM: Number(record.distanceM) || 0,
+      durationSec,
+      distanceM,
       avgPaceSecPerKm: Number(record.avgPaceSecPerKm) || 0,
+      estCaloriesKcal,
       mode: record.mode || null,
       plannedRouteId: record.plannedRouteId || null,
       activityId: record.activityId || null,

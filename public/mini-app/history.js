@@ -44,10 +44,24 @@ function closeMiniAppToBot(statusEl) {
   } catch {
     // noop
   }
+  try {
+    if (window.opener) {
+      window.close();
+      return;
+    }
+  } catch {
+    // noop
+  }
+  try {
+    window.close();
+  } catch {
+    // noop
+  }
   if (window.history.length > 1) {
     window.history.back();
   } else if (statusEl) {
-    statusEl.textContent = 'Вернитесь в бот вручную (кнопка Назад в приложении).';
+    statusEl.textContent =
+      'Во встроенном приложении MAX кнопка закрывает WebView. В обычном браузере закройте вкладку или вернитесь в чат вручную.';
   }
 }
 
@@ -58,14 +72,10 @@ function formatDuration(totalSec) {
   return `${h} ч ${m} м`;
 }
 
-function formatPace(durationSec, distanceM) {
-  const distKm = (Number(distanceM) || 0) / 1000;
-  const totalSec = Number(durationSec) || 0;
-  if (distKm <= 0 || totalSec <= 0) return '—';
-  const secPerKm = totalSec / distKm;
-  const min = Math.floor(secPerKm / 60);
-  const sec = Math.round(secPerKm % 60);
-  return `${min}:${String(sec).padStart(2, '0')} мин/км`;
+function formatTotalCaloriesSummary(durationSec, distanceM) {
+  const kcal = estimateWorkoutCaloriesKcal(distanceM, durationSec);
+  if (!Number.isFinite(kcal) || kcal <= 0) return '—';
+  return `${formatCaloriesKcalShort(kcal)} ккал`;
 }
 
 function formatDate(iso) {
@@ -364,7 +374,7 @@ async function init() {
     document.getElementById('totalKm').textContent = (distanceM / 1000).toFixed(2);
     document.getElementById('totalTime').textContent = formatDuration(durationSec);
     document.getElementById('totalSessions').textContent = String(filtered.length);
-    document.getElementById('avgPace').textContent = formatPace(durationSec, distanceM);
+    document.getElementById('estCalories').textContent = formatTotalCaloriesSummary(durationSec, distanceM);
 
     const bestSession = filtered.reduce((best, s) => {
       const dist = Number(s.distanceM) || 0;

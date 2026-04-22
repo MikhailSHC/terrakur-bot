@@ -38,7 +38,9 @@ module.exports = [
         fetch: 'readonly',
         setTimeout: 'readonly',
         clearInterval: 'readonly',
-        setInterval: 'readonly'
+        setInterval: 'readonly',
+        estimateWorkoutCaloriesKcal: 'readonly',
+        formatCaloriesKcalShort: 'readonly'
       }
     }
   },

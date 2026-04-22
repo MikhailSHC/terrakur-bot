@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { estimateWorkoutCaloriesKcal } = require('../utils/estimateCalories');
 
 function readGeoJsonRoutes(projectRoot) {
   const geojsonPath = path.join(projectRoot, 'public/mini-app/routes.geojson');
@@ -80,13 +81,17 @@ function createApiRouter({ userService, routeService, miniAppAuth }) {
 
     try {
       const sessionId = session.sessionId || Date.now().toString();
+      const durationSec = Number(session.durationSec) || 0;
+      const distanceM = Number(session.distanceM) || 0;
+      const estCaloriesKcal = Math.round(estimateWorkoutCaloriesKcal(distanceM, durationSec));
       const sessionRecord = {
         id: sessionId,
         startedAt: session.startedAt,
         finishedAt: session.finishedAt,
-        durationSec: session.durationSec,
-        distanceM: session.distanceM,
+        durationSec,
+        distanceM,
         avgPaceSecPerKm: session.avgPaceSecPerKm,
+        estCaloriesKcal,
         geojson: session.geojson,
         mode: session.mode,
         plannedRouteId: session.plannedRouteId || null,
