@@ -338,10 +338,10 @@ function initMap() {
 
       paint: {
 
-        'line-color': '#ff4d4d',
+        'line-color': '#28c1ff',
 
-        'line-width': cinematicDemoEnabled ? 10 : 8,
-        'line-opacity': cinematicDemoEnabled ? 0.96 : 0.92
+        'line-width': cinematicDemoEnabled ? 10 : 7,
+        'line-opacity': cinematicDemoEnabled ? 0.96 : 0.9
 
       }
 
@@ -352,9 +352,9 @@ function initMap() {
         type: 'line',
         source: 'run-track',
         paint: {
-          'line-color': '#f97316',
-          'line-width': 16,
-          'line-opacity': 0.2,
+          'line-color': '#23c6ff',
+          'line-width': 18,
+          'line-opacity': 0.24,
           'line-blur': 0.9
         }
       }, 'run-line');
@@ -511,8 +511,8 @@ function ensurePlannedRouteProgressLayers() {
     type: 'line',
     source: PLANNED_ROUTE_DONE_SOURCE,
     paint: {
-      'line-color': '#22c55e',
-      'line-width': 6,
+      'line-color': '#26d6ff',
+      'line-width': 7,
       'line-opacity': 0.92
     }
   });
@@ -522,9 +522,10 @@ function ensurePlannedRouteProgressLayers() {
     type: 'line',
     source: PLANNED_ROUTE_REMAINING_SOURCE,
     paint: {
-      'line-color': '#3b82f6',
+      'line-color': '#9fb1c4',
       'line-width': 4,
-      'line-dasharray': [2, 2]
+      'line-dasharray': [2, 2],
+      'line-opacity': 0.95
     }
   });
 }
@@ -596,10 +597,10 @@ function ensureNavToStartLayer() {
     type: 'line',
     source: NAV_TO_START_SOURCE,
     paint: {
-      'line-color': '#f97316',
-      'line-width': 4,
-      'line-dasharray': [0.4, 1.2],
-      'line-opacity': 0.9
+      'line-color': '#ff9b35',
+      'line-width': 5,
+      'line-dasharray': [0.6, 1.1],
+      'line-opacity': 0.96
     }
   });
 }
@@ -1145,7 +1146,7 @@ function addUserMarker(lngLat) {
   if (cinematicDemoEnabled) el.classList.add('terra-user-marker-core');
 
   el.style.cssText =
-    `width:${cinematicDemoEnabled ? 44 : 40}px;height:${cinematicDemoEnabled ? 44 : 40}px;background:rgba(0,0,0,0.2);border:2px solid rgba(255,255,255,0.85);border-radius:50%;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);`;
+    `width:${cinematicDemoEnabled ? 44 : 40}px;height:${cinematicDemoEnabled ? 44 : 40}px;background:rgba(17,34,55,0.32);border:2px solid rgba(103,208,255,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);`;
 
   const arrowWrapEl = document.createElement('div');
   arrowWrapEl.style.cssText =
@@ -1160,8 +1161,8 @@ function addUserMarker(lngLat) {
 
   const arrowPath = document.createElementNS(svgNs, 'path');
   arrowPath.setAttribute('d', 'M12 1.5 L22 22 L12 17 L2 22 Z');
-  arrowPath.setAttribute('fill', '#22c55e');
-  arrowPath.setAttribute('stroke', '#ffffff');
+  arrowPath.setAttribute('fill', '#22d3ee');
+  arrowPath.setAttribute('stroke', '#e0f2fe');
   arrowPath.setAttribute('stroke-width', '2.4');
   arrowSvg.appendChild(arrowPath);
   arrowWrapEl.appendChild(arrowSvg);
@@ -1214,18 +1215,18 @@ function setStartMarker(lngLat) {
 
   const wrap = document.createElement('div');
   wrap.style.cssText =
-    'display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5));';
+    'display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 3px 12px rgba(0,0,0,0.5));';
 
   const badge = document.createElement('div');
   badge.style.cssText =
-    'min-width:38px;height:38px;border-radius:50%;background:linear-gradient(145deg,#4ade80,#15803d);border:3px solid #fff;box-shadow:0 0 0 2px rgba(21,128,61,0.9);display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;';
-  badge.innerHTML = '&#x1F6A9;';
+    'min-width:40px;height:40px;border-radius:50%;background:linear-gradient(145deg,#2fd4ff,#2d7bff);border:2px solid rgba(255,255,255,0.92);box-shadow:0 0 0 2px rgba(45,123,255,0.52);display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;font-weight:700;color:#fff;';
+  badge.innerHTML = 'S';
   badge.title = 'Старт';
 
   const lbl = document.createElement('div');
   lbl.textContent = 'СТАРТ';
   lbl.style.cssText =
-    'margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.12em;color:#fff;background:rgba(21,128,61,0.96);padding:2px 7px;border-radius:8px;border:1px solid rgba(255,255,255,0.9);';
+    'margin-top:4px;font-size:10px;font-weight:800;letter-spacing:0.12em;color:#d8f3ff;background:rgba(22,43,70,0.96);padding:2px 7px;border-radius:8px;border:1px solid rgba(103,208,255,0.7);';
 
   wrap.appendChild(badge);
   wrap.appendChild(lbl);
@@ -1251,18 +1252,18 @@ function setFinishMarker(lngLat) {
 
   const wrap = document.createElement('div');
   wrap.style.cssText =
-    'display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.55));';
+    'display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 3px 12px rgba(0,0,0,0.55));';
 
   const badge = document.createElement('div');
   badge.style.cssText =
-    'min-width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#7c3aed 0%,#4c1d95 55%,#1e1b4b 100%);border:3px solid #fbbf24;box-shadow:inset 0 0 0 2px rgba(251,191,36,0.35);display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;';
-  badge.innerHTML = '&#x1F3C1;';
+    'min-width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#0f172a 0%,#133359 55%,#214b7e 100%);border:2px solid #67d0ff;box-shadow:inset 0 0 0 2px rgba(103,208,255,0.26);display:flex;align-items:center;justify-content:center;font-size:18px;line-height:1;font-weight:800;color:#e8f7ff;';
+  badge.innerHTML = 'F';
   badge.title = 'Финиш';
 
   const lbl = document.createElement('div');
   lbl.textContent = 'ФИНИШ';
   lbl.style.cssText =
-    'margin-top:3px;font-size:10px;font-weight:800;letter-spacing:0.14em;color:#fef3c7;background:rgba(76,29,149,0.98);padding:2px 7px;border-radius:8px;border:1px solid #fbbf24;';
+    'margin-top:4px;font-size:10px;font-weight:800;letter-spacing:0.14em;color:#d8f3ff;background:rgba(17,36,58,0.98);padding:2px 7px;border-radius:8px;border:1px solid rgba(103,208,255,0.72);';
 
   wrap.appendChild(badge);
   wrap.appendChild(lbl);
