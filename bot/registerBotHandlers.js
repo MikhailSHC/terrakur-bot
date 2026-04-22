@@ -223,14 +223,11 @@ function registerBotHandlers(bot, deps) {
       const activityId = callbackData.replace('pick_free_activity_', '');
       if (!routeService.getActivityById(activityId)) return;
       const navUrl = buildMiniAppUrl(config, chatId, {
-        activityId,
-        customRoute: '1',
-        mode: 'custom',
-        mapProvider: '2gis'
+        activityId
       });
       await bot.api.sendMessageToChat(
         chatId,
-        '🧭 Откройте конструктор своего трека по кнопке ниже. Добавьте точки на карте или через поиск, соберите маршрут и стартуйте. Данные попадут в «Моя история» для выбранного вида.',
+        '🧭 Откройте трекер по кнопке ниже. После тренировки данные попадут в «Моя история» для выбранного вида.',
         {
           parse_mode: 'Markdown',
           attachments: getOpenRouteKeyboard(navUrl)
