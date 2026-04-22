@@ -500,11 +500,22 @@ function applyPlannedRouteProgressToMap(progressVertexIndex) {
 }
 
 function finalizePlannedRouteMapProgress() {
-  const coords = getRouteLineCoordinates();
-  if (coords.length < 2 || !map?.getSource(PLANNED_ROUTE_DONE_SOURCE)) return;
-  setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, coords);
+  if (!map?.getSource(PLANNED_ROUTE_DONE_SOURCE)) return;
+  const hasActualPassed = Array.isArray(routeProgress.passedCoords) && routeProgress.passedCoords.length >= 2;
+  const hasActualOfftrack =
+    Array.isArray(routeProgress.offtrackCoords) && routeProgress.offtrackCoords.length >= 2;
+
+  if (hasActualPassed) {
+    setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, routeProgress.passedCoords);
+  } else {
+    const coords = getRouteLineCoordinates();
+    setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, coords);
+  }
   setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, []);
-  setGeoJSONLineSource(PLANNED_ROUTE_OFFTRACK_SOURCE, []);
+  setGeoJSONLineSource(
+    PLANNED_ROUTE_OFFTRACK_SOURCE,
+    hasActualOfftrack ? routeProgress.offtrackCoords : []
+  );
   clearNavToStartLine();
 }
 
@@ -900,12 +911,24 @@ function updateRouteProgress(lat, lng) {
   if (coords.length < 2) return;
 
   let closestIndex = 0;
-  let minDistance = Infinity;
+  let minDistanceToVertex = Infinity;
   for (let i = 0; i < coords.length; i += 1) {
     const d = haversineDistance(lat, lng, coords[i][1], coords[i][0]);
-    if (d < minDistance) {
-      minDistance = d;
+    if (d < minDistanceToVertex) {
+      minDistanceToVertex = d;
       closestIndex = i;
+    }
+  }
+
+  // For off-route detection use distance to the whole polyline (segment projection),
+  // not just to route vertices, to avoid false positives on long segments.
+  let minDistanceToRouteLine = Infinity;
+  for (let i = 1; i < coords.length; i += 1) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const d = pointToSegmentDistanceMeters(lat, lng, a[1], a[0], b[1], b[0]);
+    if (d < minDistanceToRouteLine) {
+      minDistanceToRouteLine = d;
     }
   }
 
@@ -936,7 +959,7 @@ function updateRouteProgress(lat, lng) {
   applyPlannedRouteProgressToMap(progressIndex);
 
   const currentCoord = [lng, lat];
-  const isFarFromRoute = minDistance > OFF_ROUTE_RADIUS_M;
+  const isFarFromRoute = minDistanceToRouteLine > OFF_ROUTE_RADIUS_M;
   if (isFarFromRoute) {
     if (!routeProgress.offRouteSince) routeProgress.offRouteSince = now;
     routeProgress.offtrackCoords.push(currentCoord);
@@ -1139,6 +1162,37 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
+}
+
+function toLocalMeters(lat, lon, originLat, originLon) {
+  const mPerDegLat = 111320;
+  const mPerDegLon = 111320 * Math.cos((originLat * Math.PI) / 180);
+  return {
+    x: (lon - originLon) * mPerDegLon,
+    y: (lat - originLat) * mPerDegLat
+  };
+}
+
+function pointToSegmentDistanceMeters(pointLat, pointLon, aLat, aLon, bLat, bLon) {
+  const p = toLocalMeters(pointLat, pointLon, pointLat, pointLon);
+  const a = toLocalMeters(aLat, aLon, pointLat, pointLon);
+  const b = toLocalMeters(bLat, bLon, pointLat, pointLon);
+
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const apx = p.x - a.x;
+  const apy = p.y - a.y;
+  const abLen2 = abx * abx + aby * aby;
+
+  if (abLen2 <= 1e-9) {
+    return Math.hypot(apx, apy);
+  }
+
+  const tRaw = (apx * abx + apy * aby) / abLen2;
+  const t = Math.min(1, Math.max(0, tRaw));
+  const projX = a.x + abx * t;
+  const projY = a.y + aby * t;
+  return Math.hypot(p.x - projX, p.y - projY);
 }
 
 function destinationPointLatLon(latDeg, lonDeg, bearingDeg, distanceM) {
