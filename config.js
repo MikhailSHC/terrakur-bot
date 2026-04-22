@@ -5,6 +5,7 @@ require('dotenv').config();
 module.exports = {
   BOT_TOKEN: process.env.BOT_TOKEN,
   MINI_APP_AUTH_SECRET: process.env.MINI_APP_AUTH_SECRET,
+  DGIS_API_KEY: process.env.DGIS_API_KEY || '',
   USER_DATA_FILE: 'data/user_data.json',
   MAX_HISTORY: 50,
   MINI_APP_URL:

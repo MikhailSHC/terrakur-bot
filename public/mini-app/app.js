@@ -126,6 +126,11 @@ const routeId     = urlParams.get('routeId');       // системный мар
 const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
 const activityIdFromUrl = urlParams.get('activityId');
+const mapProvider = (urlParams.get('mapProvider') || '').toLowerCase();
+const miniAppRuntime = window.__MINI_APP_RUNTIME__ || {};
+const dgisApiKey = typeof miniAppRuntime.DGIS_API_KEY === 'string' ? miniAppRuntime.DGIS_API_KEY.trim() : '';
+const dgisPilotRequested = mapProvider === '2gis' && routeId === 'kholodnye-rodniki';
+const dgisRasterEnabled = dgisPilotRequested && Boolean(dgisApiKey);
 
 /** Тест без прогулки: добавьте в URL `&simulate=1` (вместе с routeId). */
 const simulateEnabled = (() => {
@@ -228,6 +233,13 @@ let lastStartStatus = null;   // последнее текстовое сост�
 
 
 function initMap() {
+  const rasterTiles = dgisRasterEnabled
+    ? [
+        `https://tile0.maps.2gis.com/v2/tiles/online_hd/{z}/{x}/{y}.png?key=${encodeURIComponent(dgisApiKey)}`,
+        `https://tile1.maps.2gis.com/v2/tiles/online_hd/{z}/{x}/{y}.png?key=${encodeURIComponent(dgisApiKey)}`,
+        `https://tile2.maps.2gis.com/v2/tiles/online_hd/{z}/{x}/{y}.png?key=${encodeURIComponent(dgisApiKey)}`
+      ]
+    : ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'];
 
   map = new maplibregl.Map({
 
@@ -244,7 +256,7 @@ function initMap() {
 
           type: 'raster',
 
-          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tiles: rasterTiles,
 
           tileSize: 256
 
@@ -278,6 +290,9 @@ function initMap() {
 
 
   map.on('load', () => {
+    if (dgisPilotRequested && !dgisRasterEnabled) {
+      statusDiv.innerText = '2GIS pilot requested, but DGIS_API_KEY is missing. Using default map.';
+    }
 
     map.addSource('run-track', {
 
@@ -693,8 +708,9 @@ function stopCinematicRoutePlayback() {
 
 function startCinematicRoutePlayback() {
   if (!cinematicDemoEnabled || sessionMode !== 'planned_route') return;
-  const coords = getRouteLineCoordinates();
-  if (!coords || coords.length < 2) return;
+  const baseCoords = getRouteLineCoordinates();
+  if (!baseCoords || baseCoords.length < 2) return;
+  const coords = buildCinematicPath(baseCoords, 10);
   stopCinematicRoutePlayback();
 
   const totalDurationMs = 26000;
@@ -714,7 +730,7 @@ function startCinematicRoutePlayback() {
     const next = coords[Math.min(baseIndex + 1, coords.length - 1)];
     const lon = base[0] + (next[0] - base[0]) * frac;
     const lat = base[1] + (next[1] - base[1]) * frac;
-    emitSyntheticGpsPoint(lat, lon, 4);
+    emitSyntheticGpsPoint(lat, lon, 3);
 
     if (progress >= 1) {
       cinematicPlaybackRafId = null;
@@ -727,7 +743,7 @@ function startCinematicRoutePlayback() {
   };
 
   // Start exactly at route start for presentation consistency.
-  emitSyntheticGpsPoint(coords[0][1], coords[0][0], 4);
+  emitSyntheticGpsPoint(coords[0][1], coords[0][0], 3);
   cinematicPlaybackRafId = window.requestAnimationFrame(tick);
 }
 
@@ -807,11 +823,15 @@ async function loadPlannedRoute(id) {
     // Старт и финиш — первая и последняя точка линии маршрута (как в GeoJSON)
     plannedStart = coords.length ? coords[0] : null;
     plannedFinish = coords.length >= 2 ? coords[coords.length - 1] : null;
-    if (plannedStart) {
+    if (!cinematicDemoEnabled && plannedStart) {
       setStartMarker([plannedStart[0], plannedStart[1]]);
     }
-    if (plannedFinish) {
+    if (!cinematicDemoEnabled && plannedFinish) {
       setFinishMarker([plannedFinish[0], plannedFinish[1]]);
+    }
+    if (cinematicDemoEnabled) {
+      removeStartMarker();
+      removeFinishMarker();
     }
 
     // Один поток геолокации: не вызывать getUserLocation() здесь — второй getCurrentPosition
@@ -1279,6 +1299,42 @@ function destinationPointLatLon(latDeg, lonDeg, bearingDeg, distanceM) {
       Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2)
     );
   return { lat: (φ2 * 180) / Math.PI, lon: (λ2 * 180) / Math.PI };
+}
+
+function interpolateCatmullRom2D(p0, p1, p2, p3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return [
+    0.5 * (
+      (2 * p1[0]) +
+      (-p0[0] + p2[0]) * t +
+      (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+      (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3
+    ),
+    0.5 * (
+      (2 * p1[1]) +
+      (-p0[1] + p2[1]) * t +
+      (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+      (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3
+    )
+  ];
+}
+
+function buildCinematicPath(rawCoords, subdivisions = 10) {
+  if (!Array.isArray(rawCoords) || rawCoords.length < 2) return rawCoords || [];
+  const points = [];
+  for (let i = 0; i < rawCoords.length - 1; i += 1) {
+    const p0 = i === 0 ? rawCoords[i] : rawCoords[i - 1];
+    const p1 = rawCoords[i];
+    const p2 = rawCoords[i + 1];
+    const p3 = i + 2 < rawCoords.length ? rawCoords[i + 2] : rawCoords[i + 1];
+    for (let j = 0; j < subdivisions; j += 1) {
+      const t = j / subdivisions;
+      points.push(interpolateCatmullRom2D(p0, p1, p2, p3, t));
+    }
+  }
+  points.push(rawCoords[rawCoords.length - 1]);
+  return points;
 }
 
 function calculateBearingDeg(lat1, lon1, lat2, lon2) {

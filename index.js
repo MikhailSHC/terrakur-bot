@@ -34,7 +34,8 @@ const miniAppAuth = createMiniAppAuthMiddleware(config.MINI_APP_AUTH_SECRET);
 const app = createApp({
   userService,
   routeService,
-  miniAppAuth
+  miniAppAuth,
+  config
 });
 
 const PORT = process.env.PORT || 3000;
