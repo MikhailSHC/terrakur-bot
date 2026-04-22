@@ -52,7 +52,8 @@ function createApp({ userService, routeService, miniAppAuth, config }) {
     createApiRouter({
       userService,
       routeService,
-      miniAppAuth
+      miniAppAuth,
+      config
     })
   );
 

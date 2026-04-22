@@ -122,6 +122,7 @@ const controlsEl   = document.querySelector('.controls');
 const urlParams   = new URLSearchParams(window.location.search);
 
 const routeId     = urlParams.get('routeId');       // системный маршрут
+const customRouteMode = urlParams.get('customRoute') === '1' || urlParams.get('mode') === 'custom';
 
 const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
@@ -158,11 +159,19 @@ if (routeId) {
 
   sessionMode = 'planned_route';
 
+} else if (customRouteMode) {
+
+  sessionMode = 'planned_route';
+
 } else {
 
   sessionMode = 'free_run';
 
 }
+
+let customRouteBuilderEl = null;
+let customSearchInputEl = null;
+let customWaypoints = [];
 
 async function ensureDgisApiKeyLoaded() {
   if (!dgisRequested || dgisApiKey) return;
@@ -182,6 +191,23 @@ async function ensureDgisApiKeyLoaded() {
 function getAuthHeaders() {
   if (!authToken) return {};
   return { 'x-miniapp-auth': authToken };
+}
+
+function mapEventToLngLat(evt) {
+  if (!evt) return null;
+  if (evt.lngLat && Number.isFinite(evt.lngLat.lng) && Number.isFinite(evt.lngLat.lat)) {
+    return { lon: evt.lngLat.lng, lat: evt.lngLat.lat };
+  }
+  if (Array.isArray(evt.lngLat) && evt.lngLat.length >= 2) {
+    return { lon: Number(evt.lngLat[0]), lat: Number(evt.lngLat[1]) };
+  }
+  if (evt.point && Number.isFinite(evt.point.lon) && Number.isFinite(evt.point.lat)) {
+    return { lon: evt.point.lon, lat: evt.point.lat };
+  }
+  if (evt.detail && Number.isFinite(evt.detail.lon) && Number.isFinite(evt.detail.lat)) {
+    return { lon: evt.detail.lon, lat: evt.detail.lat };
+  }
+  return null;
 }
 
 function syncStopButtonVisibility() {
@@ -493,6 +519,19 @@ function initMap() {
 
       loadPlannedRoute(routeId);
 
+    } else if (customRouteMode) {
+      ensureCustomRouteBuilderUi();
+      getUserLocation();
+      if (typeof map.on === 'function') {
+        map.on('click', (evt) => {
+          const p = mapEventToLngLat(evt);
+          if (!p) return;
+          customWaypoints.push([p.lon, p.lat]);
+          renderCustomRouteDraft();
+          statusDiv.innerText = `Точка добавлена (${customWaypoints.length})`;
+        });
+      }
+
     } else {
 
       // свободный трек
@@ -618,6 +657,41 @@ function removeLegacyPlannedRouteLayerIfAny() {
   }
   if (map.getSource('planned-route')) {
     map.removeSource('planned-route');
+  }
+}
+
+function applyPlannedRouteFeature(routeFeature) {
+  plannedRoute = routeFeature;
+  removeLegacyPlannedRouteLayerIfAny();
+  ensurePlannedRouteProgressLayers();
+
+  const coords = getRouteLineCoordinates();
+  if (coords.length >= 2) {
+    setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, coords);
+    setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, []);
+  }
+
+  plannedStart = coords.length ? coords[0] : null;
+  plannedFinish = coords.length >= 2 ? coords[coords.length - 1] : null;
+  hasReachedStart = false;
+  hasReachedFinish = false;
+  routeProgress.isOnRoute = false;
+  routeProgress.passedCoords = [];
+
+  removeStartMarker();
+  removeFinishMarker();
+  if (!cinematicDemoEnabled && plannedStart) setStartMarker([plannedStart[0], plannedStart[1]]);
+  if (!cinematicDemoEnabled && plannedFinish) setFinishMarker([plannedFinish[0], plannedFinish[1]]);
+  if (cinematicDemoEnabled) clearNavToStartLine();
+
+  const center = coords.length ? coords[Math.floor(coords.length / 2)] : [42.7165, 43.9071];
+  if (map && typeof map.easeTo === 'function') {
+    map.easeTo({
+      center,
+      zoom: cinematicDemoEnabled ? 15.5 : 15,
+      pitch: cinematicDemoEnabled ? 38 : 0,
+      duration: cinematicDemoEnabled ? 950 : 700
+    });
   }
 }
 
@@ -957,35 +1031,12 @@ async function loadPlannedRoute(id) {
     if (!data.ok) throw new Error(data.error);
 
 
-
-    plannedRoute = data.route;
-
-
-
-    removeLegacyPlannedRouteLayerIfAny();
-    ensurePlannedRouteProgressLayers();
-
+    applyPlannedRouteFeature(data.route);
     const coords = getRouteLineCoordinates();
-    if (coords.length >= 2) {
-      setGeoJSONLineSource(PLANNED_ROUTE_REMAINING_SOURCE, coords);
-      setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, []);
-    }
 
     const center = coords.length ? coords[Math.floor(coords.length / 2)] : [42.7165, 43.9071];
 
-    // Старт и финиш — первая и последняя точка линии маршрута (как в GeoJSON)
-    plannedStart = coords.length ? coords[0] : null;
-    plannedFinish = coords.length >= 2 ? coords[coords.length - 1] : null;
-    if (!cinematicDemoEnabled && plannedStart) {
-      setStartMarker([plannedStart[0], plannedStart[1]]);
-    }
-    if (!cinematicDemoEnabled && plannedFinish) {
-      setFinishMarker([plannedFinish[0], plannedFinish[1]]);
-    }
-    if (cinematicDemoEnabled) {
-      removeStartMarker();
-      removeFinishMarker();
-    }
+    // Старт и финиш уже синхронизированы в applyPlannedRouteFeature.
 
     // Один поток геолокации: не вызывать getUserLocation() здесь — второй getCurrentPosition
     // с другим timeout давал гонку: при timeout 5s срабатывал error и карта улетала в центр линии
@@ -1273,7 +1324,8 @@ function addUserMarker(lngLat) {
   if (isNativeMapGl) {
     userMarker = new mapgl.Marker(map, {
       coordinates: lngLat,
-      icon: makeMapglIcon('user')
+      icon: makeMapglIcon('user'),
+      zIndex: 7000
     });
     userMarkerEl = null;
     return;
@@ -1354,7 +1406,8 @@ function setStartMarker(lngLat) {
   if (isNativeMapGl) {
     startMarker = new mapgl.Marker(map, {
       coordinates: lngLat,
-      icon: makeMapglIcon('start')
+      icon: makeMapglIcon('start'),
+      zIndex: 7100
     });
     return;
   }
@@ -1400,7 +1453,8 @@ function setFinishMarker(lngLat) {
   if (isNativeMapGl) {
     finishMarker = new mapgl.Marker(map, {
       coordinates: lngLat,
-      icon: makeMapglIcon('finish')
+      icon: makeMapglIcon('finish'),
+      zIndex: 7100
     });
     return;
   }
@@ -1712,6 +1766,120 @@ function ensureSimulatePanel() {
   });
 
   document.body.appendChild(panel);
+}
+
+function renderCustomRouteDraft() {
+  ensurePlannedRouteProgressLayers();
+  setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, []);
+  setGeoJSONLineSource(
+    PLANNED_ROUTE_REMAINING_SOURCE,
+    customWaypoints.length >= 2 ? customWaypoints : []
+  );
+  removeStartMarker();
+  removeFinishMarker();
+  if (customWaypoints[0]) setStartMarker(customWaypoints[0]);
+  if (customWaypoints.length >= 2) setFinishMarker(customWaypoints[customWaypoints.length - 1]);
+}
+
+async function searchAndAddCustomWaypoint() {
+  const q = (customSearchInputEl?.value || '').trim();
+  if (!q) {
+    statusDiv.innerText = 'Введите адрес/место для поиска';
+    return;
+  }
+  statusDiv.innerText = 'Поиск точки через 2GIS...';
+  try {
+    const r = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`, {
+      headers: getAuthHeaders()
+    });
+    const data = await r.json();
+    const first = data?.items?.[0];
+    if (!r.ok || !first) {
+      statusDiv.innerText = 'Точка не найдена';
+      return;
+    }
+    const point = [Number(first.lon), Number(first.lat)];
+    customWaypoints.push(point);
+    renderCustomRouteDraft();
+    map.easeTo({ center: point, zoom: 16, duration: 650 });
+    statusDiv.innerText = `Добавлено: ${first.title || q}`;
+  } catch (err) {
+    statusDiv.innerText = `Ошибка поиска: ${err.message}`;
+  }
+}
+
+async function buildCustomRouteFromWaypoints() {
+  if (customWaypoints.length < 2) {
+    statusDiv.innerText = 'Добавьте минимум 2 точки маршрута';
+    return;
+  }
+  statusDiv.innerText = 'Сборка пользовательского маршрута...';
+  try {
+    const r = await fetch('/api/routes/build-custom', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify({
+        provider: '2gis',
+        waypoints: customWaypoints.map((p) => ({ lon: p[0], lat: p[1] }))
+      })
+    });
+    const data = await r.json();
+    if (!r.ok || !data?.ok) {
+      statusDiv.innerText = data?.error || 'Не удалось собрать маршрут';
+      return;
+    }
+    const feature = data?.geojson?.features?.[0];
+    if (!feature?.geometry?.coordinates?.length) {
+      statusDiv.innerText = 'Маршрут пустой';
+      return;
+    }
+    feature.properties = {
+      ...(feature.properties || {}),
+      id: 'custom-user-route',
+      name: 'Собственный маршрут'
+    };
+    applyPlannedRouteFeature(feature);
+    statusDiv.innerText = '✅ Пользовательский маршрут готов. Подойдите к старту.';
+    if (customRouteBuilderEl) {
+      customRouteBuilderEl.style.display = 'none';
+    }
+  } catch (err) {
+    statusDiv.innerText = `Ошибка сборки: ${err.message}`;
+  }
+}
+
+function ensureCustomRouteBuilderUi() {
+  if (!customRouteMode || customRouteBuilderEl) return;
+  customRouteBuilderEl = document.createElement('div');
+  customRouteBuilderEl.style.cssText =
+    'position:fixed;top:112px;left:14px;right:14px;z-index:6;background:rgba(8,14,22,0.84);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.18);border-radius:14px;padding:10px 10px 8px;';
+  customRouteBuilderEl.innerHTML = `
+    <div style="font-size:12px;color:#d9eefc;margin-bottom:8px;">Конструктор маршрута 2GIS: кликните по карте или найдите адрес</div>
+    <div style="display:flex;gap:6px;">
+      <input id="customRouteSearch" type="text" placeholder="Адрес или место" style="flex:1;border-radius:10px;border:1px solid rgba(255,255,255,0.22);background:rgba(255,255,255,0.07);color:#fff;padding:8px 10px;font-size:12px;outline:none;" />
+      <button id="customRouteSearchBtn" type="button" style="padding:8px 10px;font-size:12px;">Поиск</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button id="customRouteBuildBtn" type="button" style="flex:1;padding:8px 10px;font-size:12px;">Собрать маршрут</button>
+      <button id="customRouteUndoBtn" type="button" style="padding:8px 10px;font-size:12px;">Отменить точку</button>
+      <button id="customRouteResetBtn" type="button" style="padding:8px 10px;font-size:12px;">Сброс</button>
+    </div>
+  `;
+  document.body.appendChild(customRouteBuilderEl);
+  customSearchInputEl = document.getElementById('customRouteSearch');
+  document.getElementById('customRouteSearchBtn')?.addEventListener('click', searchAndAddCustomWaypoint);
+  document.getElementById('customRouteBuildBtn')?.addEventListener('click', buildCustomRouteFromWaypoints);
+  document.getElementById('customRouteUndoBtn')?.addEventListener('click', () => {
+    customWaypoints.pop();
+    renderCustomRouteDraft();
+  });
+  document.getElementById('customRouteResetBtn')?.addEventListener('click', () => {
+    customWaypoints = [];
+    renderCustomRouteDraft();
+  });
 }
 
 
