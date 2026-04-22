@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>TerraKur 2GIS Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #04070c;
+      color: #fff;
+      overflow: hidden;
+    }
+    #map {
+      position: fixed;
+      inset: 0;
+    }
+    .glass {
+      position: fixed;
+      left: 14px;
+      right: 14px;
+      border-radius: 20px;
+      background: rgba(8, 14, 22, 0.62);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      z-index: 10;
+    }
+    #topBar {
+      top: 14px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    #topBar strong { font-size: 14px; letter-spacing: 0.2px; }
+    #topBar span { font-size: 12px; opacity: 0.86; }
+    #bottomBar {
+      bottom: 14px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #progressOuter {
+      flex: 1;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      overflow: hidden;
+    }
+    #progressInner {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #27c3ff, #40f37a);
+      box-shadow: 0 0 16px rgba(64, 243, 122, 0.5);
+      transition: width 0.08s linear;
+    }
+    #timeText {
+      min-width: 64px;
+      text-align: right;
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    #status {
+      position: fixed;
+      top: 78px;
+      left: 14px;
+      right: 14px;
+      z-index: 11;
+      text-align: center;
+      font-size: 12px;
+      color: #8fd7ff;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+      pointer-events: none;
+    }
+    #startBtn {
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 14px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #2b80ff, #22d3ee);
+      cursor: pointer;
+    }
+    .pulse-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #4af39c;
+      box-shadow: 0 0 0 0 rgba(74, 243, 156, 0.55);
+      animation: pulse 1.6s ease-out infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(74, 243, 156, 0.5); }
+      70% { box-shadow: 0 0 0 18px rgba(74, 243, 156, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(74, 243, 156, 0); }
+    }
+    #completionCard {
+      position: fixed;
+      left: 50%;
+      bottom: 92px;
+      transform: translateX(-50%) translateY(14px);
+      min-width: 250px;
+      max-width: calc(100vw - 28px);
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(8, 14, 22, 0.76);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      text-align: center;
+      z-index: 12;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 360ms ease, transform 360ms ease;
+    }
+    #completionCard strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    #completionCard span {
+      font-size: 12px;
+      opacity: 0.88;
+    }
+    #completionCard.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="status">Подготовка 2GIS демо...</div>
+  <div id="topBar" class="glass">
+    <div>
+      <strong>TerraKur • 2GIS Demo</strong><br>
+      <span id="routeTitle">Маршрут</span>
+    </div>
+    <button id="startBtn" type="button">Старт</button>
+  </div>
+  <div id="bottomBar" class="glass">
+    <div class="pulse-dot"></div>
+    <div id="progressOuter"><div id="progressInner"></div></div>
+    <div id="timeText">00:00</div>
+  </div>
+  <div id="completionCard" aria-live="polite">
+    <strong>Дубль завершен</strong>
+    <span>Маршрут пройден. Можно сохранять запись.</span>
+  </div>
+
+  <script src="https://mapgl.2gis.com/api/js/v1"></script>
+  <script>
+    (async function runDemo() {
+      const params = new URLSearchParams(window.location.search);
+      const routeId = params.get('routeId') || 'kholodnye-rodniki';
+      const routeFile = (params.get('routeFile') || '').trim();
+      const dgisKey = (params.get('dgisKey') || '').trim();
+      const qualityParam = (params.get('quality') || 'high').trim().toLowerCase();
+      const quality = qualityParam === 'ultra' ? 'ultra' : 'high';
+      const durationSec = Math.max(20, Number(params.get('durationSec')) || 90);
+      const autoStart = params.get('autostart') === '1';
+      const statusEl = document.getElementById('status');
+      const routeTitleEl = document.getElementById('routeTitle');
+      const startBtn = document.getElementById('startBtn');
+      const progressInner = document.getElementById('progressInner');
+      const timeText = document.getElementById('timeText');
+      const completionCard = document.getElementById('completionCard');
+
+      if (!dgisKey) {
+        statusEl.textContent = 'Нет dgisKey в URL. Добавьте &dgisKey=YOUR_KEY';
+        return;
+      }
+
+      const routePayload = await loadRoutePayload({ routeId, routeFile });
+      if (!routePayload.ok) {
+        statusEl.textContent = routePayload.error;
+        return;
+      }
+      const featureName = routePayload.name;
+      const sourceCoordinates = routePayload.coordinates;
+      const qualityConfig = getQualityConfig(quality);
+      const coordinates = densifyRoute(sourceCoordinates, qualityConfig.densifyStepM);
+      if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        statusEl.textContent = 'Маршрут не найден или слишком короткий';
+        return;
+      }
+
+      routeTitleEl.textContent = featureName || routeId;
+      const bounds = getBounds(coordinates);
+      const center = [
+        (bounds.minLng + bounds.maxLng) / 2,
+        (bounds.minLat + bounds.maxLat) / 2
+      ];
+
+      const map = new mapgl.Map('map', {
+        key: dgisKey,
+        center,
+        zoom: 14.4,
+        pitch: 38,
+      });
+
+      map.once('idle', () => {
+        map.fitBounds({
+          northEast: [bounds.maxLng, bounds.maxLat],
+          southWest: [bounds.minLng, bounds.minLat],
+        }, {
+          padding: { top: 120, right: 70, bottom: 130, left: 70 }
+        });
+      });
+
+      // Route base + glow + passed segment for cinematic look.
+      new mapgl.Polyline(map, {
+        coordinates,
+        color: '#80a3c1',
+        width: 7,
+        opacity: 0.4,
+      });
+      const glowLine = new mapgl.Polyline(map, {
+        coordinates: [coordinates[0], coordinates[0]],
+        color: '#26d3ff',
+        width: 16,
+        opacity: 0.22,
+      });
+      const passedLine = new mapgl.Polyline(map, {
+        coordinates: [coordinates[0], coordinates[0]],
+        color: '#4af39c',
+        width: 8,
+      });
+
+      const marker = new mapgl.Marker(map, {
+        coordinates: coordinates[0],
+        icon: 'https://docs.2gis.com/img/mapgl/marker.svg',
+      });
+
+      let rafId = null;
+      let startedAt = 0;
+      let running = false;
+      let lastSmoothedBearing = 0;
+
+      function startPlayback() {
+        if (running) return;
+        running = true;
+        startedAt = performance.now();
+        startBtn.style.display = 'none';
+        completionCard.classList.remove('show');
+        statusEl.textContent = `2GIS cinematic playback • quality: ${quality}`;
+        lastSmoothedBearing = calcBearing(coordinates[0], coordinates[1]);
+        tick();
+      }
+
+      function tick() {
+        const elapsedMs = performance.now() - startedAt;
+        const t = Math.min(1, elapsedMs / (durationSec * 1000));
+        const smooth = easeInOutCubic(t);
+        const totalSegments = coordinates.length - 1;
+        const exact = smooth * totalSegments;
+        const idx = Math.min(totalSegments - 1, Math.floor(exact));
+        const segT = exact - idx;
+        const a = coordinates[idx];
+        const b = coordinates[idx + 1];
+        const cur = [
+          a[0] + (b[0] - a[0]) * segT,
+          a[1] + (b[1] - a[1]) * segT
+        ];
+
+        const passed = coordinates.slice(0, idx + 1);
+        passed.push(cur);
+        marker.setCoordinates(cur);
+        passedLine.setCoordinates(passed);
+        glowLine.setCoordinates(passed);
+
+        const forwardA = coordinates[Math.max(0, idx - qualityConfig.bearingLookBehind)];
+        const forwardB = coordinates[Math.min(coordinates.length - 1, idx + qualityConfig.bearingLookAhead)];
+        const rawBearing = calcBearing(forwardA, forwardB);
+        lastSmoothedBearing = smoothBearing(lastSmoothedBearing, rawBearing, qualityConfig.bearingSmoothing);
+        map.setCenter(cur, { duration: qualityConfig.centerDurationMs });
+        map.setRotation(lastSmoothedBearing, { duration: qualityConfig.rotationDurationMs });
+        map.setPitch(46 + Math.sin(smooth * Math.PI * 2) * 1.6, { duration: qualityConfig.pitchDurationMs });
+
+        progressInner.style.width = `${(smooth * 100).toFixed(2)}%`;
+        timeText.textContent = formatTime(Math.floor(elapsedMs / 1000));
+
+        if (t < 1) {
+          rafId = requestAnimationFrame(tick);
+          return;
+        }
+
+        running = false;
+        progressInner.style.width = '100%';
+        statusEl.textContent = 'Готово для записи: дубль завершен';
+        completionCard.classList.add('show');
+      }
+
+      startBtn.addEventListener('click', startPlayback);
+      if (autoStart) startPlayback();
+
+      window.addEventListener('beforeunload', () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        map.destroy();
+      });
+
+      statusEl.textContent = autoStart
+        ? `Запуск демо... (${quality})`
+        : `Нажмите "Старт" (${quality})`;
+    })().catch((err) => {
+      const statusEl = document.getElementById('status');
+      if (statusEl) statusEl.textContent = `Ошибка демо: ${err.message}`;
+    });
+
+    async function loadRoutePayload({ routeId, routeFile }) {
+      if (routeFile) {
+        const withCacheBust = routeFile.includes('?')
+          ? `${routeFile}&v=20260422-2`
+          : `${routeFile}?v=20260422-2`;
+        const r = await fetch(withCacheBust, { cache: 'no-store' });
+        if (!r.ok) {
+          return { ok: false, error: `Не удалось загрузить файл маршрута: ${routeFile}` };
+        }
+        const yandexFc = await r.json();
+        const merged = mergeLineFeatures(yandexFc);
+        if (merged.length < 2) {
+          return { ok: false, error: 'В routeFile недостаточно координат' };
+        }
+        return {
+          ok: true,
+          name: yandexFc?.metadata?.name || 'Yandex presentation route',
+          coordinates: merged
+        };
+      }
+
+      const r = await fetch('./routes.geojson?v=20260422-1', { cache: 'no-store' });
+      if (!r.ok) {
+        return { ok: false, error: 'Не удалось загрузить routes.geojson' };
+      }
+      const fc = await r.json();
+      const feature = (fc.features || []).find((f) => f?.properties?.id === routeId);
+      const coordinates = feature?.geometry?.coordinates || [];
+      return {
+        ok: true,
+        name: feature?.properties?.name || routeId,
+        coordinates
+      };
+    }
+
+    function mergeLineFeatures(fc) {
+      const features = Array.isArray(fc?.features) ? fc.features : [];
+      const merged = [];
+      for (const f of features) {
+        const coords = f?.geometry?.type === 'LineString' ? f.geometry.coordinates : [];
+        if (!Array.isArray(coords) || coords.length === 0) continue;
+        for (let i = 0; i < coords.length; i += 1) {
+          const p = coords[i];
+          if (!Array.isArray(p) || p.length < 2) continue;
+          const point = [Number(p[0]), Number(p[1])];
+          if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) continue;
+          if (merged.length === 0) {
+            merged.push(point);
+            continue;
+          }
+          const prev = merged[merged.length - 1];
+          // Drop overlapping seam points when segment #2 starts from last point of #1.
+          if (distanceM(prev, point) < 0.6) continue;
+          merged.push(point);
+        }
+      }
+      return merged;
+    }
+
+    function getQualityConfig(quality) {
+      if (quality === 'ultra') {
+        return {
+          densifyStepM: 1.4,
+          bearingLookBehind: 8,
+          bearingLookAhead: 18,
+          bearingSmoothing: 0.92,
+          centerDurationMs: 240,
+          rotationDurationMs: 380,
+          pitchDurationMs: 420
+        };
+      }
+      return {
+        densifyStepM: 2.8,
+        bearingLookBehind: 5,
+        bearingLookAhead: 10,
+        bearingSmoothing: 0.84,
+        centerDurationMs: 190,
+        rotationDurationMs: 260,
+        pitchDurationMs: 320
+      };
+    }
+
+    function densifyRoute(coords, stepM) {
+      if (!Array.isArray(coords) || coords.length < 2) return coords;
+      const output = [coords[0]];
+      for (let i = 0; i < coords.length - 1; i += 1) {
+        const a = coords[i];
+        const b = coords[i + 1];
+        const segDist = distanceM(a, b);
+        const pieces = Math.max(1, Math.ceil(segDist / stepM));
+        for (let j = 1; j <= pieces; j += 1) {
+          const t = j / pieces;
+          output.push([
+            a[0] + (b[0] - a[0]) * t,
+            a[1] + (b[1] - a[1]) * t
+          ]);
+        }
+      }
+      return output;
+    }
+
+    function distanceM(a, b) {
+      const R = 6371000;
+      const dLat = toRad(b[1] - a[1]);
+      const dLng = toRad(b[0] - a[0]);
+      const lat1 = toRad(a[1]);
+      const lat2 = toRad(b[1]);
+      const x = Math.sin(dLat / 2) ** 2
+        + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+    }
+
+    function getBounds(coords) {
+      let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+      for (const p of coords) {
+        if (!Array.isArray(p) || p.length < 2) continue;
+        const lng = Number(p[0]);
+        const lat = Number(p[1]);
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      }
+      return { minLng, minLat, maxLng, maxLat };
+    }
+
+    function easeInOutCubic(t) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function calcBearing(a, b) {
+      const lon1 = toRad(a[0]);
+      const lat1 = toRad(a[1]);
+      const lon2 = toRad(b[0]);
+      const lat2 = toRad(b[1]);
+      const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2)
+        - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+      return (toDeg(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    function smoothBearing(prevDeg, targetDeg, alpha) {
+      const delta = ((((targetDeg - prevDeg) % 360) + 540) % 360) - 180;
+      return (prevDeg + delta * (1 - alpha) + 360) % 360;
+    }
+
+    function toRad(d) { return d * Math.PI / 180; }
+    function toDeg(r) { return r * 180 / Math.PI; }
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+  </script>
+</body>
+</html>
