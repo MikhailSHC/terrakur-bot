@@ -1189,6 +1189,61 @@ function pointAwayFromStart(coords, distanceM) {
   return destinationPointLatLon(lat0, lon0, back, distanceM);
 }
 
+function pointOffRouteAtStep(coords, stepIndex, distanceM = 16) {
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const idx = Math.min(Math.max(0, stepIndex), coords.length - 2);
+  const base = coords[idx];
+  const next = coords[idx + 1];
+  const bearing = calculateBearingDeg(base[1], base[0], next[1], next[0]);
+  const sideBearing = (bearing + 90) % 360;
+  return destinationPointLatLon(base[1], base[0], sideBearing, distanceM);
+}
+
+function runSimFinishScenario() {
+  const coords = getRouteLineCoordinates();
+  if (!coords.length || !plannedStart || !plannedFinish) return;
+
+  simRouteStepIndex = 0;
+  setSimulatedPosition(plannedStart[1], plannedStart[0]);
+
+  setTimeout(() => {
+    if (!isTracking) startRun();
+  }, 250);
+
+  setTimeout(() => {
+    if (coords.length > 3) {
+      const midIdx = Math.floor(coords.length / 2);
+      simRouteStepIndex = midIdx;
+      setSimulatedPosition(coords[midIdx][1], coords[midIdx][0]);
+    }
+  }, 900);
+
+  setTimeout(() => {
+    const endIdx = Math.max(0, coords.length - 1);
+    simRouteStepIndex = endIdx;
+    setSimulatedPosition(plannedFinish[1], plannedFinish[0]);
+  }, 1550);
+}
+
+function runSimOffRouteScenario() {
+  const coords = getRouteLineCoordinates();
+  if (!coords.length || !plannedStart) return;
+
+  setSimulatedPosition(plannedStart[1], plannedStart[0]);
+  setTimeout(() => {
+    if (!isTracking) startRun();
+  }, 220);
+
+  setTimeout(() => {
+    const safeStep = Math.min(Math.max(1, simRouteStepIndex || 1), Math.max(1, coords.length - 2));
+    const offPoint = pointOffRouteAtStep(coords, safeStep, 18);
+    if (offPoint) {
+      simRouteStepIndex = safeStep;
+      setSimulatedPosition(offPoint.lat, offPoint.lon);
+    }
+  }, 900);
+}
+
 function setSimulatedPosition(lat, lng) {
   if (!simulateEnabled) return;
   simulatedGeo = { lat, lng };
@@ -1273,6 +1328,12 @@ function ensureSimulatePanel() {
     const coords = getRouteLineCoordinates();
     simRouteStepIndex = Math.max(0, coords.length - 1);
     setSimulatedPosition(plannedFinish[1], plannedFinish[0]);
+  });
+  addBtn('Тест отклонения (жёлтый)', () => {
+    runSimOffRouteScenario();
+  });
+  addBtn('Авто-финиш (итог + replay)', () => {
+    runSimFinishScenario();
   });
 
   document.body.appendChild(panel);
