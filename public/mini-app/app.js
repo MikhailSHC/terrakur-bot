@@ -1081,18 +1081,30 @@ async function loadPlannedRoute(id) {
 
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
     const rawText = await res.text();
-    if (!contentType.includes('application/json')) {
-      throw new Error(`Сервер вернул не JSON (content-type: ${contentType || 'unknown'})`);
+    let data = null;
+    let usedLocalFallback = false;
+    if (contentType.includes('application/json')) {
+      try {
+        data = JSON.parse(rawText);
+      } catch (_err) {
+        data = null;
+      }
     }
-
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (_err) {
-      throw new Error('Некорректный JSON от сервера');
+    if (!res.ok || !data || !data.ok) {
+      // Fallback when /api proxy returns HTML or malformed payload.
+      const localRes = await fetch('./routes.geojson?v=20260422-1', { cache: 'no-store' });
+      if (!localRes.ok) {
+        if (!data) throw new Error(`Сервер вернул не JSON (content-type: ${contentType || 'unknown'})`);
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      const localFc = await localRes.json();
+      const feature = (localFc.features || []).find((f) => f?.properties?.id === id);
+      if (!feature) {
+        throw new Error('Маршрут не найден ни через API, ни в routes.geojson');
+      }
+      data = { ok: true, route: feature };
+      usedLocalFallback = true;
     }
-
-    if (!res.ok || !data.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
 
     applyPlannedRouteFeature(data.route);
@@ -1143,7 +1155,7 @@ async function loadPlannedRoute(id) {
 
         updateNavToStartLineIfNeeded(userLat, userLng);
 
-        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен. До «СТАРТ» ≈ ${distanceToStart} м. Оранжевая линия — направление к старту.`;
+        statusDiv.innerText = `✅ Маршрут "${getRouteNameSafe()}" загружен${usedLocalFallback ? ' (fallback)' : ''}. До «СТАРТ» ≈ ${distanceToStart} м. Оранжевая линия — направление к старту.`;
 
         setTimeout(() => {
 
