@@ -221,16 +221,22 @@
         width: 7,
         opacity: 0.4,
       });
-      const glowLine = new mapgl.Polyline(map, {
-        coordinates: [coordinates[0], coordinates[0]],
+      const glowLineStyle = {
         color: '#26d3ff',
         width: 16,
         opacity: 0.22,
-      });
-      const passedLine = new mapgl.Polyline(map, {
-        coordinates: [coordinates[0], coordinates[0]],
+      };
+      const passedLineStyle = {
         color: '#4af39c',
         width: 8,
+      };
+      let glowLine = new mapgl.Polyline(map, {
+        ...glowLineStyle,
+        coordinates: [coordinates[0], coordinates[0]],
+      });
+      let passedLine = new mapgl.Polyline(map, {
+        ...passedLineStyle,
+        coordinates: [coordinates[0], coordinates[0]],
       });
 
       const marker = new mapgl.Marker(map, {
@@ -273,8 +279,18 @@
           const passed = coordinates.slice(0, idx + 1);
           passed.push(cur);
           marker.setCoordinates(cur);
-          passedLine.setCoordinates(passed);
-          glowLine.setCoordinates(passed);
+          passedLine = updatePolylineCoordinates({
+            polyline: passedLine,
+            map,
+            style: passedLineStyle,
+            coordinates: passed
+          });
+          glowLine = updatePolylineCoordinates({
+            polyline: glowLine,
+            map,
+            style: glowLineStyle,
+            coordinates: passed
+          });
 
           const forwardA = coordinates[Math.max(0, idx - qualityConfig.bearingLookBehind)];
           const forwardB = coordinates[Math.min(coordinates.length - 1, idx + qualityConfig.bearingLookAhead)];
@@ -487,6 +503,21 @@
       if (typeof map.setPitch === 'function') {
         map.setPitch(pitch, { duration: qualityConfig.pitchDurationMs });
       }
+    }
+
+    function updatePolylineCoordinates({ polyline, map, style, coordinates }) {
+      if (polyline && typeof polyline.setCoordinates === 'function') {
+        polyline.setCoordinates(coordinates);
+        return polyline;
+      }
+      if (polyline && typeof polyline.setOptions === 'function') {
+        polyline.setOptions({ ...style, coordinates });
+        return polyline;
+      }
+      if (polyline && typeof polyline.destroy === 'function') {
+        polyline.destroy();
+      }
+      return new mapgl.Polyline(map, { ...style, coordinates });
     }
 
     function toRad(d) { return d * Math.PI / 180; }
