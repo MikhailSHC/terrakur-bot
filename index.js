@@ -7,24 +7,25 @@ const MessageHandler = require('./handlers/messageHandler');
 const { createMiniAppAuthMiddleware } = require('./middleware/miniAppAuth');
 const { createApp } = require('./app/createApp');
 const { registerBotHandlers } = require('./bot/registerBotHandlers');
+const { createLogger } = require('./utils/logger');
+
+const logger = createLogger('bootstrap');
 
 if (!config.BOT_TOKEN) {
-  console.error('❌ BOT_TOKEN не найден в переменных окружения');
+  logger.error('Missing BOT_TOKEN');
   process.exit(1);
 }
 
 if (!config.MINI_APP_AUTH_SECRET) {
-  console.warn('⚠️ MINI_APP_AUTH_SECRET не задан, mini-app auth отключен');
+  logger.warn('MINI_APP_AUTH_SECRET is not configured; mini-app auth relaxed');
 }
 
 process.on('uncaughtException', (err) => {
-  console.error('💥 НЕ ПЕРЕХВАЧЕННАЯ ОШИБКА:');
-  console.error(err.stack);
+  logger.error('Uncaught exception', { error: err?.stack || err?.message || String(err) });
 });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('💥 НЕ ОБРАБОТАННЫЙ PROMISE:');
-  console.error(reason);
+  logger.error('Unhandled promise rejection', { reason: String(reason) });
 });
 
 const userService = new UserService();
@@ -40,7 +41,7 @@ const app = createApp({
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🌐 Mini-app server listening on port ${PORT}`);
+  logger.info('HTTP server started', { port: PORT });
 });
 
 const bot = new Bot(config.BOT_TOKEN);
@@ -55,9 +56,9 @@ registerBotHandlers(bot, {
   messageHandler
 });
 
-console.log('🚀 Запуск бота...');
+logger.info('Starting bot process');
 bot.start()
-  .then(() => console.log('✅ TerraKur bot for MAX is running!'))
-  .catch((err) => console.error('❌ Ошибка запуска:', err.message));
+  .then(() => logger.info('Bot is running'))
+  .catch((err) => logger.error('Bot start failed', { error: err.message }));
 
 process.on('SIGINT', () => process.exit(0));

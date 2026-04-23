@@ -1,6 +1,9 @@
 const keyboards = require('../keyboards/buttons');
 const { formatRouteDetails } = require('../utils/helpers');
 const { createMiniAppToken } = require('../utils/miniAppAuth');
+const { createLogger } = require('../utils/logger');
+
+const logger = createLogger('bot-handlers');
 
 function buildMiniAppUrl(config, chatId, extraParams = {}) {
   const paramsObject = {
@@ -529,7 +532,7 @@ function registerBotHandlers(bot, deps) {
         await messageHandler.handleTextMessage(chatId, messageText);
       }
     } catch (error) {
-      console.error('❌ Ошибка в message_created:', error.message);
+      logger.error('message_created handler failed', { error: error.message });
     }
   });
 }

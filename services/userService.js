@@ -2,6 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const config = require('../config');
 const { estimateWorkoutCaloriesKcal } = require('../utils/estimateCalories');
+const { createLogger } = require('../utils/logger');
+
+const logger = createLogger('user-service');
 
 class UserService {
   constructor() {
@@ -29,8 +32,7 @@ class UserService {
       mode: record.mode || null,
       plannedRouteId: record.plannedRouteId || null,
       activityId: record.activityId || null,
-      // Тяжелый geojson оставляем только как есть, если он есть в записи;
-      // в persist-снимке ниже будем хранить его только у последних сессий.
+      // Keep geojson only for recent sessions to avoid bloating user_data.json.
       geojson: record.geojson || null
     };
   }
@@ -84,7 +86,7 @@ class UserService {
 
       result[String(chatId)] = {
         chatId: String(chatId),
-        // Оставляем только полезные для продукта поля.
+        // Persist only fields required by runtime and analytics.
         history,
         sessions,
         fullName: typeof user.fullName === 'string' ? user.fullName : '',
@@ -108,13 +110,13 @@ class UserService {
       if (fs.existsSync(this.dataFile)) {
         const rawData = fs.readFileSync(this.dataFile, 'utf8');
         this.userData = JSON.parse(rawData) || {};
-        console.log(`✅ Загружены данные для ${Object.keys(this.userData).length} пользователей`);
+        logger.info('User data loaded', { users: Object.keys(this.userData).length });
       } else {
-        console.log('📁 Файл с данными не найден, будет создан новый');
+        logger.warn('User data file is missing, new snapshot will be created');
         this.userData = {};
       }
     } catch (error) {
-      console.error('❌ Ошибка загрузки данных пользователей:', error.message);
+      logger.error('Failed to load user data', { error: error.message });
       this.userData = {};
     }
   }
@@ -124,14 +126,14 @@ class UserService {
       const snapshot = this.buildPersistentSnapshot();
       const data = JSON.stringify(snapshot, null, 2);
       fs.writeFileSync(this.dataFile, data, 'utf8');
-      console.log(`💾 Сохранены данные для ${Object.keys(snapshot).length} пользователей`);
+      logger.info('User data saved', { users: Object.keys(snapshot).length });
     } catch (error) {
-      console.error('❌ Ошибка сохранения данных пользователей:', error.message);
+      logger.error('Failed to save user data', { error: error.message });
       throw new Error('Не удалось сохранить данные пользователя');
     }
   }
 
-  // Гарантировано возвращает объект пользователя с нужными полями
+  // Returns normalized user record with all required fields.
   getUserSession(chatId) {
     const id = String(chatId);
 
@@ -155,14 +157,14 @@ class UserService {
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
       };
-      console.log(`👤 Создан новый пользователь: ${id}`);
+      logger.info('User created', { chatId: id });
       this.saveData();
       return this.userData[id];
     }
 
     const u = this.userData[id];
 
-    // Миграция/инициализация недостающих полей
+    // Schema guard for old snapshots and partially filled records.
     if (!Array.isArray(u.history)) u.history = [];
     if (!Array.isArray(u.sessions)) u.sessions = [];
     if (typeof u.totalDistanceM !== 'number') u.totalDistanceM = 0;
@@ -196,7 +198,7 @@ class UserService {
     });
 
     this.saveData();
-    console.log(`🔄 Обновлено состояние пользователя ${id}: ${state}`);
+    logger.info('State updated', { chatId: id, state });
   }
 
   addRouteToHistory(chatId, routeName, routeId, extra = {}) {
@@ -211,7 +213,7 @@ class UserService {
     if (lastEntry && lastEntry.routeId === routeId) {
       const lastTsMs = Date.parse(lastEntry.timestamp || '');
       if (Number.isFinite(lastTsMs) && nowMs - lastTsMs <= 15000) {
-        // Защита от дублей: один и тот же маршрут, записанный повторно сразу после предыдущей записи.
+        // Deduplicate accidental double-save of the same route in short interval.
         return;
       }
     }
@@ -238,7 +240,7 @@ class UserService {
     session.lastUpdated = new Date().toISOString();
     this.saveData();
 
-    console.log(`📝 Добавлен маршрут "${routeName}" для пользователя ${id}`);
+    logger.info('Route added to history', { chatId: id, routeName, routeId });
   }
 
   getUserHistory(chatId, limit = 5) {
@@ -292,7 +294,7 @@ class UserService {
     if (this.userData[id]) {
       delete this.userData[id];
       this.saveData();
-      console.log(`🗑️ Удалены данные пользователя ${id}`);
+      logger.warn('User data removed', { chatId: id });
     }
   }
 
@@ -320,7 +322,6 @@ class UserService {
     };
   }
 
-  // === Новое: геолокация пользователя ===
   setLastLocation(chatId, lastLocation) {
     const session = this.getUserSession(chatId);
     session.lastLocation = lastLocation;
@@ -375,7 +376,6 @@ class UserService {
     return this.getUserProfile(chatId);
   }
 
-  // === Новое: тренировочные сессии ===
   addSession(chatId, sessionData) {
     const session = this.getUserSession(chatId);
     if (!Array.isArray(session.sessions)) session.sessions = [];
@@ -405,7 +405,7 @@ class UserService {
     session.sessions = session.sessions.filter((s) => String(s?.id || '') !== String(sessionId));
     const removed = session.sessions.length !== beforeLen;
     if (!removed) return false;
-    // По договоренности продукта lifetime-метрики архивные: удаление из истории их не меняет.
+    // Product rule: deleting one session does not rewrite lifetime aggregates.
     session.lastUpdated = new Date().toISOString();
     this.saveData();
     return true;

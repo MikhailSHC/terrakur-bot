@@ -2,6 +2,9 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const { estimateWorkoutCaloriesKcal } = require('../utils/estimateCalories');
+const { createLogger } = require('../utils/logger');
+
+const logger = createLogger('api');
 
 function readGeoJsonRoutes(projectRoot) {
   const geojsonPath = path.join(projectRoot, 'public/mini-app/routes.geojson');
@@ -25,10 +28,12 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     return base * ageFactor;
   };
 
+  // Service health probe for bot + mini-app uptime checks.
   router.get('/health', (req, res) => {
     res.json({ ok: true, message: 'API is alive' });
   });
 
+  // 2GIS proxy endpoints isolate external failures from mini-app clients.
   router.get('/geocode', async (req, res) => {
     const query = String(req.query.q || '').trim();
     if (!query) {
@@ -101,6 +106,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     }
   });
 
+  // Route catalog API (system + generated routes).
   router.post('/routes/build-custom', miniAppAuth, (req, res) => {
     const waypoints = Array.isArray(req.body?.waypoints) ? req.body.waypoints : [];
     const providerRaw = String(req.body?.provider || 'legacy').toLowerCase();
@@ -113,8 +119,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       return res.status(400).json({ ok: false, error: 'At least 2 waypoints are required' });
     }
 
-    // Compatibility-safe first step: keep your current logic/format,
-    // but explicitly mark provider to allow transparent 2GIS rollout.
+    // Keep provider marker in response to trace route-building strategy.
     const geojson = {
       type: 'FeatureCollection',
       features: [
@@ -153,7 +158,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
 
       res.json({ ok: true, routes: systemRoutes });
     } catch (err) {
-      console.error(err);
+      logger.error('Failed to read routes', { error: err.message });
       res.status(500).json({ ok: false, error: err.message });
     }
   });
@@ -167,7 +172,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       }
       return res.json({ ok: true, route });
     } catch (error) {
-      console.error('❌ API /api/routes/:id error:', error);
+      logger.error('Route details request failed', { error: error.message, routeId: req.params.id });
       return res.status(500).json({ ok: false, error: 'Internal server error' });
     }
   });
@@ -187,6 +192,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     }
   });
 
+  // Session and profile APIs are protected by mini-app auth middleware.
   router.post('/sessions', miniAppAuth, (req, res) => {
     const chatId = req.chatId;
     const { session } = req.body;
@@ -227,7 +233,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
 
       return res.json({ ok: true });
     } catch (err) {
-      console.error(err);
+      logger.error('Session save failed', { error: err.message, chatId: req.chatId });
       return res.status(500).json({ ok: false, error: err.message });
     }
   });
