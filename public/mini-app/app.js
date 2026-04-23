@@ -190,7 +190,7 @@ async function ensureDgisApiKeyLoaded() {
       const parsed = JSON.parse(match[1]);
       const apiKey = typeof parsed?.DGIS_API_KEY === 'string' ? parsed.DGIS_API_KEY.trim() : '';
       return apiKey;
-    } catch (_err) {
+    } catch {
       return '';
     }
   };
@@ -205,7 +205,7 @@ async function ensureDgisApiKeyLoaded() {
         return;
       }
     }
-  } catch (_err) {
+  } catch {
     // Continue with fallback source below.
   }
   try {
@@ -216,7 +216,7 @@ async function ensureDgisApiKeyLoaded() {
     if (!runtimeKey) return;
     dgisApiKey = runtimeKey;
     dgisRasterEnabled = true;
-  } catch (_err) {
+  } catch {
     // Keep silent fallback: map continues with standard tiles if API key is unavailable.
   }
 }
@@ -305,6 +305,8 @@ let uiTimerId = null;
 let lastFlyTime = 0;
 let lastCameraCenter = null;
 let isFollowingUser = true;
+let geoRetryTimerId = null;
+const GEO_RETRY_INTERVAL_MS = 15000;
 
 let routeProgressEl = null;
 let recenterBtn = null;
@@ -333,6 +335,39 @@ function debugReplay(stage, extra = '') {
   const msg = `[replay] ${stage}${extra ? ` | ${extra}` : ''}`;
   console.log(msg);
   if (statusDiv) statusDiv.innerText = msg;
+}
+
+function stopGeoRetryLoop() {
+  if (geoRetryTimerId !== null) {
+    clearInterval(geoRetryTimerId);
+    geoRetryTimerId = null;
+  }
+}
+
+function startGeoRetryLoop() {
+  if (geoRetryTimerId !== null) return;
+  geoRetryTimerId = setInterval(() => {
+    if (!navigator.geolocation) {
+      stopGeoRetryLoop();
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const now = Date.now();
+        const latitude = pos.coords.latitude;
+        const longitude = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy;
+        applyPassiveUserPosition(latitude, longitude, accuracy, now);
+        stopGeoRetryLoop();
+        statusDiv.innerText = '✅ Геолокация снова доступна';
+        setTimeout(() => {
+          if (statusDiv.innerText === '✅ Геолокация снова доступна') statusDiv.innerText = '';
+        }, 1800);
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 9000 }
+    );
+  }, GEO_RETRY_INTERVAL_MS);
 }
 
 async function saveRouteToHistory({ routeName, activityId, routeId, sourceSessionId }) {
@@ -1183,6 +1218,7 @@ function ensurePassiveLocationWatch() {
         accuracy = pos.coords.accuracy;
       }
       applyPassiveUserPosition(latitude, longitude, accuracy, now);
+      stopGeoRetryLoop();
     },
     () => {},
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 7000 }
@@ -1211,7 +1247,7 @@ async function loadPlannedRoute(id) {
     if (contentType.includes('application/json')) {
       try {
         data = JSON.parse(rawText);
-      } catch (_err) {
+      } catch {
         data = null;
       }
     }
@@ -1405,7 +1441,8 @@ function getUserLocation() {
 
       console.error(err);
 
-      statusDiv.innerText = '❌ Нет доступа к геолокации';
+      statusDiv.innerText = '❌ Нет доступа к геолокации. Проверяю снова...';
+      startGeoRetryLoop();
 
     },
 
@@ -2563,7 +2600,7 @@ function animateCompletedPath(trackCoords, options = {}) {
       duration: 820,
       maxZoom: 17
     });
-  } catch (_err) {
+  } catch {
     debugReplay('animate:fitBounds_failed');
     // fitBounds can fail in some WebView/MapGL states; replay should still continue.
   }
@@ -2673,9 +2710,9 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
           removeFinishMarker();
         }
       });
-    } catch (_err) {
+    } catch (err) {
       clearTimeout(replayWatchdogId);
-      debugReplay('ui:replay_start_failed', _err.message || 'unknown');
+      debugReplay('ui:replay_start_failed', err.message || 'unknown');
       if (phaseEl) {
         phaseEl.textContent = 'Не удалось запустить воспроизведение, показан итог тренировки.';
       }

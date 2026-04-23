@@ -271,6 +271,20 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       if (typeof userService.updateUserProfile !== 'function') {
         return res.status(500).json({ ok: false, error: 'Profile update is not supported' });
       }
+      const rawWeight = req.body?.weightKg;
+      const rawAge = req.body?.age;
+      if (rawWeight !== null && rawWeight !== undefined && rawWeight !== '') {
+        const w = Number(rawWeight);
+        if (!Number.isFinite(w) || w < 10 || w > 250) {
+          return res.status(400).json({ ok: false, error: 'Invalid weight range' });
+        }
+      }
+      if (rawAge !== null && rawAge !== undefined && rawAge !== '') {
+        const a = Number(rawAge);
+        if (!Number.isFinite(a) || a < 0 || a > 110) {
+          return res.status(400).json({ ok: false, error: 'Invalid age range' });
+        }
+      }
       const profile = userService.updateUserProfile(req.chatId, {
         weightKg: req.body?.weightKg,
         age: req.body?.age
@@ -287,6 +301,9 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       const longitude = Number(req.body?.longitude);
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
         return res.status(400).json({ ok: false, error: 'latitude and longitude are required' });
+      }
+      if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        return res.status(400).json({ ok: false, error: 'Invalid coordinate range' });
       }
       userService.setLastLocation(req.chatId, {
         latitude,

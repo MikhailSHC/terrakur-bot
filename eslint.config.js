@@ -21,7 +21,8 @@ module.exports = [
         __dirname: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',
-        Buffer: 'readonly'
+        Buffer: 'readonly',
+        fetch: 'readonly'
       }
     },
     rules: {
@@ -36,11 +37,14 @@ module.exports = [
         document: 'readonly',
         navigator: 'readonly',
         maplibregl: 'readonly',
+        mapgl: 'readonly',
         TerraSimHelpers: 'readonly',
         fetch: 'readonly',
         setTimeout: 'readonly',
+        clearTimeout: 'readonly',
         clearInterval: 'readonly',
         setInterval: 'readonly',
+        AbortController: 'readonly',
         estimateWorkoutCaloriesKcal: 'readonly',
         formatCaloriesKcalShort: 'readonly'
       }

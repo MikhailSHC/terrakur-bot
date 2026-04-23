@@ -523,6 +523,8 @@ async function init() {
   let selectedHistoryActivity = 'all';
   let currentPoints = [];
   let currentHitBoxes = [];
+  let locationRetryTimerId = null;
+  const LOCATION_RETRY_MS = 15000;
 
   const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
   tabButtons.forEach((btn) => {
@@ -664,12 +666,18 @@ async function init() {
   }
 
   if (updateLocationBtnEl) {
-    updateLocationBtnEl.addEventListener('click', () => {
+    const stopLocationRetry = () => {
+      if (locationRetryTimerId !== null) {
+        clearInterval(locationRetryTimerId);
+        locationRetryTimerId = null;
+      }
+    };
+    const attemptLocationSave = () => {
       if (!navigator.geolocation) {
         if (locationStatusEl) locationStatusEl.textContent = 'Геолокация недоступна на устройстве';
+        stopLocationRetry();
         return;
       }
-      if (locationStatusEl) locationStatusEl.textContent = 'Определяем местоположение...';
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           try {
@@ -679,15 +687,32 @@ async function init() {
                 ? 'Геолокация сохранена'
                 : 'Геолокация не указана';
             }
+            stopLocationRetry();
           } catch (err) {
             if (locationStatusEl) locationStatusEl.textContent = err.message || 'Ошибка сохранения геолокации';
           }
         },
         () => {
-          if (locationStatusEl) locationStatusEl.textContent = 'Не удалось получить геолокацию';
+          if (locationStatusEl) {
+            locationStatusEl.textContent = 'Геолокацию обнаружить не удалось. Проверяем снова...';
+          }
+          if (locationRetryTimerId === null) {
+            locationRetryTimerId = setInterval(() => {
+              attemptLocationSave();
+            }, LOCATION_RETRY_MS);
+          }
         },
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
+    };
+    updateLocationBtnEl.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        if (locationStatusEl) locationStatusEl.textContent = 'Геолокация недоступна на устройстве';
+        return;
+      }
+      if (locationStatusEl) locationStatusEl.textContent = 'Определяем местоположение...';
+      stopLocationRetry();
+      attemptLocationSave();
     });
   }
 }
