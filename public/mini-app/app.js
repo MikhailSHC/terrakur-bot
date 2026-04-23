@@ -311,6 +311,107 @@ function debugReplay(stage, extra = '') {
   if (statusDiv) statusDiv.innerText = msg;
 }
 
+async function saveRouteToHistory({ routeName, activityId, routeId, sourceSessionId }) {
+  const res = await fetch('/api/history/save-route', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({
+      chatId,
+      authToken,
+      routeName,
+      activityId,
+      routeId,
+      sourceSessionId
+    })
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.error || 'Не удалось сохранить маршрут');
+  }
+}
+
+function renderSaveRouteFlow(meta) {
+  if (!replayPanelEl || !meta || !meta.isSessionSaved) return;
+  const flowHost = replayPanelEl.querySelector('#saveRouteFlowHost');
+  if (!flowHost) return;
+
+  flowHost.innerHTML = `
+    <button type="button" id="saveRouteBtn" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(82,183,136,0.65);background:rgba(31,122,70,0.24);color:#e6fff0;font-size:14px;font-weight:700;cursor:pointer;">
+      Сохранить маршрут
+    </button>
+  `;
+
+  const saveRouteBtn = flowHost.querySelector('#saveRouteBtn');
+  saveRouteBtn?.addEventListener('click', () => {
+    flowHost.innerHTML = `
+      <div style="margin-top:10px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Название маршрута</div>
+        <input id="routeNameInput" type="text" value="${(meta.defaultRouteName || '').replace(/"/g, '&quot;')}" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.24);background:rgba(255,255,255,0.06);color:#fff;" />
+        <div id="routeNameWarn" style="display:none;color:#ff9f9f;font-size:12px;margin-top:6px;">Введите называние!</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+          <button type="button" id="saveRouteConfirm" style="padding:9px;border-radius:8px;border:1px solid rgba(82,183,136,0.65);background:rgba(31,122,70,0.24);color:#e6fff0;cursor:pointer;">Подтвердить</button>
+          <button type="button" id="saveRouteCancel" style="padding:9px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#fff;cursor:pointer;">Отменить</button>
+        </div>
+      </div>
+    `;
+
+    const inputEl = flowHost.querySelector('#routeNameInput');
+    const warnEl = flowHost.querySelector('#routeNameWarn');
+    const cancelEl = flowHost.querySelector('#saveRouteCancel');
+    const confirmEl = flowHost.querySelector('#saveRouteConfirm');
+
+    cancelEl?.addEventListener('click', () => renderSaveRouteFlow(meta));
+    confirmEl?.addEventListener('click', () => {
+      const routeName = String(inputEl?.value || '').trim();
+      if (!routeName) {
+        if (warnEl) warnEl.style.display = 'block';
+        return;
+      }
+      if (warnEl) warnEl.style.display = 'none';
+      flowHost.innerHTML = `
+        <div style="font-size:13px;font-weight:600;margin-top:10px;margin-bottom:8px;">Выберите активность</div>
+        <div style="display:grid;grid-template-columns:1fr;gap:8px;">
+          <button type="button" data-act="running" style="padding:9px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#fff;cursor:pointer;">🏃 Бег</button>
+          <button type="button" data-act="nordic_walking" style="padding:9px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#fff;cursor:pointer;">🥾 Скандинавская ходьба</button>
+          <button type="button" data-act="cycling" style="padding:9px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#fff;cursor:pointer;">🚲 Велопрогулки</button>
+        </div>
+        <button type="button" id="saveRouteBack" style="margin-top:8px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#fff;cursor:pointer;">Отменить</button>
+        <div id="saveRouteResult" style="font-size:12px;margin-top:8px;color:#dbeafe;"></div>
+      `;
+
+      flowHost.querySelector('#saveRouteBack')?.addEventListener('click', () => renderSaveRouteFlow(meta));
+      const resultEl = flowHost.querySelector('#saveRouteResult');
+      const activityButtons = Array.from(flowHost.querySelectorAll('[data-act]'));
+      activityButtons.forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const activityId = btn.getAttribute('data-act');
+          activityButtons.forEach((b) => {
+            b.disabled = true;
+          });
+          try {
+            await saveRouteToHistory({
+              routeName,
+              activityId,
+              routeId: meta.routeId,
+              sourceSessionId: meta.sessionId
+            });
+            flowHost.innerHTML = `
+              <div style="margin-top:10px;background:rgba(34,197,94,0.16);border:1px solid rgba(34,197,94,0.45);color:#d9ffe8;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:600;">
+                ✅ Маршрут сохранен в историю
+              </div>
+            `;
+          } catch (err) {
+            if (resultEl) resultEl.textContent = err.message || 'Ошибка сохранения';
+            activityButtons.forEach((b) => {
+              b.disabled = false;
+            });
+          }
+        });
+      });
+    });
+  });
+}
+
 function normalizeLayerPaint(paint = {}) {
   return {
     color: paint['line-color'] || '#3b82f6',
@@ -2496,7 +2597,7 @@ function animateCompletedPath(trackCoords, options = {}) {
   replayTimerId = scheduleNext(tick);
 }
 
-function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showReplay = true, isSaved = false }) {
+function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showReplay = true, isSaved = false, saveMeta = null }) {
   if (!replayPanelEl) return;
   const km = (distanceM / 1000).toFixed(2);
   const mins = Math.floor(elapsedSec / 60);
@@ -2506,7 +2607,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
   const kcal = formatCaloriesKcalShort(estimateWorkoutCaloriesKcal(distanceM, elapsedSec));
   const kcalSub = 'при весе 70 кг';
   const saveBadge = isSaved
-    ? `<div style="background:rgba(34,197,94,0.16);border:1px solid rgba(34,197,94,0.45);color:#d9ffe8;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:600;margin-bottom:8px;">✅ Маршрут сохранен в истории</div>`
+    ? `<div style="background:rgba(34,197,94,0.16);border:1px solid rgba(34,197,94,0.45);color:#d9ffe8;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:600;margin-bottom:8px;">✅ Тренировка сохранена</div>`
     : '';
   const summaryCard =
     saveBadge +
@@ -2516,7 +2617,8 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Мин : Сек</div><div style="font-size:20px;font-weight:700;">${mins}:${secs}</div></div>` +
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Скорость</div><div style="font-size:18px;font-weight:700;">${avgSpeed}</div></div>` +
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Ккал (оценка)</div><div style="font-size:18px;font-weight:700;">${kcal}</div><div style="font-size:10px;opacity:0.6;margin-top:2px;">${kcalSub}</div></div>` +
-    `</div>`;
+    `</div>` +
+    `<div id="saveRouteFlowHost"></div>`;
 
   if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
     debugReplay('ui:prepare_replay', `saved=${isSaved}`);
@@ -2554,6 +2656,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
         phaseEl.textContent = 'Не удалось запустить воспроизведение, показан итог тренировки.';
       }
     }
+    renderSaveRouteFlow(saveMeta);
     return;
   }
 
@@ -2561,6 +2664,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
     summaryCard +
     `<div style="font-size:11px;opacity:0.75;margin-top:8px;">Пройденная тропа на карте отмечена зелёным.</div>`;
   replayPanelEl.style.display = 'block';
+  renderSaveRouteFlow(saveMeta);
 }
 
 
@@ -3104,7 +3208,9 @@ async function stopAndSave() {
 
 
 
+  const generatedSessionId = `sess_${Date.now()}`;
   const session = {
+    sessionId: generatedSessionId,
 
     startedAt: new Date(startTime).toISOString(),
 
@@ -3222,12 +3328,23 @@ async function stopAndSave() {
   if (!saveSucceeded) {
     statusDiv.innerText = 'Подготовка воспроизведения...';
   }
+  const defaultRouteName = sessionMode === 'planned_route' ? getRouteNameSafe() : 'Мой маршрут';
+  const finalRouteId =
+    sessionMode === 'planned_route'
+      ? (session.plannedRouteId || `planned-${generatedSessionId}`)
+      : `free-${generatedSessionId}`;
   showWorkoutSummaryAndReplay({
     distanceM,
     elapsedSec,
     trackCoords: replayCoordinates,
     showReplay: true,
-    isSaved: saveSucceeded
+    isSaved: saveSucceeded,
+    saveMeta: {
+      isSessionSaved: saveSucceeded,
+      defaultRouteName,
+      routeId: finalRouteId,
+      sessionId: generatedSessionId
+    }
   });
 
   ensurePassiveLocationWatch();

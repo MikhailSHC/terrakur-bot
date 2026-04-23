@@ -292,7 +292,7 @@ function renderRouteHistory(container, historyRecords, sessions, selectedActivit
   const normalized = historyRecords
     .map((item) => ({
       ...item,
-      activityId: inferRouteActivity(item.routeId, sessions)
+      activityId: item.activityId || inferRouteActivity(item.routeId, sessions)
     }))
     .filter((item) => selectedActivity === 'all' || item.activityId === selectedActivity)
     .slice()

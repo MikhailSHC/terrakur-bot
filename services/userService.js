@@ -57,7 +57,17 @@ class UserService {
           timestamp: item.timestamp || new Date().toISOString()
         });
       }
-      const history = Array.from(historyDedupMap.values()).slice(-100);
+      const history = Array.from(historyDedupMap.values())
+        .map((item) => ({
+          routeName: item.routeName || 'Маршрут',
+          routeId: item.routeId || null,
+          activityId: item.activityId || null,
+          sourceSessionId: item.sourceSessionId || null,
+          date: item.date || null,
+          completed: item.completed !== false,
+          timestamp: item.timestamp || new Date().toISOString()
+        }))
+        .slice(-100);
 
       const sessionsRaw = Array.isArray(user.sessions) ? user.sessions : [];
       const sessionsSanitized = sessionsRaw
@@ -180,7 +190,7 @@ class UserService {
     console.log(`🔄 Обновлено состояние пользователя ${id}: ${state}`);
   }
 
-  addRouteToHistory(chatId, routeName, routeId) {
+  addRouteToHistory(chatId, routeName, routeId, extra = {}) {
     const id = String(chatId);
     const session = this.getUserSession(id);
     const nowIso = new Date().toISOString();
@@ -200,6 +210,11 @@ class UserService {
     const historyEntry = {
       routeName: routeName,
       routeId: routeId,
+      activityId: typeof extra.activityId === 'string' && extra.activityId.length > 0 ? extra.activityId : null,
+      sourceSessionId:
+        typeof extra.sourceSessionId === 'string' && extra.sourceSessionId.length > 0
+          ? extra.sourceSessionId
+          : null,
       date: new Date().toLocaleString(),
       completed: true,
       timestamp: nowIso

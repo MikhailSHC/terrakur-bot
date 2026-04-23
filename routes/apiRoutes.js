@@ -214,12 +214,6 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
 
       userService.addSession(chatId, sessionRecord);
 
-      if (session.mode === 'planned_route' && session.plannedRouteId) {
-        const route = routeService.findRouteById(session.plannedRouteId);
-        const historyRouteName = route ? route.name : `Маршрут ${session.plannedRouteId}`;
-        userService.addRouteToHistory(chatId, historyRouteName, session.plannedRouteId);
-      }
-
       return res.json({ ok: true });
     } catch (err) {
       console.error(err);
@@ -259,6 +253,32 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       if (!removed) {
         return res.status(404).json({ ok: false, error: 'Session not found' });
       }
+      return res.json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  router.post('/history/save-route', miniAppAuth, (req, res) => {
+    try {
+      const chatId = req.chatId;
+      const routeName = String(req.body?.routeName || '').trim();
+      const activityId = String(req.body?.activityId || '').trim();
+      const routeIdRaw = String(req.body?.routeId || '').trim();
+      const sourceSessionId = String(req.body?.sourceSessionId || '').trim();
+
+      if (!routeName) {
+        return res.status(400).json({ ok: false, error: 'routeName is required' });
+      }
+      if (!activityId) {
+        return res.status(400).json({ ok: false, error: 'activityId is required' });
+      }
+
+      const safeRouteId = routeIdRaw || `saved-${Date.now()}`;
+      userService.addRouteToHistory(chatId, routeName, safeRouteId, {
+        activityId,
+        sourceSessionId: sourceSessionId || null
+      });
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });
