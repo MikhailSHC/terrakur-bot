@@ -30,7 +30,7 @@ process.on('unhandledRejection', (reason) => {
 
 const userService = new UserService();
 const routeService = new RouteService();
-const miniAppAuth = createMiniAppAuthMiddleware(config.MINI_APP_AUTH_SECRET);
+const miniAppAuth = createMiniAppAuthMiddleware(config.MINI_APP_AUTH_SECRET, config.BOT_TOKEN);
 
 const app = createApp({
   userService,

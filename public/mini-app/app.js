@@ -129,11 +129,58 @@ const controlsEl   = document.querySelector('.controls');
 
 const urlParams   = new URLSearchParams(window.location.search);
 
+function readMaxInitDataRaw() {
+  const fromWebApp = window.WebApp?.initData;
+  if (typeof fromWebApp === 'string' && fromWebApp.trim()) return fromWebApp.trim();
+  const hashRaw = String(window.location.hash || '');
+  if (!hashRaw) return '';
+  const fragment = hashRaw.startsWith('#') ? hashRaw.slice(1) : hashRaw;
+  const fragmentParams = new URLSearchParams(fragment);
+  const webAppData = fragmentParams.get('WebAppData') || fragmentParams.get('tgWebAppData') || '';
+  if (!webAppData) return '';
+  try {
+    return decodeURIComponent(webAppData);
+  } catch {
+    return webAppData;
+  }
+}
+
+function extractChatIdFromInitData(rawInitData) {
+  if (!rawInitData) return null;
+  const params = new URLSearchParams(rawInitData);
+  const direct = params.get('chat_id') || params.get('chatId') || params.get('user_id') || params.get('userId');
+  if (direct && /^\d+$/.test(String(direct))) return String(direct);
+  const parseObj = (value) => {
+    if (!value) return null;
+    const attempts = [value];
+    try {
+      attempts.push(decodeURIComponent(value));
+    } catch {
+      // ignore
+    }
+    for (const item of attempts) {
+      try {
+        const parsed = JSON.parse(item);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  };
+  const userObj = parseObj(params.get('user'));
+  const chatObj = parseObj(params.get('chat'));
+  const nested = userObj?.id || chatObj?.id || chatObj?.chat_id || chatObj?.chatId;
+  if (nested && /^\d+$/.test(String(nested))) return String(nested);
+  return null;
+}
+
 const routeId     = urlParams.get('routeId');       // системный маршрут
 const customRouteMode = urlParams.get('customRoute') === '1' || urlParams.get('mode') === 'custom';
 const replayDebugEnabled = urlParams.get('replayDebug') === '1';
 
-const chatId      = urlParams.get('chatId') || 'test_user';
+const maxInitDataRaw = readMaxInitDataRaw();
+const chatId      = urlParams.get('chatId') || extractChatIdFromInitData(maxInitDataRaw) || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
 const activityIdFromUrl = urlParams.get('activityId');
 let userWeightKg = 70;
@@ -232,8 +279,10 @@ async function ensureDgisApiKeyLoaded() {
 }
 
 function getAuthHeaders() {
-  if (!authToken) return {};
-  return { 'x-miniapp-auth': authToken };
+  const headers = {};
+  if (authToken) headers['x-miniapp-auth'] = authToken;
+  if (maxInitDataRaw) headers['x-max-init-data'] = maxInitDataRaw;
+  return headers;
 }
 
 function estimateCaloriesForUser(distanceM, durationSec) {

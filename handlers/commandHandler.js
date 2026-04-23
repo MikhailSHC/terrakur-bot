@@ -14,7 +14,16 @@ class CommandHandler {
         if (baseUrl.pathname.endsWith('/index.html')) {
             baseUrl.pathname = baseUrl.pathname.replace(/\/index\.html$/, '/history.html');
         }
+        // New preferred mode: static URL for MAX launch.
+        // Personalization is resolved by validated MAX initData on backend.
+        const useMaxInitDataMode = this.config?.USE_MAX_INITDATA_LINKS !== '0';
+        if (useMaxInitDataMode) {
+            baseUrl.search = '';
+            return baseUrl.toString();
+        }
 
+        // Legacy fallback mode (kept intentionally for quick rollback).
+        // If MAX initData flow has incidents, set USE_MAX_INITDATA_LINKS=0.
         const params = new URLSearchParams({
             chatId: String(chatId),
             screen: 'history'

@@ -54,6 +54,18 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     res.json({ ok: true, message: 'API is alive' });
   });
 
+  // Dev-only helper to validate MAX launch auth resolution.
+  if (process.env.NODE_ENV !== 'production') {
+    router.get('/auth/debug', miniAppAuth, (req, res) => {
+      res.json({
+        ok: true,
+        chatId: String(req.chatId || ''),
+        authSource: req.authSource || 'unknown',
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
+
   // 2GIS proxy endpoints isolate external failures from mini-app clients.
   router.get('/geocode', async (req, res) => {
     const query = String(req.query.q || '').trim();

@@ -57,10 +57,63 @@ function estimateCaloriesWithProfile(distanceM, durationSec, activityId = null) 
 
 function getParams() {
   const params = new URLSearchParams(window.location.search);
-  return {
-    chatId: params.get('chatId'),
-    authToken: params.get('authToken')
+  const readMaxInitDataRaw = () => {
+    const fromWebApp = window.WebApp?.initData;
+    if (typeof fromWebApp === 'string' && fromWebApp.trim()) return fromWebApp.trim();
+    const hashRaw = String(window.location.hash || '');
+    if (!hashRaw) return '';
+    const fragment = hashRaw.startsWith('#') ? hashRaw.slice(1) : hashRaw;
+    const fragmentParams = new URLSearchParams(fragment);
+    const webAppData = fragmentParams.get('WebAppData') || fragmentParams.get('tgWebAppData') || '';
+    if (!webAppData) return '';
+    try {
+      return decodeURIComponent(webAppData);
+    } catch {
+      return webAppData;
+    }
   };
+  const maxInitData = readMaxInitDataRaw();
+  const extractChatIdFromInitData = (raw) => {
+    if (!raw) return null;
+    const p = new URLSearchParams(raw);
+    const direct = p.get('chat_id') || p.get('chatId') || p.get('user_id') || p.get('userId');
+    if (direct && /^\d+$/.test(String(direct))) return String(direct);
+    const parseObj = (value) => {
+      if (!value) return null;
+      const attempts = [value];
+      try {
+        attempts.push(decodeURIComponent(value));
+      } catch {
+        // ignore
+      }
+      for (const item of attempts) {
+        try {
+          const parsed = JSON.parse(item);
+          if (parsed && typeof parsed === 'object') return parsed;
+        } catch {
+          // ignore
+        }
+      }
+      return null;
+    };
+    const userObj = parseObj(p.get('user'));
+    const chatObj = parseObj(p.get('chat'));
+    const nested = userObj?.id || chatObj?.id || chatObj?.chat_id || chatObj?.chatId;
+    if (nested && /^\d+$/.test(String(nested))) return String(nested);
+    return null;
+  };
+  return {
+    chatId: params.get('chatId') || extractChatIdFromInitData(maxInitData),
+    authToken: params.get('authToken'),
+    maxInitData
+  };
+}
+
+function buildAuthHeaders(authToken, maxInitData) {
+  const headers = {};
+  if (authToken) headers['x-miniapp-auth'] = authToken;
+  if (maxInitData) headers['x-max-init-data'] = maxInitData;
+  return headers;
 }
 
 function formatDuration(totalSec) {
@@ -450,11 +503,11 @@ function switchTab(tabId) {
   panels.forEach((panel) => panel.classList.toggle('active', panel.id === `panel-${tabId}`));
 }
 
-async function fetchSessions(chatId, authToken) {
+async function fetchSessions(chatId, authToken, maxInitData) {
   const query = new URLSearchParams({ chatId });
   if (authToken) query.set('authToken', authToken);
   const resp = await fetch(`/api/sessions?${query.toString()}`, {
-    headers: authToken ? { 'x-miniapp-auth': authToken } : {}
+    headers: buildAuthHeaders(authToken, maxInitData)
   });
   const contentType = (resp.headers.get('content-type') || '').toLowerCase();
   const rawText = await resp.text();
@@ -471,14 +524,14 @@ async function fetchSessions(chatId, authToken) {
   return json;
 }
 
-async function saveProfile(chatId, authToken, profile) {
+async function saveProfile(chatId, authToken, maxInitData, profile) {
   const query = new URLSearchParams({ chatId });
   if (authToken) query.set('authToken', authToken);
   const resp = await fetch(`/api/profile?${query.toString()}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(authToken ? { 'x-miniapp-auth': authToken } : {})
+      ...buildAuthHeaders(authToken, maxInitData)
     },
     body: JSON.stringify(profile)
   });
@@ -487,14 +540,14 @@ async function saveProfile(chatId, authToken, profile) {
   return json.profile || {};
 }
 
-async function saveLocation(chatId, authToken, latitude, longitude) {
+async function saveLocation(chatId, authToken, maxInitData, latitude, longitude) {
   const query = new URLSearchParams({ chatId });
   if (authToken) query.set('authToken', authToken);
   const resp = await fetch(`/api/profile/location?${query.toString()}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(authToken ? { 'x-miniapp-auth': authToken } : {})
+      ...buildAuthHeaders(authToken, maxInitData)
     },
     body: JSON.stringify({ latitude, longitude })
   });
@@ -503,7 +556,7 @@ async function saveLocation(chatId, authToken, latitude, longitude) {
   return json.profile || {};
 }
 
-async function deleteHistoryEntry(chatId, authToken, entry) {
+async function deleteHistoryEntry(chatId, authToken, maxInitData, entry) {
   const query = new URLSearchParams({
     chatId,
     routeId: String(entry.routeId || ''),
@@ -512,7 +565,7 @@ async function deleteHistoryEntry(chatId, authToken, entry) {
   if (authToken) query.set('authToken', authToken);
   const resp = await fetch(`/api/history?${query.toString()}`, {
     method: 'DELETE',
-    headers: authToken ? { 'x-miniapp-auth': authToken } : {}
+    headers: buildAuthHeaders(authToken, maxInitData)
   });
   const json = await resp.json();
   if (!resp.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить запись истории');
@@ -520,7 +573,7 @@ async function deleteHistoryEntry(chatId, authToken, entry) {
 }
 
 async function init() {
-  const { chatId, authToken } = getParams();
+  const { chatId, authToken, maxInitData } = getParams();
   const statusEl = document.getElementById('status');
   const errorBox = document.getElementById('errorBox');
   const filtersEl = document.getElementById('filters');
@@ -552,7 +605,7 @@ async function init() {
 
   let payload;
   try {
-    payload = await fetchSessions(chatId, authToken);
+    payload = await fetchSessions(chatId, authToken, maxInitData);
   } catch (err) {
     statusEl.textContent = 'Ошибка загрузки';
     errorBox.textContent = err.message;
@@ -681,7 +734,7 @@ async function init() {
       const confirmed = window.confirm('Удалить прохождение маршрута из истории?');
       if (!confirmed) return;
       try {
-        await deleteHistoryEntry(chatId, authToken, entry);
+        await deleteHistoryEntry(chatId, authToken, maxInitData, entry);
         historyRecords = historyRecords.filter(
           (h) => !(String(h.routeId || '') === String(entry.routeId || '') && String(h.timestamp || '') === String(entry.timestamp || ''))
         );
@@ -808,7 +861,7 @@ async function init() {
           if (userProfileStatusEl) userProfileStatusEl.textContent = 'Введите действительные данные';
           return;
         }
-        const profile = await saveProfile(chatId, authToken, {
+        const profile = await saveProfile(chatId, authToken, maxInitData, {
           weightKg: weightVal,
           age: ageVal,
           heightCm: heightVal,
@@ -844,7 +897,7 @@ async function init() {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           try {
-            const profile = await saveLocation(chatId, authToken, pos.coords.latitude, pos.coords.longitude);
+            const profile = await saveLocation(chatId, authToken, maxInitData, pos.coords.latitude, pos.coords.longitude);
             if (locationStatusEl) {
               locationStatusEl.textContent = profile?.hasLocation
                 ? 'Геолокация сохранена'
