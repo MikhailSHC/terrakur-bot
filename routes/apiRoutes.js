@@ -344,6 +344,25 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     }
   });
 
+  router.delete('/history', miniAppAuth, (req, res) => {
+    try {
+      const routeId = String(req.query.routeId || '').trim();
+      const timestamp = String(req.query.timestamp || '').trim();
+      if (!routeId || !timestamp) {
+        return res.status(400).json({ ok: false, error: 'routeId and timestamp are required' });
+      }
+      const removed = typeof userService.removeHistoryEntry === 'function'
+        ? userService.removeHistoryEntry(req.chatId, routeId, timestamp)
+        : false;
+      if (!removed) {
+        return res.status(404).json({ ok: false, error: 'History entry not found' });
+      }
+      return res.json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   return router;
 }
 

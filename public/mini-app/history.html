@@ -14,7 +14,7 @@
       color: #eef2f7;
       padding: 14px;
     }
-    h1 { margin: 0 0 10px; font-size: 22px; }
+    h1 { margin: 0 0 10px; font-size: 22px; text-align: center; }
     .muted { color: #9da7b3; font-size: 13px; margin-bottom: 12px; }
     .hidden { display: none !important; }
     .card {
@@ -57,8 +57,10 @@
       background: #151a20;
       color: #d7dde6;
       border-radius: 10px;
-      padding: 8px 6px;
-      font-size: 12px;
+      padding: 8px 4px;
+      font-size: 11px;
+      line-height: 1.2;
+      white-space: normal;
       cursor: pointer;
     }
     .tab-btn.active {
@@ -153,15 +155,25 @@
       margin-bottom: 8px;
       font-size: 14px;
     }
-    .heatmap-wrap { overflow-x: auto; }
-    .heatmap-grid {
+    .heatmap-wrap {
+      overflow-x: auto;
+      display: flex;
+      gap: 10px;
+      padding-bottom: 2px;
+    }
+    .month-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .month-grid {
       display: grid;
       grid-template-rows: repeat(7, 12px);
       grid-auto-flow: column;
       grid-auto-columns: 12px;
       gap: 3px;
-      margin-bottom: 8px;
-      min-width: max-content;
     }
     .heat-day {
       width: 12px;
@@ -173,10 +185,7 @@
     .lvl-1 { background: #275438; border-color: #2f6543; }
     .lvl-2 { background: #388e55; border-color: #46a567; }
     .lvl-3 { background: #5bc878; border-color: #70d98f; }
-    .months {
-      display: flex;
-      justify-content: space-between;
-      gap: 6px;
+    .month-label {
       color: #9da7b3;
       font-size: 11px;
     }
@@ -192,24 +201,21 @@
   </style>
 </head>
 <body>
-  <h1>Моя история</h1>
+  <h1>Навигация</h1>
   <div class="muted" id="status">Загрузка статистики...</div>
 
   <div class="tabs">
     <button type="button" class="tab-btn active" data-tab="home">Главная</button>
     <button type="button" class="tab-btn" data-tab="stats">Статистика</button>
     <button type="button" class="tab-btn" data-tab="history">История</button>
-    <button type="button" class="tab-btn" data-tab="user">Пользовательские настройки</button>
+    <button type="button" class="tab-btn" data-tab="user">Настройки</button>
   </div>
 
   <section class="tab-panel active" id="panel-home">
     <div class="card">
       <div class="home-name" id="homeUserName">Пользователь</div>
       <div class="home-regularity" id="homeTodayStatus">Сегодня тренировки не было</div>
-      <div class="heatmap-wrap">
-        <div class="heatmap-grid" id="regularityHeatmap"></div>
-        <div class="months" id="regularityMonths"></div>
-      </div>
+      <div class="heatmap-wrap" id="regularityHeatmap"></div>
       <div class="home-stats">
         <div class="card">
           <div class="home-stat-value" id="streakNow">0</div>
@@ -272,10 +278,6 @@
   <section class="tab-panel" id="panel-history">
     <div class="filters" id="historyFilters"></div>
     <div class="list" id="routeHistoryList"></div>
-    <div class="card">
-      <div class="label">Тренировки (детализация)</div>
-      <div class="list" id="sessionList"></div>
-    </div>
   </section>
 
   <section class="tab-panel" id="panel-user">
@@ -283,8 +285,10 @@
       <div class="row-title">Пользовательские настройки</div>
       <div class="row-meta" style="margin-bottom:8px;">Заполните данные для более точного расчета калорий.</div>
       <div style="display:grid;gap:8px;">
-        <input id="userWeightInput" type="number" min="20" max="300" step="0.1" placeholder="Вес, кг" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
-        <input id="userAgeInput" type="number" min="5" max="120" step="1" placeholder="Возраст" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
+        <label class="row-meta" for="userWeightInput">Вес (кг)</label>
+        <input id="userWeightInput" type="number" min="10" max="250" step="0.1" placeholder="Например, 72.5" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
+        <label class="row-meta" for="userAgeInput">Возраст</label>
+        <input id="userAgeInput" type="number" min="0" max="110" step="1" placeholder="Например, 29" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
         <button type="button" id="saveUserProfileBtn" class="chip active">Сохранить данные</button>
       </div>
       <div class="row-meta" id="userProfileStatus" style="margin-top:8px;">Если поля не заполнены, используются примерные расчеты.</div>

@@ -247,6 +247,22 @@ class UserService {
     return session.history.slice(-limit);
   }
 
+  removeHistoryEntry(chatId, routeId, timestamp) {
+    const session = this.getUserSession(chatId);
+    if (!Array.isArray(session.history) || !session.history.length) return false;
+    const beforeLen = session.history.length;
+    session.history = session.history.filter((item) => {
+      const sameRoute = String(item?.routeId || '') === String(routeId || '');
+      const sameTimestamp = String(item?.timestamp || '') === String(timestamp || '');
+      return !(sameRoute && sameTimestamp);
+    });
+    const removed = session.history.length !== beforeLen;
+    if (!removed) return false;
+    session.lastUpdated = new Date().toISOString();
+    this.saveData();
+    return true;
+  }
+
   getUserState(chatId) {
     const id = String(chatId);
     const session = this.getUserSession(id);

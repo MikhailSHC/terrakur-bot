@@ -263,38 +263,6 @@ function renderMetricFilters(container, selected, onSelect) {
   });
 }
 
-function renderSessions(container, sessions, onDelete) {
-  container.innerHTML = '';
-  if (!sessions.length) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.innerHTML = '<div class="row-meta">Пока нет тренировок</div>';
-    container.appendChild(row);
-    return;
-  }
-  sessions
-    .slice()
-    .sort((a, b) => new Date(b.finishedAt || b.startedAt) - new Date(a.finishedAt || a.startedAt))
-    .slice(0, 20)
-    .forEach((s) => {
-      const row = document.createElement('div');
-      row.className = 'row';
-      const km = ((Number(s.distanceM) || 0) / 1000).toFixed(2);
-      const activityLabel = ACTIVITY_LABELS[s.activityId] || 'Активность';
-      const kcal = Number(s.estCaloriesKcal) > 0 ? Number(s.estCaloriesKcal) : estimateCaloriesWithProfile(s.distanceM, s.durationSec);
-      row.innerHTML = `
-        <div class="row-head">
-          <div class="row-title">${activityLabel} - ${km} км</div>
-          <button type="button" class="row-delete-btn" data-session-id="${s.id}">Удалить</button>
-        </div>
-        <div class="row-meta">${formatDate(s.finishedAt || s.startedAt)} · ${formatDuration(s.durationSec)} · ${Math.round(kcal)} ккал</div>
-      `;
-      const deleteBtn = row.querySelector('.row-delete-btn');
-      if (deleteBtn) deleteBtn.addEventListener('click', () => onDelete(s));
-      container.appendChild(row);
-    });
-}
-
 function inferRouteActivity(routeId, sessions) {
   const linked = sessions
     .filter((s) => String(s.plannedRouteId || '') === String(routeId) && s.activityId)
@@ -302,7 +270,7 @@ function inferRouteActivity(routeId, sessions) {
   return linked[0]?.activityId || 'all';
 }
 
-function renderRouteHistory(container, historyRecords, sessions, selectedActivity) {
+function renderRouteHistory(container, historyRecords, sessions, selectedActivity, onDelete) {
   container.innerHTML = '';
   const normalized = historyRecords
     .map((item) => ({
@@ -326,9 +294,16 @@ function renderRouteHistory(container, historyRecords, sessions, selectedActivit
     row.className = 'row';
     const activity = item.activityId && item.activityId !== 'all' ? ` · ${ACTIVITY_LABELS[item.activityId] || 'Активность'}` : '';
     row.innerHTML = `
-      <div class="row-title">${idx + 1}. ${item.routeName || 'Маршрут'}</div>
+      <div class="row-head">
+        <div class="row-title">${idx + 1}. ${item.routeName || 'Маршрут'}</div>
+        <button type="button" class="row-delete-btn">Удалить</button>
+      </div>
       <div class="row-meta">${item.date || formatDate(item.timestamp)}${activity}</div>
     `;
+    const deleteBtn = row.querySelector('.row-delete-btn');
+    if (deleteBtn && typeof onDelete === 'function') {
+      deleteBtn.addEventListener('click', () => onDelete(item));
+    }
     container.appendChild(row);
   });
 }
@@ -380,26 +355,35 @@ function computeStreaks(heatmapDays) {
   return { current, best };
 }
 
-function renderHomeRegularity(heatmapEl, monthsEl, sessions) {
+function renderHomeRegularity(heatmapEl, sessions) {
   const days = buildYearHeatmapData(sessions, 364);
   heatmapEl.innerHTML = '';
+  const byMonth = new Map();
   days.forEach((day) => {
-    const cell = document.createElement('div');
-    cell.className = `heat-day${day.level ? ` lvl-${day.level}` : ''}`;
-    cell.title = `${formatDate(day.date)}: ${((day.distanceM || 0) / 1000).toFixed(2)} км`;
-    heatmapEl.appendChild(cell);
+    const key = `${day.date.getFullYear()}-${day.date.getMonth()}`;
+    if (!byMonth.has(key)) byMonth.set(key, []);
+    byMonth.get(key).push(day);
   });
 
-  monthsEl.innerHTML = '';
-  const monthSet = new Set();
-  days.forEach((day) => {
-    const m = day.date.getMonth();
-    if (!monthSet.has(m)) {
-      monthSet.add(m);
-      const label = document.createElement('span');
-      label.textContent = MONTH_SHORT[m];
-      monthsEl.appendChild(label);
-    }
+  Array.from(byMonth.entries()).forEach(([monthKey, monthDays]) => {
+    const [, monthNumRaw] = monthKey.split('-');
+    const monthNum = Number(monthNumRaw);
+    const block = document.createElement('div');
+    block.className = 'month-block';
+    const grid = document.createElement('div');
+    grid.className = 'month-grid';
+    monthDays.forEach((day) => {
+      const cell = document.createElement('div');
+      cell.className = `heat-day${day.level ? ` lvl-${day.level}` : ''}`;
+      cell.title = `${formatDate(day.date)}: ${((day.distanceM || 0) / 1000).toFixed(2)} км`;
+      grid.appendChild(cell);
+    });
+    const label = document.createElement('div');
+    label.className = 'month-label';
+    label.textContent = MONTH_SHORT[monthNum] || '';
+    block.appendChild(grid);
+    block.appendChild(label);
+    heatmapEl.appendChild(block);
   });
   return days;
 }
@@ -429,28 +413,6 @@ async function fetchSessions(chatId, authToken) {
     throw new Error('Некорректный JSON от /api/sessions');
   }
   if (!resp.ok || !json.ok) throw new Error(json.error || 'Не удалось загрузить историю');
-  return json;
-}
-
-async function deleteSession(chatId, authToken, sessionId) {
-  const query = new URLSearchParams({ chatId });
-  if (authToken) query.set('authToken', authToken);
-  const resp = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?${query.toString()}`, {
-    method: 'DELETE',
-    headers: authToken ? { 'x-miniapp-auth': authToken } : {}
-  });
-  const contentType = (resp.headers.get('content-type') || '').toLowerCase();
-  const rawText = await resp.text();
-  if (!contentType.includes('application/json')) {
-    throw new Error(`Сервер удаления вернул не JSON (content-type: ${contentType || 'unknown'})`);
-  }
-  let json;
-  try {
-    json = JSON.parse(rawText);
-  } catch (_err) {
-    throw new Error('Некорректный JSON от DELETE /api/sessions/:id');
-  }
-  if (!resp.ok || !json.ok) throw new Error(json.error || 'Не удалось удалить тренировку');
   return json;
 }
 
@@ -486,6 +448,22 @@ async function saveLocation(chatId, authToken, latitude, longitude) {
   return json.profile || {};
 }
 
+async function deleteHistoryEntry(chatId, authToken, entry) {
+  const query = new URLSearchParams({
+    chatId,
+    routeId: String(entry.routeId || ''),
+    timestamp: String(entry.timestamp || '')
+  });
+  if (authToken) query.set('authToken', authToken);
+  const resp = await fetch(`/api/history?${query.toString()}`, {
+    method: 'DELETE',
+    headers: authToken ? { 'x-miniapp-auth': authToken } : {}
+  });
+  const json = await resp.json();
+  if (!resp.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить запись истории');
+  return true;
+}
+
 async function init() {
   const { chatId, authToken } = getParams();
   const statusEl = document.getElementById('status');
@@ -494,7 +472,6 @@ async function init() {
   const metricFiltersEl = document.getElementById('metricFilters');
   const periodFiltersEl = document.getElementById('periodFilters');
   const historyFiltersEl = document.getElementById('historyFilters');
-  const sessionListEl = document.getElementById('sessionList');
   const routeHistoryEl = document.getElementById('routeHistoryList');
   const dayDetailsEl = document.getElementById('dayDetails');
   const canvas = document.getElementById('chart');
@@ -502,7 +479,6 @@ async function init() {
   const homeUserNameEl = document.getElementById('homeUserName');
   const homeTodayStatusEl = document.getElementById('homeTodayStatus');
   const regularityHeatmapEl = document.getElementById('regularityHeatmap');
-  const regularityMonthsEl = document.getElementById('regularityMonths');
   const userWeightInputEl = document.getElementById('userWeightInput');
   const userAgeInputEl = document.getElementById('userAgeInput');
   const saveUserProfileBtnEl = document.getElementById('saveUserProfileBtn');
@@ -526,7 +502,7 @@ async function init() {
   }
 
   const allSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
-  const historyRecords = Array.isArray(payload.history) ? payload.history : [];
+  let historyRecords = Array.isArray(payload.history) ? [...payload.history] : [];
   const fullName = (payload.profile && typeof payload.profile.fullName === 'string' && payload.profile.fullName.trim()) || 'Пользователь';
   profileWeightKg = payload?.profile?.weightKg ?? null;
   profileAge = payload?.profile?.age ?? null;
@@ -557,10 +533,6 @@ async function init() {
     const metricsFiltered = selectedActivity === 'all'
       ? allSessions
       : allSessions.filter((s) => s.activityId === selectedActivity);
-    const listFiltered = selectedHistoryActivity === 'all'
-      ? listSessions
-      : listSessions.filter((s) => s.activityId === selectedHistoryActivity);
-
     const distanceM = metricsFiltered.reduce((sum, s) => sum + (Number(s.distanceM) || 0), 0);
     const durationSec = metricsFiltered.reduce((sum, s) => sum + (Number(s.durationSec) || 0), 0);
     document.getElementById('totalKm').textContent = (distanceM / 1000).toFixed(2);
@@ -585,20 +557,19 @@ async function init() {
     currentHitBoxes = drawChart(canvas, currentPoints, selectedMetric, selectedDayIndex);
     renderDayDetails(dayDetailsEl, Number.isInteger(selectedDayIndex) ? currentPoints[selectedDayIndex] || null : null);
 
-    renderSessions(sessionListEl, listFiltered, async (session) => {
-      const confirmed = window.confirm('Удалить тренировку из истории?');
+    renderRouteHistory(routeHistoryEl, historyRecords, listSessions, selectedHistoryActivity, async (entry) => {
+      const confirmed = window.confirm('Удалить прохождение маршрута из истории?');
       if (!confirmed) return;
       try {
-        await deleteSession(chatId, authToken, session.id);
-        listSessions = listSessions.filter((s) => String(s.id) !== String(session.id));
-        selectedDayIndex = null;
+        await deleteHistoryEntry(chatId, authToken, entry);
+        historyRecords = historyRecords.filter(
+          (h) => !(String(h.routeId || '') === String(entry.routeId || '') && String(h.timestamp || '') === String(entry.timestamp || ''))
+        );
         renderAll();
       } catch (err) {
         errorBox.textContent = err.message;
       }
     });
-
-    renderRouteHistory(routeHistoryEl, historyRecords, listSessions, selectedHistoryActivity);
 
     renderFilters(filtersEl, selectedActivity, (id) => {
       selectedActivity = id;
@@ -620,7 +591,7 @@ async function init() {
       renderAll();
     });
 
-    const heatmapDays = renderHomeRegularity(regularityHeatmapEl, regularityMonthsEl, listSessions);
+    const heatmapDays = renderHomeRegularity(regularityHeatmapEl, listSessions);
     const today = getDayKey(new Date());
     const trainedToday = heatmapDays.some((d) => d.key === today && d.distanceM > 0);
     homeTodayStatusEl.textContent = trainedToday ? 'Сегодня тренировка есть' : 'Сегодня тренировки не было';
@@ -664,9 +635,21 @@ async function init() {
   if (saveUserProfileBtnEl) {
     saveUserProfileBtnEl.addEventListener('click', async () => {
       try {
+        const weightValRaw = String(userWeightInputEl?.value || '').trim();
+        const ageValRaw = String(userAgeInputEl?.value || '').trim();
+        const weightVal = weightValRaw === '' ? null : Number(weightValRaw);
+        const ageVal = ageValRaw === '' ? null : Number(ageValRaw);
+        if (weightVal !== null && (!Number.isFinite(weightVal) || weightVal < 10 || weightVal > 250)) {
+          if (userProfileStatusEl) userProfileStatusEl.textContent = 'Введите действительные данные';
+          return;
+        }
+        if (ageVal !== null && (!Number.isFinite(ageVal) || ageVal < 0 || ageVal > 110)) {
+          if (userProfileStatusEl) userProfileStatusEl.textContent = 'Введите действительные данные';
+          return;
+        }
         const profile = await saveProfile(chatId, authToken, {
-          weightKg: userWeightInputEl?.value || null,
-          age: userAgeInputEl?.value || null
+          weightKg: weightVal,
+          age: ageVal
         });
         profileWeightKg = profile.weightKg ?? null;
         profileAge = profile.age ?? null;
