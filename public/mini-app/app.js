@@ -321,6 +321,7 @@ let lastHeadingDeg = null;
 let replayPanelEl = null;
 let isReplayRunning = false;
 let isReplayViewLocked = false;
+let simFinishTimerId = null;
 
 const REPLAY_SOURCE_ID = 'run-replay-source';
 const REPLAY_LAYER_ID = 'run-replay-line';
@@ -1907,6 +1908,10 @@ function pointOffRouteAtStep(coords, stepIndex, distanceM = 16) {
 function runSimFinishScenario() {
   const coords = getRouteLineCoordinates();
   if (!coords.length || !plannedStart || !plannedFinish) return;
+  if (simFinishTimerId !== null) {
+    clearInterval(simFinishTimerId);
+    simFinishTimerId = null;
+  }
 
   simRouteStepIndex = 0;
   setSimulatedPosition(plannedStart[1], plannedStart[0]);
@@ -1915,19 +1920,20 @@ function runSimFinishScenario() {
     if (!isTracking) startRun();
   }, 250);
 
-  setTimeout(() => {
-    if (coords.length > 3) {
-      const midIdx = Math.floor(coords.length / 2);
-      simRouteStepIndex = midIdx;
-      setSimulatedPosition(coords[midIdx][1], coords[midIdx][0]);
+  const totalSteps = Math.max(1, coords.length - 1);
+  const totalDurationMs = 12000;
+  const stepIntervalMs = Math.max(90, Math.floor(totalDurationMs / totalSteps));
+  let currentIdx = 0;
+  simFinishTimerId = setInterval(() => {
+    currentIdx += 1;
+    const nextIdx = Math.min(currentIdx, coords.length - 1);
+    simRouteStepIndex = nextIdx;
+    setSimulatedPosition(coords[nextIdx][1], coords[nextIdx][0]);
+    if (nextIdx >= coords.length - 1) {
+      clearInterval(simFinishTimerId);
+      simFinishTimerId = null;
     }
-  }, 900);
-
-  setTimeout(() => {
-    const endIdx = Math.max(0, coords.length - 1);
-    simRouteStepIndex = endIdx;
-    setSimulatedPosition(plannedFinish[1], plannedFinish[0]);
-  }, 1550);
+  }, stepIntervalMs);
 }
 
 function runSimOffRouteScenario() {
@@ -2808,7 +2814,6 @@ function getSmoothedPosition() {
 
 function onGPSPosition(pos) {
   if (!isTracking) return;
-  isFollowingUser = true;
 
 
 
