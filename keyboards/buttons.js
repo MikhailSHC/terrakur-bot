@@ -11,7 +11,7 @@ function getMainMenuKeyboard(historyUrl) {
     payload: {
       buttons: [
         [
-          { type: 'callback', text: '🧭 Начать свой трек', payload: 'start_free_track' }
+          { type: 'callback', text: '🧭 Построить маршрут', payload: 'start_free_track' }
         ],
         [
           { type: 'callback', text: '📋 Маршруты Ставрополья', payload: 'find_routes' }
@@ -39,7 +39,7 @@ const locationKeyboard = {
     buttons: [
       [
         { type: 'callback', text: 'Ставрополь', payload: 'location_stavropol' },
-        { type: 'callback', text: 'Минеральные воды', payload: 'location_kavminvody' }
+        { type: 'callback', text: 'Минводы', payload: 'location_kavminvody' }
       ],
       [
         { type: 'callback', text: 'Кисловодск', payload: 'location_kislovodsk' },

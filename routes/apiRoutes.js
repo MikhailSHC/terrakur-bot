@@ -231,7 +231,19 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     try {
       const sessions = userService.getSessions(req.chatId);
       const lifetime = userService.getLifetimeStats(req.chatId);
-      return res.json({ ok: true, sessions, lifetime });
+      const user = typeof userService.getUserSession === 'function'
+        ? userService.getUserSession(req.chatId)
+        : null;
+      const history = Array.isArray(user?.history) ? user.history : [];
+      return res.json({
+        ok: true,
+        sessions,
+        lifetime,
+        history,
+        profile: {
+          fullName: typeof user?.fullName === 'string' ? user.fullName : ''
+        }
+      });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }

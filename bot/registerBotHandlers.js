@@ -25,7 +25,7 @@ function getOpenRouteKeyboard(navUrl) {
       type: 'inline_keyboard',
       payload: {
         buttons: [
-          [{ type: 'link', text: '🗺️ Открыть маршрут', url: navUrl }],
+          [{ type: 'link', text: '🗺️ Начать', url: navUrl }],
           [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
         ]
       }
@@ -211,11 +211,18 @@ function registerBotHandlers(bot, deps) {
     }
 
     if (callbackData === 'start_free_track') {
+      const navUrl = buildMiniAppUrl(config, chatId);
       await bot.api.sendMessageToChat(
         chatId,
-        '🧭 Выберите тип тренировки — километры и время в трекере сохранятся с этим видом активности:',
-        { attachments: [keyboards.freeTrackActivityPickKeyboard] }
+        '🧭 Нажмите кнопку ниже, чтобы начать построение маршрута в трекере.',
+        {
+          parse_mode: 'Markdown',
+          attachments: getOpenRouteKeyboard(navUrl)
+        }
       );
+      userService.setUserState(chatId, 'free_run_started', {
+        lastFreeRun: { startedAt: new Date().toISOString(), activityId: null }
+      });
       return;
     }
 
@@ -317,13 +324,16 @@ function registerBotHandlers(bot, deps) {
       if (!routes.length) {
         await bot.api.sendMessageToChat(
           chatId,
-          `❌ Нет маршрутов для ${activity.name} в ${session.selectedLocation.name}.`,
+          `❌ К сожалению для выбранного города ${session.selectedLocation.name} для активности ${activity.name} маршрутов нет.`,
           {
             attachments: [
               {
                 type: 'inline_keyboard',
                 payload: {
-                  buttons: [[{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]]
+                  buttons: [
+                    [{ type: 'callback', text: '⬅️ Назад', payload: 'back_to_activities' }],
+                    [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+                  ]
                 }
               }
             ]

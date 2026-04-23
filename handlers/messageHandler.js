@@ -87,7 +87,7 @@ class MessageHandler {
         
         if (messageText === 'Ставрополь' || messageText === 'Stavropol') {
             location = this.routeService.getLocationById('stavropol');
-        } else if (messageText === 'Минеральные воды' || messageText === 'КавМинВоды' || messageText === 'KavMinVody') {
+        } else if (messageText === 'Минводы' || messageText === 'Минеральные воды' || messageText === 'КавМинВоды' || messageText === 'KavMinVody') {
             location = this.routeService.getLocationById('kavminvody');
         } else if (messageText === 'Кисловодск' || messageText === 'Kislovodsk') {
             location = this.routeService.getLocationById('kislovodsk');
@@ -177,13 +177,16 @@ class MessageHandler {
         } else {
             await this.bot.api.sendMessageToChat(
                 chatId,
-                `❌ Нет маршрутов для ${activity.name} в ${location.name}. Попробуйте другую активность.`,
+                `❌ К сожалению для выбранного города ${location.name} для активности ${activity.name} маршрутов нет.`,
                 {
                     attachments: [
                         {
                             type: 'inline_keyboard',
                             payload: {
-                                buttons: [[{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]]
+                                buttons: [
+                                    [{ type: 'callback', text: '⬅️ Назад', payload: 'back_to_activities' }],
+                                    [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+                                ]
                             }
                         }
                     ]

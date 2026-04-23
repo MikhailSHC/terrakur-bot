@@ -14,20 +14,15 @@
       color: #eef2f7;
       padding: 14px;
     }
-    h1 { margin: 0 0 12px; font-size: 22px; }
+    h1 { margin: 0 0 10px; font-size: 22px; }
     .muted { color: #9da7b3; font-size: 13px; margin-bottom: 12px; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      margin-bottom: 12px;
-    }
     .hidden { display: none !important; }
     .card {
       background: #171c22;
       border: 1px solid #26303b;
       border-radius: 12px;
       padding: 10px;
+      margin-bottom: 10px;
     }
     .label { color: #9da7b3; font-size: 11px; margin-bottom: 6px; }
     .value { font-size: 18px; font-weight: 700; }
@@ -50,6 +45,34 @@
       background: #1f7a46;
       border-color: #2a9a5b;
       color: #fff;
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .tab-btn {
+      border: 1px solid #2a3440;
+      background: #151a20;
+      color: #d7dde6;
+      border-radius: 10px;
+      padding: 8px 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: #1f7a46;
+      border-color: #2a9a5b;
+      color: #fff;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
     }
     .chart-head {
       display: flex;
@@ -77,7 +100,6 @@
       margin-right: 4px;
     }
     .dot-bars { background: #2a9a5b; }
-    .dot-line { background: #6ec1ff; }
     canvas {
       width: 100%;
       height: 200px;
@@ -86,6 +108,11 @@
       border-radius: 12px;
       margin-bottom: 12px;
     }
+    #dayDetails {
+      display: none;
+      margin-bottom: 12px;
+    }
+    #dayDetails.show { display: block; }
     .list {
       display: flex;
       flex-direction: column;
@@ -116,70 +143,150 @@
       cursor: pointer;
       flex-shrink: 0;
     }
+    .home-name {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .home-regularity {
+      color: #cbd5e1;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .heatmap-wrap { overflow-x: auto; }
+    .heatmap-grid {
+      display: grid;
+      grid-template-rows: repeat(7, 12px);
+      grid-auto-flow: column;
+      grid-auto-columns: 12px;
+      gap: 3px;
+      margin-bottom: 8px;
+      min-width: max-content;
+    }
+    .heat-day {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      background: #2a3038;
+      border: 1px solid #39424d;
+    }
+    .lvl-1 { background: #275438; border-color: #2f6543; }
+    .lvl-2 { background: #388e55; border-color: #46a567; }
+    .lvl-3 { background: #5bc878; border-color: #70d98f; }
+    .months {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      color: #9da7b3;
+      font-size: 11px;
+    }
+    .home-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .home-stat-value { font-size: 28px; font-weight: 700; }
+    .home-stat-label { color: #9da7b3; font-size: 12px; }
     .error { color: #ff8383; font-size: 13px; margin-top: 10px; }
-    #dayDetails {
-      display: none;
-      margin-bottom: 12px;
-    }
-    #dayDetails.show {
-      display: block;
-    }
   </style>
 </head>
 <body>
   <h1>Моя история</h1>
   <div class="muted" id="status">Загрузка статистики...</div>
-  <div class="filters">
-    <button type="button" class="chip active" id="summaryToggle">Суммарная статистика</button>
+
+  <div class="tabs">
+    <button type="button" class="tab-btn active" data-tab="home">Главная</button>
+    <button type="button" class="tab-btn" data-tab="stats">Статистика</button>
+    <button type="button" class="tab-btn" data-tab="history">История</button>
+    <button type="button" class="tab-btn" data-tab="user">Пользовательские данные</button>
   </div>
 
-  <div id="summaryPanel">
-  <div class="grid">
+  <section class="tab-panel active" id="panel-home">
     <div class="card">
-      <div class="label">Всего километров</div>
-      <div class="value" id="totalKm">0.00</div>
+      <div class="home-name" id="homeUserName">Пользователь</div>
+      <div class="home-regularity" id="homeTodayStatus">Сегодня тренировки не было</div>
+      <div class="heatmap-wrap">
+        <div class="heatmap-grid" id="regularityHeatmap"></div>
+        <div class="months" id="regularityMonths"></div>
+      </div>
+      <div class="home-stats">
+        <div class="card">
+          <div class="home-stat-value" id="streakNow">0</div>
+          <div class="home-stat-label">дней без перерыва</div>
+        </div>
+        <div class="card">
+          <div class="home-stat-value" id="streakMax">0</div>
+          <div class="home-stat-label">максимальная серия</div>
+        </div>
+        <div class="card">
+          <div class="home-stat-value" id="homeTotalSessions">0</div>
+          <div class="home-stat-label">тренировок всего</div>
+        </div>
+      </div>
     </div>
-    <div class="card">
-      <div class="label">Общее время</div>
-      <div class="value" id="totalTime">0 ч 0 м</div>
-    </div>
-    <div class="card">
-      <div class="label">Тренировок</div>
-      <div class="value" id="totalSessions">0</div>
-    </div>
-  </div>
-  <div class="grid">
-    <div class="card">
-      <div class="label">Ккал (оценка, 70 кг)</div>
-      <div class="value" id="estCalories">—</div>
-    </div>
-    <div class="card">
-      <div class="label">Личный рекорд</div>
-      <div class="value" id="personalBest">0.00 км</div>
-    </div>
-    <div class="card">
-      <div class="label">Дата рекорда</div>
-      <div class="value" id="personalBestDate">—</div>
-    </div>
-  </div>
-  </div>
+  </section>
 
-  <div class="filters" id="filters"></div>
-  <div class="chart-head">
-    <div class="chart-title">Динамика километража</div>
-    <div class="filters" id="metricFilters"></div>
-  </div>
-  <div class="chart-legend">
-    <span><span class="dot dot-bars"></span>Вертикальная гистограмма по дням</span>
-  </div>
-  <div class="filters" id="periodFilters"></div>
-  <canvas id="chart" width="360" height="200"></canvas>
-  <div class="card" id="dayDetails"></div>
+  <section class="tab-panel" id="panel-stats">
+    <div class="filters" id="filters"></div>
+    <div class="grid">
+      <div class="card">
+        <div class="label">Всего километров</div>
+        <div class="value" id="totalKm">0.00</div>
+      </div>
+      <div class="card">
+        <div class="label">Общее время</div>
+        <div class="value" id="totalTime">0 ч 0 м</div>
+      </div>
+      <div class="card">
+        <div class="label">Тренировок</div>
+        <div class="value" id="totalSessions">0</div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="label">Ккал (оценка, 70 кг)</div>
+        <div class="value" id="estCalories">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Личный рекорд</div>
+        <div class="value" id="personalBest">0.00 км</div>
+      </div>
+      <div class="card">
+        <div class="label">Дата рекорда</div>
+        <div class="value" id="personalBestDate">—</div>
+      </div>
+    </div>
+    <div class="chart-head">
+      <div class="chart-title">Динамика километража</div>
+      <div class="filters" id="metricFilters"></div>
+    </div>
+    <div class="chart-legend">
+      <span><span class="dot dot-bars"></span>Вертикальная гистограмма по дням</span>
+    </div>
+    <div class="filters" id="periodFilters"></div>
+    <canvas id="chart" width="360" height="200"></canvas>
+    <div class="card" id="dayDetails"></div>
+  </section>
 
-  <div class="list" id="sessionList"></div>
+  <section class="tab-panel" id="panel-history">
+    <div class="filters" id="historyFilters"></div>
+    <div class="list" id="routeHistoryList"></div>
+    <div class="card">
+      <div class="label">Тренировки (детализация)</div>
+      <div class="list" id="sessionList"></div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="panel-user">
+    <div class="card">
+      <div class="row-title">Пользовательские данные</div>
+      <div class="row-meta">Раздел добавлен. Функционал будет расширен в следующем блоке.</div>
+    </div>
+  </section>
   <div class="error" id="errorBox"></div>
 
   <script src="./estimateCalories.js?v=20260422-4"></script>
-  <script src="./history.js?v=20260422-5"></script>
+  <script src="./history.js?v=20260423-1"></script>
 </body>
 </html>
