@@ -70,11 +70,15 @@ let routeProgress = {
   isOnRoute: false,        // находится ли пользователь на маршруте
 
   lastProgressUpdate: 0,  // время последнего обновления прогресса
-  passedCoords: []
+  passedCoords: [],
+  axisFilledIndex: 0
 
 };
 
 const PROGRESS_UPDATE_INTERVAL_MS = 350;
+const AXIS_FILL_MIN_DURATION_MS = 260;
+const AXIS_FILL_MAX_DURATION_MS = 1400;
+const AXIS_FILL_MS_PER_VERTEX = 34;
 
 /** Источники GeoJSON: пройденный участок (сплошной зелёный) и остаток (синий пунктир) */
 const PLANNED_ROUTE_DONE_SOURCE = 'planned-route-done';
@@ -84,6 +88,10 @@ const ROUTE_PROGRESS_MIN_VERTEX_FOR_GREEN = 1;
 
 /** Пунктир от текущей позиции до точки старта (скрывается в зоне старта) */
 const NAV_TO_START_SOURCE = 'nav-to-start-line';
+const NAV_TO_START_LAYER_ID = 'nav-to-start-line-layer';
+const NAV_TO_START_BASE_OPACITY = 0.34;
+const NAV_TO_START_DIM_OPACITY = 0.12;
+const NAV_TO_START_BLINK_INTERVAL_MS = 620;
 const cinematicDemoEnabled = /(?:\?|&)demo=(?:cinematic|1|true)(?:&|$)/i.test(window.location.search);
 
 
@@ -322,6 +330,9 @@ let replayPanelEl = null;
 let isReplayRunning = false;
 let isReplayViewLocked = false;
 let simFinishTimerId = null;
+let navToStartBlinkTimerId = null;
+let navToStartBlinkVisible = true;
+let axisFillAnimationRafId = null;
 
 const REPLAY_SOURCE_ID = 'run-replay-source';
 const REPLAY_LAYER_ID = 'run-replay-line';
@@ -907,6 +918,7 @@ function removeLegacyPlannedRouteLayerIfAny() {
 
 function applyPlannedRouteFeature(routeFeature) {
   plannedRoute = routeFeature;
+  stopAxisFillAnimation();
   removeLegacyPlannedRouteLayerIfAny();
   ensurePlannedRouteProgressLayers();
 
@@ -922,6 +934,7 @@ function applyPlannedRouteFeature(routeFeature) {
   hasReachedFinish = false;
   routeProgress.isOnRoute = false;
   routeProgress.passedCoords = [];
+  routeProgress.axisFilledIndex = 0;
 
   removeStartMarker();
   removeFinishMarker();
@@ -1040,20 +1053,50 @@ function ensureNavToStartLayer() {
     data: { type: 'FeatureCollection', features: [] }
   });
   map.addLayer({
-    id: 'nav-to-start-line-layer',
+    id: NAV_TO_START_LAYER_ID,
     type: 'line',
     source: NAV_TO_START_SOURCE,
     paint: {
-      'line-color': '#ff9b35',
-      'line-width': 5,
-      'line-dasharray': [0.6, 1.1],
-      'line-opacity': 0.96
+      'line-color': '#ffb56c',
+      'line-width': 4,
+      'line-dasharray': [1.1, 1.8],
+      'line-opacity': NAV_TO_START_BASE_OPACITY
     }
   });
 }
 
+function setNavToStartOpacity(opacity) {
+  if (!map || typeof map.setPaintProperty !== 'function') return;
+  if (!map.getLayer || !map.getLayer(NAV_TO_START_LAYER_ID)) return;
+  map.setPaintProperty(NAV_TO_START_LAYER_ID, 'line-opacity', opacity);
+}
+
+function stopNavToStartBlink() {
+  if (navToStartBlinkTimerId !== null) {
+    clearInterval(navToStartBlinkTimerId);
+    navToStartBlinkTimerId = null;
+  }
+  navToStartBlinkVisible = true;
+  setNavToStartOpacity(NAV_TO_START_BASE_OPACITY);
+}
+
+function startNavToStartBlink() {
+  if (!map || typeof map.setPaintProperty !== 'function') return;
+  if (!map.getLayer || !map.getLayer(NAV_TO_START_LAYER_ID)) return;
+  if (navToStartBlinkTimerId !== null) return;
+  navToStartBlinkVisible = true;
+  setNavToStartOpacity(NAV_TO_START_BASE_OPACITY);
+  navToStartBlinkTimerId = setInterval(() => {
+    navToStartBlinkVisible = !navToStartBlinkVisible;
+    setNavToStartOpacity(
+      navToStartBlinkVisible ? NAV_TO_START_BASE_OPACITY : NAV_TO_START_DIM_OPACITY
+    );
+  }, NAV_TO_START_BLINK_INTERVAL_MS);
+}
+
 function clearNavToStartLine() {
   if (!map?.getSource(NAV_TO_START_SOURCE)) return;
+  stopNavToStartBlink();
   map.getSource(NAV_TO_START_SOURCE).setData({ type: 'FeatureCollection', features: [] });
 }
 
@@ -1081,6 +1124,7 @@ function updateNavToStartLineIfNeeded(userLat, userLng) {
     [a, b],
     [c, d]
   ]);
+  startNavToStartBlink();
 }
 
 function updateGPSQuality(_accuracy) {
@@ -1497,6 +1541,7 @@ function getUserLocation() {
 // === ПРОГРЕСС ПО МАРШРУТУ ===
 
 function initializeRouteProgress() {
+  stopAxisFillAnimation();
   const coords = getRouteLineCoordinates();
   if (!coords.length) return;
 
@@ -1521,7 +1566,8 @@ function initializeRouteProgress() {
   routeProgress.completionPercent = 0;
   routeProgress.offRouteSince = null;
   routeProgress.maxClosestIndex = 0;
-  routeProgress.passedCoords = [];
+  routeProgress.passedCoords = coords.length ? [coords[0]] : [];
+  routeProgress.axisFilledIndex = 0;
 
   applyPlannedRouteProgressToMap(0);
 
@@ -1576,17 +1622,72 @@ function updateRouteProgress(lat, lng) {
 
   applyPlannedRouteProgressToMap(progressIndex);
 
-  const currentCoord = [lng, lat];
-  routeProgress.passedCoords.push(currentCoord);
-  if (routeProgress.passedCoords.length > 1200) {
-    routeProgress.passedCoords = routeProgress.passedCoords.slice(-1200);
-  }
-  setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, routeProgress.passedCoords);
+  animateAxisFillToIndex(progressIndex, coords);
 
   if (routeProgressEl) {
     routeProgressEl.style.display = 'block';
     routeProgressEl.innerText = `Прогресс: ${completionPercent}% | Осталось: ${(distanceRemainingM / 1000).toFixed(2)} км`;
   }
+}
+
+function stopAxisFillAnimation() {
+  if (axisFillAnimationRafId !== null && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(axisFillAnimationRafId);
+  }
+  axisFillAnimationRafId = null;
+}
+
+function appendAxisCoordsToIndex(targetIndex, coords) {
+  const safeTarget = Math.min(Math.max(0, targetIndex), coords.length - 1);
+  const axisFromIndex = Math.max(0, routeProgress.axisFilledIndex || 0);
+  if (!routeProgress.passedCoords.length && coords.length) {
+    routeProgress.passedCoords.push(coords[0]);
+  }
+  if (safeTarget <= axisFromIndex) return;
+  for (let i = axisFromIndex + 1; i <= safeTarget; i += 1) {
+    routeProgress.passedCoords.push(coords[i]);
+  }
+  routeProgress.axisFilledIndex = safeTarget;
+  if (routeProgress.passedCoords.length > 1200) {
+    routeProgress.passedCoords = routeProgress.passedCoords.slice(-1200);
+  }
+  setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, routeProgress.passedCoords);
+}
+
+function animateAxisFillToIndex(targetIndex, coords) {
+  const fromIndex = Math.max(0, routeProgress.axisFilledIndex || 0);
+  const safeTarget = Math.min(Math.max(0, targetIndex), coords.length - 1);
+  if (safeTarget <= fromIndex) {
+    if (routeProgress.passedCoords.length >= 2) {
+      setGeoJSONLineSource(PLANNED_ROUTE_DONE_SOURCE, routeProgress.passedCoords);
+    }
+    return;
+  }
+  const gap = safeTarget - fromIndex;
+  if (gap <= 1 || typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+    appendAxisCoordsToIndex(safeTarget, coords);
+    return;
+  }
+  stopAxisFillAnimation();
+  const durationMs = Math.min(
+    AXIS_FILL_MAX_DURATION_MS,
+    Math.max(AXIS_FILL_MIN_DURATION_MS, gap * AXIS_FILL_MS_PER_VERTEX)
+  );
+  const startTs = Date.now();
+  const tick = () => {
+    const elapsed = Date.now() - startTs;
+    const t = Math.min(1, elapsed / durationMs);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const animatedIndex = fromIndex + Math.floor(gap * eased);
+    appendAxisCoordsToIndex(animatedIndex, coords);
+    if (t >= 1 || routeProgress.axisFilledIndex >= safeTarget) {
+      appendAxisCoordsToIndex(safeTarget, coords);
+      axisFillAnimationRafId = null;
+      return;
+    }
+    axisFillAnimationRafId = window.requestAnimationFrame(tick);
+  };
+  axisFillAnimationRafId = window.requestAnimationFrame(tick);
 }
 
 
