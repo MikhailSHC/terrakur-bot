@@ -20,6 +20,9 @@ function getMaxInitDataRaw(req) {
   };
   const fromHeaders = req.headers['x-max-init-data'] || req.headers['x-webapp-data'];
   if (typeof fromHeaders === 'string' && fromHeaders.trim()) return decodeHeaderValue(fromHeaders);
+  if (typeof req.query?.maxInitData === 'string' && req.query.maxInitData.trim()) {
+    return decodeHeaderValue(req.query.maxInitData);
+  }
   if (typeof req.body?.maxInitData === 'string' && req.body.maxInitData.trim()) return req.body.maxInitData.trim();
   return '';
 }

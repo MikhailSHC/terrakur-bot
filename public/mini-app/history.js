@@ -112,8 +112,15 @@ function getParams() {
 function buildAuthHeaders(authToken, maxInitData) {
   const headers = {};
   if (authToken) headers['x-miniapp-auth'] = authToken;
-  if (maxInitData) headers['x-max-init-data'] = encodeURIComponent(maxInitData);
   return headers;
+}
+
+function buildAuthQuery(chatId, authToken, maxInitData) {
+  const query = new URLSearchParams();
+  if (chatId) query.set('chatId', String(chatId));
+  if (authToken) query.set('authToken', authToken);
+  if (!authToken && maxInitData) query.set('maxInitData', maxInitData);
+  return query;
 }
 
 function formatDuration(totalSec) {
@@ -504,8 +511,7 @@ function switchTab(tabId) {
 }
 
 async function fetchSessions(chatId, authToken, maxInitData) {
-  const query = new URLSearchParams({ chatId });
-  if (authToken) query.set('authToken', authToken);
+  const query = buildAuthQuery(chatId, authToken, maxInitData);
   const resp = await fetch(`/api/sessions?${query.toString()}`, {
     headers: buildAuthHeaders(authToken, maxInitData)
   });
@@ -525,8 +531,7 @@ async function fetchSessions(chatId, authToken, maxInitData) {
 }
 
 async function saveProfile(chatId, authToken, maxInitData, profile) {
-  const query = new URLSearchParams({ chatId });
-  if (authToken) query.set('authToken', authToken);
+  const query = buildAuthQuery(chatId, authToken, maxInitData);
   const resp = await fetch(`/api/profile?${query.toString()}`, {
     method: 'POST',
     headers: {
@@ -541,8 +546,7 @@ async function saveProfile(chatId, authToken, maxInitData, profile) {
 }
 
 async function saveLocation(chatId, authToken, maxInitData, latitude, longitude) {
-  const query = new URLSearchParams({ chatId });
-  if (authToken) query.set('authToken', authToken);
+  const query = buildAuthQuery(chatId, authToken, maxInitData);
   const resp = await fetch(`/api/profile/location?${query.toString()}`, {
     method: 'POST',
     headers: {
@@ -557,12 +561,9 @@ async function saveLocation(chatId, authToken, maxInitData, latitude, longitude)
 }
 
 async function deleteHistoryEntry(chatId, authToken, maxInitData, entry) {
-  const query = new URLSearchParams({
-    chatId,
-    routeId: String(entry.routeId || ''),
-    timestamp: String(entry.timestamp || '')
-  });
-  if (authToken) query.set('authToken', authToken);
+  const query = buildAuthQuery(chatId, authToken, maxInitData);
+  query.set('routeId', String(entry.routeId || ''));
+  query.set('timestamp', String(entry.timestamp || ''));
   const resp = await fetch(`/api/history?${query.toString()}`, {
     method: 'DELETE',
     headers: buildAuthHeaders(authToken, maxInitData)
@@ -597,8 +598,8 @@ async function init() {
   const locationStatusEl = document.getElementById('locationStatus');
   const updateLocationBtnEl = document.getElementById('updateLocationBtn');
 
-  if (!chatId) {
-    errorBox.textContent = 'Отсутствует chatId в ссылке mini-app.';
+  if (!chatId && !maxInitData) {
+    errorBox.textContent = 'Отсутствуют параметры авторизации mini-app.';
     statusEl.textContent = 'Ошибка параметров';
     return;
   }
