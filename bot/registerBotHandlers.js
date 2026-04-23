@@ -50,6 +50,29 @@ function registerBotHandlers(bot, deps) {
     messageHandler
   } = deps;
   const ROUTES_PAGE_SIZE = 5;
+  const extractMessengerFullName = (ctx) => {
+    const candidates = [
+      ctx?.sender,
+      ctx?.message?.sender,
+      ctx?.message?.body?.sender,
+      ctx?.message?.from,
+      ctx?.from,
+      ctx?.user
+    ].filter(Boolean);
+    for (const user of candidates) {
+      const first = String(user.first_name || user.firstName || user.name || '').trim();
+      const last = String(user.last_name || user.lastName || '').trim();
+      const username = String(user.username || user.login || '').trim();
+      const full = `${first} ${last}`.trim() || username;
+      if (full) return full;
+    }
+    return '';
+  };
+  const syncUserNameFromContext = (ctx, chatId) => {
+    const fullName = extractMessengerFullName(ctx);
+    if (!fullName || typeof userService.updateUserProfile !== 'function') return;
+    userService.updateUserProfile(chatId, { fullName });
+  };
   const difficultyLabel = (difficulty) => {
     if (difficulty === 1) return 'Легкий';
     if (difficulty === 2) return 'Средний';
@@ -172,22 +195,30 @@ function registerBotHandlers(bot, deps) {
   bot.command('start', async (ctx) => {
     const chatId = ctx.chatId;
     if (!chatId) return;
+    syncUserNameFromContext(ctx, chatId);
     userService.getUserSession(chatId);
     await commandHandler.handleStart(chatId, { withGreeting: true });
   });
 
   bot.command('help', async (ctx) => {
-    if (ctx.chatId) await commandHandler.handleHelp(ctx.chatId);
+    if (ctx.chatId) {
+      syncUserNameFromContext(ctx, ctx.chatId);
+      await commandHandler.handleHelp(ctx.chatId);
+    }
   });
 
   bot.command('profile', async (ctx) => {
-    if (ctx.chatId) await commandHandler.handleProfile(ctx.chatId);
+    if (ctx.chatId) {
+      syncUserNameFromContext(ctx, ctx.chatId);
+      await commandHandler.handleProfile(ctx.chatId);
+    }
   });
 
   bot.on('message_callback', async (ctx) => {
     const chatId = ctx.message?.recipient?.chat_id || ctx.chatId;
     const callbackData = ctx.callback?.payload;
     if (!chatId || !callbackData) return;
+    syncUserNameFromContext(ctx, chatId);
     if (callbackData === 'noop') return;
 
     const callbackMessageId = getCallbackMessageId(ctx);
@@ -253,6 +284,13 @@ function registerBotHandlers(bot, deps) {
 
     if (callbackData === 'nearby_routes') {
       const prev = userService.getUserSession(chatId);
+      if (!prev.lastLocation) {
+        await bot.api.sendMessageToChat(
+          chatId,
+          '⚠️ Для раздела «Рядом со мной» сначала укажите геолокацию в mini-app: «Моя история» → «Пользовательские данные».'
+        );
+        return;
+      }
       userService.setUserState(chatId, prev.state, { locationShareIntent: null });
       await bot.api.sendMessageToChat(chatId, '📍 Выберите вид активности — подберу ближайшие маршруты с учётом этого типа:', {
         attachments: [keyboards.nearbyActivityPickKeyboard]
@@ -268,36 +306,26 @@ function registerBotHandlers(bot, deps) {
         nearbyPendingActivityId: activityId,
         locationShareIntent: null
       });
-      if (session.lastLocation) {
-        return showNearbyRoutesForUser(
+      if (!session.lastLocation) {
+        await bot.api.sendMessageToChat(
           chatId,
-          session.lastLocation.latitude,
-          session.lastLocation.longitude,
-          activityId
+          '⚠️ Геолокация не указана. Добавьте её в mini-app: «Моя история» → «Пользовательские данные».'
         );
+        return;
       }
-      await bot.api.sendMessageToChat(
+      return showNearbyRoutesForUser(
         chatId,
-        '📍 Поделитесь геолокацией — по ней отсортирую маршруты по расстоянию.',
-        { attachments: [keyboards.geoRequestKeyboard] }
+        session.lastLocation.latitude,
+        session.lastLocation.longitude,
+        activityId
       );
-      return;
     }
 
-    if (callbackData === 'settings') {
+    if (callbackData === 'change_location' || callbackData === 'settings') {
       await bot.api.sendMessageToChat(
         chatId,
-        '⚙️ Настройки:\n\nВы можете изменить сохранённое местоположение для поиска маршрутов рядом.',
-        { attachments: [keyboards.settingsKeyboard] }
+        '⚙️ Настройки геолокации перенесены в mini-app: «Моя история» → «Пользовательские данные».'
       );
-      return;
-    }
-
-    if (callbackData === 'change_location') {
-      userService.setUserState(chatId, 'settings', { locationShareIntent: 'update_only' });
-      await bot.api.sendMessageToChat(chatId, '📍 Выберите новое местоположение:', {
-        attachments: [keyboards.geoRequestKeyboard]
-      });
       return;
     }
 
@@ -447,6 +475,7 @@ function registerBotHandlers(bot, deps) {
       const chatId = ctx.chatId || ctx.message?.recipient?.chat_id;
       const message = ctx.message;
       if (!chatId || !message) return;
+      syncUserNameFromContext(ctx, chatId);
 
       const body = message.body || {};
       const attachments = Array.isArray(body.attachments) ? body.attachments : [];

@@ -16,6 +16,14 @@ function readGeoJsonRoutes(projectRoot) {
 function createApiRouter({ userService, routeService, miniAppAuth, config }) {
   const router = express.Router();
   const dgisApiKey = typeof config?.DGIS_API_KEY === 'string' ? config.DGIS_API_KEY.trim() : '';
+  const estimateWithProfile = (distanceM, durationSec, profile = {}) => {
+    const weightKg = Number(profile.weightKg);
+    const age = Number(profile.age);
+    const base = estimateWorkoutCaloriesKcal(distanceM, durationSec, Number.isFinite(weightKg) && weightKg > 0 ? weightKg : 70);
+    if (!Number.isFinite(age) || age <= 0) return base;
+    const ageFactor = Math.max(0.9, Math.min(1.1, 1 + (age - 30) * 0.002));
+    return base * ageFactor;
+  };
 
   router.get('/health', (req, res) => {
     res.json({ ok: true, message: 'API is alive' });
@@ -194,7 +202,10 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       const sessionId = session.sessionId || Date.now().toString();
       const durationSec = Number(session.durationSec) || 0;
       const distanceM = Number(session.distanceM) || 0;
-      const estCaloriesKcal = Math.round(estimateWorkoutCaloriesKcal(distanceM, durationSec));
+      const profile = typeof userService.getUserProfile === 'function'
+        ? userService.getUserProfile(chatId)
+        : {};
+      const estCaloriesKcal = Math.round(estimateWithProfile(distanceM, durationSec, profile));
       const sessionRecord = {
         id: sessionId,
         startedAt: session.startedAt,
@@ -229,15 +240,63 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
         ? userService.getUserSession(req.chatId)
         : null;
       const history = Array.isArray(user?.history) ? user.history : [];
+      const profile = typeof userService.getUserProfile === 'function'
+        ? userService.getUserProfile(req.chatId)
+        : { fullName: '', weightKg: null, age: null, hasLocation: false };
       return res.json({
         ok: true,
         sessions,
         lifetime,
         history,
-        profile: {
-          fullName: typeof user?.fullName === 'string' ? user.fullName : ''
-        }
+        profile
       });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  router.get('/profile', miniAppAuth, (req, res) => {
+    try {
+      const profile = typeof userService.getUserProfile === 'function'
+        ? userService.getUserProfile(req.chatId)
+        : { fullName: '', weightKg: null, age: null, hasLocation: false };
+      return res.json({ ok: true, profile });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  router.post('/profile', miniAppAuth, (req, res) => {
+    try {
+      if (typeof userService.updateUserProfile !== 'function') {
+        return res.status(500).json({ ok: false, error: 'Profile update is not supported' });
+      }
+      const profile = userService.updateUserProfile(req.chatId, {
+        weightKg: req.body?.weightKg,
+        age: req.body?.age
+      });
+      return res.json({ ok: true, profile });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  router.post('/profile/location', miniAppAuth, (req, res) => {
+    try {
+      const latitude = Number(req.body?.latitude);
+      const longitude = Number(req.body?.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return res.status(400).json({ ok: false, error: 'latitude and longitude are required' });
+      }
+      userService.setLastLocation(req.chatId, {
+        latitude,
+        longitude,
+        updatedAt: new Date().toISOString()
+      });
+      const profile = typeof userService.getUserProfile === 'function'
+        ? userService.getUserProfile(req.chatId)
+        : { fullName: '', weightKg: null, age: null, hasLocation: true };
+      return res.json({ ok: true, profile });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }

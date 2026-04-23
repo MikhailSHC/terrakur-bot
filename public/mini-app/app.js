@@ -128,6 +128,8 @@ const replayDebugEnabled = urlParams.get('replayDebug') === '1';
 const chatId      = urlParams.get('chatId') || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
 const activityIdFromUrl = urlParams.get('activityId');
+let userWeightKg = 70;
+let userAge = null;
 const mapProvider = (urlParams.get('mapProvider') || '').toLowerCase();
 const dgisKeyFromUrl = (urlParams.get('dgisKey') || '').trim();
 const miniAppRuntime = window.__MINI_APP_RUNTIME__ || {};
@@ -222,6 +224,28 @@ async function ensureDgisApiKeyLoaded() {
 function getAuthHeaders() {
   if (!authToken) return {};
   return { 'x-miniapp-auth': authToken };
+}
+
+function estimateCaloriesForUser(distanceM, durationSec) {
+  const base = estimateWorkoutCaloriesKcal(distanceM, durationSec, userWeightKg);
+  const age = Number(userAge);
+  if (!Number.isFinite(age) || age <= 0) return base;
+  const ageFactor = Math.max(0.9, Math.min(1.1, 1 + (age - 30) * 0.002));
+  return base * ageFactor;
+}
+
+async function loadUserProfileForCalories() {
+  const query = new URLSearchParams({ chatId });
+  if (authToken) query.set('authToken', authToken);
+  const res = await fetch(`/api/profile?${query.toString()}`, { headers: getAuthHeaders() });
+  if (!res.ok) return;
+  const data = await res.json();
+  if (!data?.ok) return;
+  const profile = data.profile || {};
+  const weight = Number(profile.weightKg);
+  userWeightKg = Number.isFinite(weight) && weight > 0 ? weight : 70;
+  const age = Number(profile.age);
+  userAge = Number.isFinite(age) && age > 0 ? age : null;
 }
 
 function mapEventToLngLat(evt) {
@@ -2353,7 +2377,7 @@ function updateStatsUI() {
 
   if (estCaloriesEl) {
     estCaloriesEl.textContent = formatCaloriesKcalShort(
-      estimateWorkoutCaloriesKcal(totalDistanceM, elapsedSec)
+      estimateCaloriesForUser(totalDistanceM, elapsedSec)
     );
   }
 
@@ -2604,7 +2628,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
   const secs = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
   const speedKmh = elapsedSec > 0 ? (distanceM / 1000) / (elapsedSec / 3600) : 0;
   const avgSpeed = Number.isFinite(speedKmh) && speedKmh > 0 ? `${speedKmh.toFixed(1).replace('.', ',')} км/ч` : '—';
-  const kcal = formatCaloriesKcalShort(estimateWorkoutCaloriesKcal(distanceM, elapsedSec));
+  const kcal = formatCaloriesKcalShort(estimateCaloriesForUser(distanceM, elapsedSec));
   const kcalSub = 'при весе 70 кг';
   const saveBadge = isSaved
     ? `<div style="background:rgba(34,197,94,0.16);border:1px solid rgba(34,197,94,0.45);color:#d9ffe8;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:600;margin-bottom:8px;">✅ Тренировка сохранена</div>`
@@ -3222,7 +3246,7 @@ async function stopAndSave() {
 
     avgPaceSecPerKm,
 
-    estCaloriesKcal: Math.round(estimateWorkoutCaloriesKcal(distanceM, elapsedSec)),
+    estCaloriesKcal: Math.round(estimateCaloriesForUser(distanceM, elapsedSec)),
 
     geojson: geojsonTrack,
 
@@ -3379,5 +3403,7 @@ ensureCinematicStyles();
 ensureUiEnhancements();
 syncStopButtonVisibility();
 ensureDgisApiKeyLoaded().finally(() => {
-  initMap();
+  loadUserProfileForCalories().finally(() => {
+    initMap();
+  });
 });

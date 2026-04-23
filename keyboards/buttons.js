@@ -21,9 +21,6 @@ function getMainMenuKeyboard(historyUrl) {
         ],
         [historyButton],
         [
-          { type: 'callback', text: '⚙️ Настройки', payload: 'settings' }
-        ],
-        [
           { type: 'callback', text: '❓ Помощь', payload: 'help' }
         ]
       ]

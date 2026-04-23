@@ -17,6 +17,21 @@ const METRIC_LABELS = {
 };
 
 const MONTH_SHORT = ['янв.', 'февр.', 'март', 'апр.', 'май', 'июнь', 'июль', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'];
+const DEFAULT_WEIGHT_KG = 70;
+
+let profileWeightKg = null;
+let profileAge = null;
+
+function estimateCaloriesWithProfile(distanceM, durationSec) {
+  const weight = Number.isFinite(Number(profileWeightKg)) && Number(profileWeightKg) > 0
+    ? Number(profileWeightKg)
+    : DEFAULT_WEIGHT_KG;
+  const base = estimateWorkoutCaloriesKcal(distanceM, durationSec, weight);
+  const age = Number(profileAge);
+  if (!Number.isFinite(age) || age <= 0) return base;
+  const ageFactor = Math.max(0.9, Math.min(1.1, 1 + (age - 30) * 0.002));
+  return base * ageFactor;
+}
 
 function getParams() {
   const params = new URLSearchParams(window.location.search);
@@ -34,7 +49,7 @@ function formatDuration(totalSec) {
 }
 
 function formatTotalCaloriesSummary(durationSec, distanceM) {
-  const kcal = estimateWorkoutCaloriesKcal(distanceM, durationSec);
+  const kcal = estimateCaloriesWithProfile(distanceM, durationSec);
   if (!Number.isFinite(kcal) || kcal <= 0) return '—';
   return `${formatCaloriesKcalShort(kcal)} ккал`;
 }
@@ -69,7 +84,7 @@ function buildMetricSeries(sessions, periodDays, metric) {
     agg.distanceM += Number(s.distanceM) || 0;
     agg.durationSec += Number(s.durationSec) || 0;
     const bySession = Number(s.estCaloriesKcal);
-    const fallbackCalories = estimateWorkoutCaloriesKcal(s.distanceM, s.durationSec);
+    const fallbackCalories = estimateCaloriesWithProfile(s.distanceM, s.durationSec);
     agg.estCaloriesKcal += Number.isFinite(bySession) && bySession > 0 ? bySession : fallbackCalories;
     const activityId = s.activityId || 'unknown';
     if (!agg.activities[activityId]) agg.activities[activityId] = 0;
@@ -266,7 +281,7 @@ function renderSessions(container, sessions, onDelete) {
       row.className = 'row';
       const km = ((Number(s.distanceM) || 0) / 1000).toFixed(2);
       const activityLabel = ACTIVITY_LABELS[s.activityId] || 'Активность';
-      const kcal = Number(s.estCaloriesKcal) > 0 ? Number(s.estCaloriesKcal) : estimateWorkoutCaloriesKcal(s.distanceM, s.durationSec);
+      const kcal = Number(s.estCaloriesKcal) > 0 ? Number(s.estCaloriesKcal) : estimateCaloriesWithProfile(s.distanceM, s.durationSec);
       row.innerHTML = `
         <div class="row-head">
           <div class="row-title">${activityLabel} - ${km} км</div>
@@ -439,6 +454,38 @@ async function deleteSession(chatId, authToken, sessionId) {
   return json;
 }
 
+async function saveProfile(chatId, authToken, profile) {
+  const query = new URLSearchParams({ chatId });
+  if (authToken) query.set('authToken', authToken);
+  const resp = await fetch(`/api/profile?${query.toString()}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { 'x-miniapp-auth': authToken } : {})
+    },
+    body: JSON.stringify(profile)
+  });
+  const json = await resp.json();
+  if (!resp.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить профиль');
+  return json.profile || {};
+}
+
+async function saveLocation(chatId, authToken, latitude, longitude) {
+  const query = new URLSearchParams({ chatId });
+  if (authToken) query.set('authToken', authToken);
+  const resp = await fetch(`/api/profile/location?${query.toString()}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { 'x-miniapp-auth': authToken } : {})
+    },
+    body: JSON.stringify({ latitude, longitude })
+  });
+  const json = await resp.json();
+  if (!resp.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить местоположение');
+  return json.profile || {};
+}
+
 async function init() {
   const { chatId, authToken } = getParams();
   const statusEl = document.getElementById('status');
@@ -456,6 +503,12 @@ async function init() {
   const homeTodayStatusEl = document.getElementById('homeTodayStatus');
   const regularityHeatmapEl = document.getElementById('regularityHeatmap');
   const regularityMonthsEl = document.getElementById('regularityMonths');
+  const userWeightInputEl = document.getElementById('userWeightInput');
+  const userAgeInputEl = document.getElementById('userAgeInput');
+  const saveUserProfileBtnEl = document.getElementById('saveUserProfileBtn');
+  const userProfileStatusEl = document.getElementById('userProfileStatus');
+  const locationStatusEl = document.getElementById('locationStatus');
+  const updateLocationBtnEl = document.getElementById('updateLocationBtn');
 
   if (!chatId) {
     errorBox.textContent = 'Отсутствует chatId в ссылке mini-app.';
@@ -475,7 +528,16 @@ async function init() {
   const allSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
   const historyRecords = Array.isArray(payload.history) ? payload.history : [];
   const fullName = (payload.profile && typeof payload.profile.fullName === 'string' && payload.profile.fullName.trim()) || 'Пользователь';
+  profileWeightKg = payload?.profile?.weightKg ?? null;
+  profileAge = payload?.profile?.age ?? null;
   homeUserNameEl.textContent = fullName;
+  if (userWeightInputEl) userWeightInputEl.value = Number.isFinite(Number(profileWeightKg)) ? String(profileWeightKg) : '';
+  if (userAgeInputEl) userAgeInputEl.value = Number.isFinite(Number(profileAge)) ? String(profileAge) : '';
+  if (locationStatusEl) {
+    locationStatusEl.textContent = payload?.profile?.hasLocation
+      ? 'Геолокация указана'
+      : 'Геолокация не указана';
+  }
 
   let listSessions = [...allSessions];
   let selectedActivity = 'all';
@@ -567,7 +629,8 @@ async function init() {
     document.getElementById('streakMax').textContent = String(streaks.best);
     document.getElementById('homeTotalSessions').textContent = String(listSessions.length);
 
-    statusEl.textContent = `Данные обновлены · ${listSessions.length} тренировок`;
+    const weightText = Number.isFinite(Number(profileWeightKg)) ? `${profileWeightKg} кг` : 'примерный вес';
+    statusEl.textContent = `Данные обновлены · ${listSessions.length} тренировок · ${weightText}`;
   }
 
   renderAll();
@@ -597,6 +660,53 @@ async function init() {
   });
 
   window.addEventListener('resize', renderAll);
+
+  if (saveUserProfileBtnEl) {
+    saveUserProfileBtnEl.addEventListener('click', async () => {
+      try {
+        const profile = await saveProfile(chatId, authToken, {
+          weightKg: userWeightInputEl?.value || null,
+          age: userAgeInputEl?.value || null
+        });
+        profileWeightKg = profile.weightKg ?? null;
+        profileAge = profile.age ?? null;
+        const resolvedName = (profile.fullName || '').trim() || 'Пользователь';
+        homeUserNameEl.textContent = resolvedName;
+        if (userProfileStatusEl) userProfileStatusEl.textContent = 'Данные сохранены';
+        renderAll();
+      } catch (err) {
+        if (userProfileStatusEl) userProfileStatusEl.textContent = err.message || 'Ошибка сохранения профиля';
+      }
+    });
+  }
+
+  if (updateLocationBtnEl) {
+    updateLocationBtnEl.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        if (locationStatusEl) locationStatusEl.textContent = 'Геолокация недоступна на устройстве';
+        return;
+      }
+      if (locationStatusEl) locationStatusEl.textContent = 'Определяем местоположение...';
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const profile = await saveLocation(chatId, authToken, pos.coords.latitude, pos.coords.longitude);
+            if (locationStatusEl) {
+              locationStatusEl.textContent = profile?.hasLocation
+                ? 'Геолокация сохранена'
+                : 'Геолокация не указана';
+            }
+          } catch (err) {
+            if (locationStatusEl) locationStatusEl.textContent = err.message || 'Ошибка сохранения геолокации';
+          }
+        },
+        () => {
+          if (locationStatusEl) locationStatusEl.textContent = 'Не удалось получить геолокацию';
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+    });
+  }
 }
 
 init();

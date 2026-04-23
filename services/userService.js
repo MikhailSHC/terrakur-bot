@@ -87,6 +87,9 @@ class UserService {
         // Оставляем только полезные для продукта поля.
         history,
         sessions,
+        fullName: typeof user.fullName === 'string' ? user.fullName : '',
+        weightKg: Number.isFinite(Number(user.weightKg)) ? Number(user.weightKg) : null,
+        age: Number.isFinite(Number(user.age)) ? Number(user.age) : null,
         totalDistanceM: Number(user.totalDistanceM) || 0,
         totalDurationSec: Number(user.totalDurationSec) || 0,
         totalSessions: Number(user.totalSessions) || 0,
@@ -141,6 +144,9 @@ class UserService {
         availableRoutes: [],
         history: [],
         sessions: [],
+        fullName: '',
+        weightKg: null,
+        age: null,
         totalDistanceM: 0,
         totalDurationSec: 0,
         totalSessions: 0,
@@ -162,6 +168,9 @@ class UserService {
     if (typeof u.totalDistanceM !== 'number') u.totalDistanceM = 0;
     if (typeof u.totalDurationSec !== 'number') u.totalDurationSec = 0;
     if (typeof u.totalSessions !== 'number') u.totalSessions = 0;
+    if (!('fullName' in u)) u.fullName = '';
+    if (!('weightKg' in u)) u.weightKg = null;
+    if (!('age' in u)) u.age = null;
     if (!('lastLocation' in u)) u.lastLocation = null;
     if (!('hasSeenWelcome' in u)) u.hasSeenWelcome = false;
     if (!u.createdAt) u.createdAt = new Date().toISOString();
@@ -301,6 +310,53 @@ class UserService {
     session.lastLocation = lastLocation;
     session.lastUpdated = new Date().toISOString();
     this.saveData();
+  }
+
+  getUserProfile(chatId) {
+    const session = this.getUserSession(chatId);
+    return {
+      fullName: typeof session.fullName === 'string' ? session.fullName : '',
+      weightKg: Number.isFinite(Number(session.weightKg)) ? Number(session.weightKg) : null,
+      age: Number.isFinite(Number(session.age)) ? Number(session.age) : null,
+      hasLocation: Boolean(
+        session.lastLocation &&
+        Number.isFinite(Number(session.lastLocation.latitude)) &&
+        Number.isFinite(Number(session.lastLocation.longitude))
+      )
+    };
+  }
+
+  updateUserProfile(chatId, profilePatch = {}) {
+    const session = this.getUserSession(chatId);
+    let changed = false;
+    if (typeof profilePatch.fullName === 'string') {
+      const next = profilePatch.fullName.trim();
+      if (next !== (session.fullName || '')) {
+        session.fullName = next;
+        changed = true;
+      }
+    }
+    if (profilePatch.weightKg !== undefined) {
+      const n = Number(profilePatch.weightKg);
+      const next = Number.isFinite(n) && n > 0 ? n : null;
+      if (next !== session.weightKg) {
+        session.weightKg = next;
+        changed = true;
+      }
+    }
+    if (profilePatch.age !== undefined) {
+      const n = Number(profilePatch.age);
+      const next = Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+      if (next !== session.age) {
+        session.age = next;
+        changed = true;
+      }
+    }
+    if (changed) {
+      session.lastUpdated = new Date().toISOString();
+      this.saveData();
+    }
+    return this.getUserProfile(chatId);
   }
 
   // === Новое: тренировочные сессии ===

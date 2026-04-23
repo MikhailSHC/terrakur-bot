@@ -199,7 +199,7 @@
     <button type="button" class="tab-btn active" data-tab="home">Главная</button>
     <button type="button" class="tab-btn" data-tab="stats">Статистика</button>
     <button type="button" class="tab-btn" data-tab="history">История</button>
-    <button type="button" class="tab-btn" data-tab="user">Пользовательские данные</button>
+    <button type="button" class="tab-btn" data-tab="user">Пользовательские настройки</button>
   </div>
 
   <section class="tab-panel active" id="panel-home">
@@ -280,13 +280,24 @@
 
   <section class="tab-panel" id="panel-user">
     <div class="card">
-      <div class="row-title">Пользовательские данные</div>
-      <div class="row-meta">Раздел добавлен. Функционал будет расширен в следующем блоке.</div>
+      <div class="row-title">Пользовательские настройки</div>
+      <div class="row-meta" style="margin-bottom:8px;">Заполните данные для более точного расчета калорий.</div>
+      <div style="display:grid;gap:8px;">
+        <input id="userWeightInput" type="number" min="20" max="300" step="0.1" placeholder="Вес, кг" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
+        <input id="userAgeInput" type="number" min="5" max="120" step="1" placeholder="Возраст" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
+        <button type="button" id="saveUserProfileBtn" class="chip active">Сохранить данные</button>
+      </div>
+      <div class="row-meta" id="userProfileStatus" style="margin-top:8px;">Если поля не заполнены, используются примерные расчеты.</div>
+    </div>
+    <div class="card">
+      <div class="row-title">Местоположение для “Рядом со мной”</div>
+      <div class="row-meta" id="locationStatus" style="margin-bottom:8px;">Геолокация не указана</div>
+      <button type="button" id="updateLocationBtn" class="chip">Изменить местоположение</button>
     </div>
   </section>
   <div class="error" id="errorBox"></div>
 
   <script src="./estimateCalories.js?v=20260422-4"></script>
-  <script src="./history.js?v=20260423-1"></script>
+  <script src="./history.js?v=20260423-3"></script>
 </body>
 </html>
