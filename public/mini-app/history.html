@@ -26,6 +26,12 @@
     }
     .label { color: #9da7b3; font-size: 11px; margin-bottom: 6px; }
     .value { font-size: 18px; font-weight: 700; }
+    #personalBestDate {
+      font-size: 15px;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     .filters {
       display: flex;
       flex-wrap: wrap;
@@ -94,6 +100,10 @@
       color: #9da7b3;
       font-size: 11px;
     }
+    .chart-wrap {
+      position: relative;
+      margin-bottom: 12px;
+    }
     .dot {
       display: inline-block;
       width: 8px;
@@ -105,10 +115,36 @@
     canvas {
       width: 100%;
       height: 200px;
-      background: #171c22;
-      border: 1px solid #26303b;
+      background: linear-gradient(180deg, #141a22 0%, #11161d 100%);
+      border: 1px solid #24303d;
       border-radius: 12px;
-      margin-bottom: 12px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+    .chart-tooltip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+      z-index: 4;
+      transform: translate(-50%, calc(-100% - 8px));
+      background: rgba(10, 14, 20, 0.94);
+      border: 1px solid #2c3845;
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-width: 120px;
+      color: #dbe6f2;
+      font-size: 11px;
+      line-height: 1.35;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transition: opacity 140ms ease;
+    }
+    .chart-tooltip.show { opacity: 1; }
+    .chart-tooltip .tt-title {
+      color: #f3f7fc;
+      font-weight: 700;
+      margin-bottom: 4px;
+      font-size: 12px;
     }
     #dayDetails {
       display: none;
@@ -251,7 +287,7 @@
     </div>
     <div class="grid">
       <div class="card">
-        <div class="label">Ккал (оценка, 70 кг)</div>
+        <div class="label">Ккал (оценка)</div>
         <div class="value" id="estCalories">—</div>
       </div>
       <div class="card">
@@ -271,7 +307,10 @@
       <span><span class="dot dot-bars"></span>Вертикальная гистограмма по дням</span>
     </div>
     <div class="filters" id="periodFilters"></div>
-    <canvas id="chart" width="360" height="200"></canvas>
+    <div class="chart-wrap">
+      <canvas id="chart" width="360" height="200"></canvas>
+      <div id="chartTooltip" class="chart-tooltip" aria-hidden="true"></div>
+    </div>
     <div class="card" id="dayDetails"></div>
   </section>
 
@@ -289,6 +328,14 @@
         <input id="userWeightInput" type="number" min="10" max="250" step="0.1" placeholder="Например, 72.5" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
         <label class="row-meta" for="userAgeInput">Возраст</label>
         <input id="userAgeInput" type="number" min="0" max="110" step="1" placeholder="Например, 29" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
+        <label class="row-meta" for="userHeightInput">Рост (см)</label>
+        <input id="userHeightInput" type="number" min="50" max="290" step="1" placeholder="Например, 176" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
+        <label class="row-meta" for="userSexSelect">Пол</label>
+        <select id="userSexSelect" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;">
+          <option value="">Не указан</option>
+          <option value="male">Мужской</option>
+          <option value="female">Женский</option>
+        </select>
         <button type="button" id="saveUserProfileBtn" class="chip active">Сохранить данные</button>
       </div>
       <div class="row-meta" id="userProfileStatus" style="margin-top:8px;">Если поля не заполнены, используются примерные расчеты.</div>
@@ -302,6 +349,6 @@
   <div class="error" id="errorBox"></div>
 
   <script src="./estimateCalories.js?v=20260422-4"></script>
-  <script src="./history.js?v=20260423-3"></script>
+  <script src="./history.js?v=20260423-4"></script>
 </body>
 </html>

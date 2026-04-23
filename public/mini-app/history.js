@@ -18,19 +18,41 @@ const METRIC_LABELS = {
 
 const MONTH_SHORT = ['янв.', 'февр.', 'март', 'апр.', 'май', 'июнь', 'июль', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'];
 const DEFAULT_WEIGHT_KG = 70;
+const DEFAULT_HEIGHT_CM = 170;
+const DEFAULT_SEX = 'male';
+const ACTIVITY_MET = {
+  running: 9.0,
+  nordic_walking: 6.5,
+  cycling: 8.0,
+  unknown: 7.0
+};
 
 let profileWeightKg = null;
 let profileAge = null;
+let profileHeightCm = null;
+let profileSex = null;
 
-function estimateCaloriesWithProfile(distanceM, durationSec) {
-  const weight = Number.isFinite(Number(profileWeightKg)) && Number(profileWeightKg) > 0
-    ? Number(profileWeightKg)
-    : DEFAULT_WEIGHT_KG;
-  const base = estimateWorkoutCaloriesKcal(distanceM, durationSec, weight);
+function resolveProfileForCalories() {
+  const weight = Number(profileWeightKg);
   const age = Number(profileAge);
-  if (!Number.isFinite(age) || age <= 0) return base;
-  const ageFactor = Math.max(0.9, Math.min(1.1, 1 + (age - 30) * 0.002));
-  return base * ageFactor;
+  const heightCm = Number(profileHeightCm);
+  const sexRaw = String(profileSex || '').toLowerCase();
+  return {
+    weightKg: Number.isFinite(weight) && weight > 0 ? weight : DEFAULT_WEIGHT_KG,
+    age: Number.isFinite(age) && age > 0 ? age : 30,
+    heightCm: Number.isFinite(heightCm) && heightCm >= 50 && heightCm <= 290 ? heightCm : DEFAULT_HEIGHT_CM,
+    sex: sexRaw === 'male' || sexRaw === 'female' ? sexRaw : DEFAULT_SEX
+  };
+}
+
+function estimateCaloriesWithProfile(distanceM, durationSec, activityId = null) {
+  const p = resolveProfileForCalories();
+  const bmr = (10 * p.weightKg) + (6.25 * p.heightCm) - (5 * p.age) + (p.sex === 'male' ? 5 : -161);
+  const hours = Math.max(0, Number(durationSec) || 0) / 3600;
+  const met = ACTIVITY_MET[String(activityId || 'unknown').toLowerCase()] || ACTIVITY_MET.unknown;
+  const kcal = (bmr / 24) * hours * met;
+  if (Number.isFinite(kcal) && kcal > 0) return kcal;
+  return estimateWorkoutCaloriesKcal(distanceM, durationSec, p.weightKg);
 }
 
 function getParams() {
@@ -84,7 +106,7 @@ function buildMetricSeries(sessions, periodDays, metric) {
     agg.distanceM += Number(s.distanceM) || 0;
     agg.durationSec += Number(s.durationSec) || 0;
     const bySession = Number(s.estCaloriesKcal);
-    const fallbackCalories = estimateCaloriesWithProfile(s.distanceM, s.durationSec);
+    const fallbackCalories = estimateCaloriesWithProfile(s.distanceM, s.durationSec, s.activityId);
     agg.estCaloriesKcal += Number.isFinite(bySession) && bySession > 0 ? bySession : fallbackCalories;
     const activityId = s.activityId || 'unknown';
     if (!agg.activities[activityId]) agg.activities[activityId] = 0;
@@ -145,10 +167,17 @@ function prepareCanvas(canvas, cssHeight = 220) {
   return { ctx, w: cssWidth, h: cssHeight };
 }
 
-function drawChart(canvas, points, metric, selectedIndex) {
+function drawChart(canvas, points, metric, selectedIndex, options = {}) {
+  const {
+    animationProgress = 1,
+    hoverIndex = null
+  } = options;
   const { ctx, w, h } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#171c22';
+  const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
+  bgGradient.addColorStop(0, '#141a22');
+  bgGradient.addColorStop(1, '#11161d');
+  ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, w, h);
   if (!points.length) {
     ctx.fillStyle = '#9da7b3';
@@ -161,13 +190,15 @@ function drawChart(canvas, points, metric, selectedIndex) {
   const left = 30;
   const right = 12;
   const top = 14;
-  const bottom = 40;
+  const bottom = 42;
   const plotW = w - left - right;
   const plotH = h - top - bottom;
   const stepX = plotW / points.length;
-  const barW = Math.max(3, Math.floor(stepX) - 4);
+  const barW = Math.max(4, Math.floor(stepX) - 5);
+  const progress = Math.max(0, Math.min(1, Number(animationProgress) || 0));
+  const easedProgress = 1 - Math.pow(1 - progress, 3);
 
-  ctx.strokeStyle = '#2d3742';
+  ctx.strokeStyle = '#25303c';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const y = top + (plotH * i) / 4;
@@ -184,29 +215,53 @@ function drawChart(canvas, points, metric, selectedIndex) {
   const hitBoxes = [];
   points.forEach((p, idx) => {
     const x = left + idx * stepX + 2;
-    const barH = Math.max(2, (p.value / max) * plotH);
+    const finalBarH = Math.max(2, (p.value / max) * plotH);
+    const barH = Math.max(2, finalBarH * easedProgress);
     const y = top + (plotH - barH);
+    const isFocused = idx === selectedIndex || idx === hoverIndex;
     const gradient = ctx.createLinearGradient(0, y, 0, y + barH);
-    gradient.addColorStop(0, '#41c776');
-    gradient.addColorStop(1, '#1f7a46');
+    gradient.addColorStop(0, isFocused ? '#55de8c' : '#44cf7c');
+    gradient.addColorStop(1, isFocused ? '#1f8e53' : '#1d7447');
     ctx.fillStyle = gradient;
-    ctx.fillRect(x, y, barW, barH);
-    if (idx === selectedIndex) {
-      ctx.strokeStyle = '#cce8d7';
+    const radius = Math.min(7, Math.floor(barW / 2), Math.floor(barH / 2));
+    ctx.beginPath();
+    ctx.moveTo(x, y + barH);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.lineTo(x + barW - radius, y);
+    ctx.quadraticCurveTo(x + barW, y, x + barW, y + radius);
+    ctx.lineTo(x + barW, y + barH);
+    ctx.closePath();
+    ctx.fill();
+    if (isFocused) {
+      ctx.strokeStyle = '#d9f2e4';
       ctx.lineWidth = 2;
-      ctx.strokeRect(x - 1, y - 1, barW + 2, barH + 2);
+      ctx.stroke();
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#4ad17d';
+      ctx.fillRect(x - 2, y - 6, barW + 4, barH + 8);
+      ctx.restore();
     }
     ctx.fillStyle = '#9da7b3';
     ctx.font = '10px sans-serif';
     if (points.length <= 10 || idx % 3 === 0 || idx === points.length - 1) {
-      ctx.fillText(p.date, x, h - 20);
+      ctx.fillText(p.date, x, h - 18);
     }
-    if (p.value > 0) {
+    if (p.value > 0 && (isFocused || points.length <= 10)) {
       ctx.fillStyle = '#dfe6ee';
       ctx.font = '10px sans-serif';
-      ctx.fillText(p.value.toFixed(1), x, y - 4);
+      const valueLabel = metric === 'calories' ? String(Math.round(p.value)) : p.value.toFixed(1);
+      ctx.fillText(valueLabel, x, y - 4);
     }
-    hitBoxes.push({ index: idx, x, y, width: barW, height: barH });
+    hitBoxes.push({
+      index: idx,
+      x,
+      y: top + (plotH - finalBarH),
+      width: barW,
+      height: finalBarH,
+      centerX: x + barW / 2
+    });
   });
   return hitBoxes;
 }
@@ -475,12 +530,15 @@ async function init() {
   const routeHistoryEl = document.getElementById('routeHistoryList');
   const dayDetailsEl = document.getElementById('dayDetails');
   const canvas = document.getElementById('chart');
+  const chartTooltipEl = document.getElementById('chartTooltip');
   const chartTitleEl = document.querySelector('.chart-title');
   const homeUserNameEl = document.getElementById('homeUserName');
   const homeTodayStatusEl = document.getElementById('homeTodayStatus');
   const regularityHeatmapEl = document.getElementById('regularityHeatmap');
   const userWeightInputEl = document.getElementById('userWeightInput');
   const userAgeInputEl = document.getElementById('userAgeInput');
+  const userHeightInputEl = document.getElementById('userHeightInput');
+  const userSexSelectEl = document.getElementById('userSexSelect');
   const saveUserProfileBtnEl = document.getElementById('saveUserProfileBtn');
   const userProfileStatusEl = document.getElementById('userProfileStatus');
   const locationStatusEl = document.getElementById('locationStatus');
@@ -506,9 +564,13 @@ async function init() {
   const fullName = (payload.profile && typeof payload.profile.fullName === 'string' && payload.profile.fullName.trim()) || 'Пользователь';
   profileWeightKg = payload?.profile?.weightKg ?? null;
   profileAge = payload?.profile?.age ?? null;
+  profileHeightCm = payload?.profile?.heightCm ?? null;
+  profileSex = payload?.profile?.sex ?? null;
   homeUserNameEl.textContent = fullName;
   if (userWeightInputEl) userWeightInputEl.value = Number.isFinite(Number(profileWeightKg)) ? String(profileWeightKg) : '';
   if (userAgeInputEl) userAgeInputEl.value = Number.isFinite(Number(profileAge)) ? String(profileAge) : '';
+  if (userHeightInputEl) userHeightInputEl.value = Number.isFinite(Number(profileHeightCm)) ? String(profileHeightCm) : '';
+  if (userSexSelectEl) userSexSelectEl.value = (profileSex === 'male' || profileSex === 'female') ? profileSex : '';
   if (locationStatusEl) {
     locationStatusEl.textContent = payload?.profile?.hasLocation
       ? 'Геолокация указана'
@@ -523,8 +585,64 @@ async function init() {
   let selectedHistoryActivity = 'all';
   let currentPoints = [];
   let currentHitBoxes = [];
+  let currentHoverIndex = null;
+  let chartAnimationRafId = null;
+  let chartAnimationToken = 0;
   let locationRetryTimerId = null;
   const LOCATION_RETRY_MS = 15000;
+
+  function hideChartTooltip() {
+    if (!chartTooltipEl) return;
+    chartTooltipEl.classList.remove('show');
+    chartTooltipEl.innerHTML = '';
+  }
+
+  function showChartTooltip(point, box, canvasRect) {
+    if (!chartTooltipEl || !point || !box || !canvasRect) return;
+    chartTooltipEl.innerHTML = `
+      <div class="tt-title">${point.date} · ${getActivityLabel(point.activityId)}</div>
+      <div>Расстояние: ${(point.distanceM / 1000).toFixed(2)} км</div>
+      <div>Время: ${formatDuration(point.durationSec)}</div>
+      <div>Калории: ${Math.round(point.estCaloriesKcal || 0)} ккал</div>
+    `;
+    const x = Math.min(canvasRect.width - 8, Math.max(8, box.centerX));
+    const y = Math.max(18, box.y);
+    chartTooltipEl.style.left = `${x}px`;
+    chartTooltipEl.style.top = `${y}px`;
+    chartTooltipEl.classList.add('show');
+  }
+
+  function renderChartAnimated(animated = true) {
+    chartAnimationToken += 1;
+    const token = chartAnimationToken;
+    if (chartAnimationRafId !== null && typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(chartAnimationRafId);
+      chartAnimationRafId = null;
+    }
+    if (!animated) {
+      currentHitBoxes = drawChart(canvas, currentPoints, selectedMetric, selectedDayIndex, {
+        animationProgress: 1,
+        hoverIndex: currentHoverIndex
+      });
+      return;
+    }
+    const startedAt = performance.now();
+    const durationMs = 460;
+    const tick = () => {
+      if (token !== chartAnimationToken) return;
+      const progress = Math.min(1, (performance.now() - startedAt) / durationMs);
+      currentHitBoxes = drawChart(canvas, currentPoints, selectedMetric, selectedDayIndex, {
+        animationProgress: progress,
+        hoverIndex: currentHoverIndex
+      });
+      if (progress >= 1) {
+        chartAnimationRafId = null;
+        return;
+      }
+      chartAnimationRafId = window.requestAnimationFrame(tick);
+    };
+    chartAnimationRafId = window.requestAnimationFrame(tick);
+  }
 
   const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
   tabButtons.forEach((btn) => {
@@ -556,7 +674,7 @@ async function init() {
 
     chartTitleEl.textContent = getChartTitle(selectedMetric);
     currentPoints = buildMetricSeries(metricsFiltered, selectedPeriodDays, selectedMetric);
-    currentHitBoxes = drawChart(canvas, currentPoints, selectedMetric, selectedDayIndex);
+    renderChartAnimated(true);
     renderDayDetails(dayDetailsEl, Number.isInteger(selectedDayIndex) ? currentPoints[selectedDayIndex] || null : null);
 
     renderRouteHistory(routeHistoryEl, historyRecords, listSessions, selectedHistoryActivity, async (entry) => {
@@ -622,7 +740,35 @@ async function init() {
     }
     event.stopPropagation();
     selectedDayIndex = hit.index;
+    currentHoverIndex = hit.index;
     renderAll();
+    showChartTooltip(currentPoints[hit.index], hit, rect);
+  });
+
+  canvas.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const hit = currentHitBoxes.find((box) => x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height);
+    if (!hit) {
+      if (currentHoverIndex !== null) {
+        currentHoverIndex = null;
+        renderChartAnimated(false);
+      }
+      hideChartTooltip();
+      return;
+    }
+    if (currentHoverIndex !== hit.index) {
+      currentHoverIndex = hit.index;
+      renderChartAnimated(false);
+    }
+    showChartTooltip(currentPoints[hit.index], hit, rect);
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    currentHoverIndex = null;
+    hideChartTooltip();
+    renderChartAnimated(false);
   });
 
   document.addEventListener('click', () => {
@@ -630,6 +776,7 @@ async function init() {
       selectedDayIndex = null;
       renderAll();
     }
+    hideChartTooltip();
   });
 
   window.addEventListener('resize', renderAll);
@@ -639,8 +786,12 @@ async function init() {
       try {
         const weightValRaw = String(userWeightInputEl?.value || '').trim();
         const ageValRaw = String(userAgeInputEl?.value || '').trim();
+        const heightValRaw = String(userHeightInputEl?.value || '').trim();
+        const sexValRaw = String(userSexSelectEl?.value || '').trim().toLowerCase();
         const weightVal = weightValRaw === '' ? null : Number(weightValRaw);
         const ageVal = ageValRaw === '' ? null : Number(ageValRaw);
+        const heightVal = heightValRaw === '' ? null : Number(heightValRaw);
+        const sexVal = sexValRaw === '' ? null : sexValRaw;
         if (weightVal !== null && (!Number.isFinite(weightVal) || weightVal < 10 || weightVal > 250)) {
           if (userProfileStatusEl) userProfileStatusEl.textContent = 'Введите действительные данные';
           return;
@@ -649,12 +800,24 @@ async function init() {
           if (userProfileStatusEl) userProfileStatusEl.textContent = 'Введите действительные данные';
           return;
         }
+        if (heightVal !== null && (!Number.isFinite(heightVal) || heightVal < 50 || heightVal > 290)) {
+          if (userProfileStatusEl) userProfileStatusEl.textContent = 'Введите действительные данные';
+          return;
+        }
+        if (sexVal !== null && sexVal !== 'male' && sexVal !== 'female') {
+          if (userProfileStatusEl) userProfileStatusEl.textContent = 'Введите действительные данные';
+          return;
+        }
         const profile = await saveProfile(chatId, authToken, {
           weightKg: weightVal,
-          age: ageVal
+          age: ageVal,
+          heightCm: heightVal,
+          sex: sexVal
         });
         profileWeightKg = profile.weightKg ?? null;
         profileAge = profile.age ?? null;
+        profileHeightCm = profile.heightCm ?? null;
+        profileSex = profile.sex ?? null;
         const resolvedName = (profile.fullName || '').trim() || 'Пользователь';
         homeUserNameEl.textContent = resolvedName;
         if (userProfileStatusEl) userProfileStatusEl.textContent = 'Данные сохранены';

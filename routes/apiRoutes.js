@@ -19,13 +19,34 @@ function readGeoJsonRoutes(projectRoot) {
 function createApiRouter({ userService, routeService, miniAppAuth, config }) {
   const router = express.Router();
   const dgisApiKey = typeof config?.DGIS_API_KEY === 'string' ? config.DGIS_API_KEY.trim() : '';
-  const estimateWithProfile = (distanceM, durationSec, profile = {}) => {
+  const normalizeSex = (value) => {
+    const normalized = String(value || '').toLowerCase();
+    return normalized === 'male' || normalized === 'female' ? normalized : null;
+  };
+  const estimateMifflinWorkoutKcal = (distanceM, durationSec, profile = {}, activityId = null) => {
     const weightKg = Number(profile.weightKg);
     const age = Number(profile.age);
-    const base = estimateWorkoutCaloriesKcal(distanceM, durationSec, Number.isFinite(weightKg) && weightKg > 0 ? weightKg : 70);
-    if (!Number.isFinite(age) || age <= 0) return base;
-    const ageFactor = Math.max(0.9, Math.min(1.1, 1 + (age - 30) * 0.002));
-    return base * ageFactor;
+    const heightCm = Number(profile.heightCm);
+    const sex = normalizeSex(profile.sex);
+    if (!Number.isFinite(weightKg) || weightKg <= 0) {
+      return estimateWorkoutCaloriesKcal(distanceM, durationSec, 70);
+    }
+    if (!Number.isFinite(age) || age <= 0 || !Number.isFinite(heightCm) || heightCm < 50 || heightCm > 290 || !sex) {
+      return estimateWorkoutCaloriesKcal(distanceM, durationSec, weightKg);
+    }
+    const bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + (sex === 'male' ? 5 : -161);
+    const hours = Math.max(0, Number(durationSec) || 0) / 3600;
+    const activityMetMap = {
+      running: 9.0,
+      nordic_walking: 6.5,
+      cycling: 8.0
+    };
+    const met = activityMetMap[String(activityId || '').toLowerCase()] || 7.0;
+    const workoutKcal = (bmr / 24) * hours * met;
+    return Math.max(0, workoutKcal);
+  };
+  const estimateWithProfile = (distanceM, durationSec, profile = {}) => {
+    return estimateMifflinWorkoutKcal(distanceM, durationSec, profile, null);
   };
 
   // Service health probe for bot + mini-app uptime checks.
@@ -211,7 +232,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       const profile = typeof userService.getUserProfile === 'function'
         ? userService.getUserProfile(chatId)
         : {};
-      const estCaloriesKcal = Math.round(estimateWithProfile(distanceM, durationSec, profile));
+      const estCaloriesKcal = Math.round(estimateMifflinWorkoutKcal(distanceM, durationSec, profile, session.activityId));
       const sessionRecord = {
         id: sessionId,
         startedAt: session.startedAt,
@@ -248,7 +269,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       const history = Array.isArray(user?.history) ? user.history : [];
       const profile = typeof userService.getUserProfile === 'function'
         ? userService.getUserProfile(req.chatId)
-        : { fullName: '', weightKg: null, age: null, hasLocation: false };
+        : { fullName: '', weightKg: null, age: null, heightCm: null, sex: null, hasLocation: false };
       return res.json({
         ok: true,
         sessions,
@@ -265,7 +286,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     try {
       const profile = typeof userService.getUserProfile === 'function'
         ? userService.getUserProfile(req.chatId)
-        : { fullName: '', weightKg: null, age: null, hasLocation: false };
+        : { fullName: '', weightKg: null, age: null, heightCm: null, sex: null, hasLocation: false };
       return res.json({ ok: true, profile });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });
@@ -279,6 +300,8 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       }
       const rawWeight = req.body?.weightKg;
       const rawAge = req.body?.age;
+      const rawHeight = req.body?.heightCm;
+      const rawSex = req.body?.sex;
       if (rawWeight !== null && rawWeight !== undefined && rawWeight !== '') {
         const w = Number(rawWeight);
         if (!Number.isFinite(w) || w < 10 || w > 250) {
@@ -291,9 +314,22 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
           return res.status(400).json({ ok: false, error: 'Invalid age range' });
         }
       }
+      if (rawHeight !== null && rawHeight !== undefined && rawHeight !== '') {
+        const h = Number(rawHeight);
+        if (!Number.isFinite(h) || h < 50 || h > 290) {
+          return res.status(400).json({ ok: false, error: 'Invalid height range' });
+        }
+      }
+      if (rawSex !== null && rawSex !== undefined && rawSex !== '') {
+        if (!normalizeSex(rawSex)) {
+          return res.status(400).json({ ok: false, error: 'Invalid sex value' });
+        }
+      }
       const profile = userService.updateUserProfile(req.chatId, {
         weightKg: req.body?.weightKg,
-        age: req.body?.age
+        age: req.body?.age,
+        heightCm: req.body?.heightCm,
+        sex: normalizeSex(req.body?.sex)
       });
       return res.json({ ok: true, profile });
     } catch (err) {
@@ -318,7 +354,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       });
       const profile = typeof userService.getUserProfile === 'function'
         ? userService.getUserProfile(req.chatId)
-        : { fullName: '', weightKg: null, age: null, hasLocation: true };
+        : { fullName: '', weightKg: null, age: null, heightCm: null, sex: null, hasLocation: true };
       return res.json({ ok: true, profile });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });

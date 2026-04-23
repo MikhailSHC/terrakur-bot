@@ -92,6 +92,8 @@ class UserService {
         fullName: typeof user.fullName === 'string' ? user.fullName : '',
         weightKg: Number.isFinite(Number(user.weightKg)) ? Number(user.weightKg) : null,
         age: Number.isFinite(Number(user.age)) ? Number(user.age) : null,
+        heightCm: Number.isFinite(Number(user.heightCm)) ? Math.round(Number(user.heightCm)) : null,
+        sex: user.sex === 'male' || user.sex === 'female' ? user.sex : null,
         totalDistanceM: Number(user.totalDistanceM) || 0,
         totalDurationSec: Number(user.totalDurationSec) || 0,
         totalSessions: Number(user.totalSessions) || 0,
@@ -149,6 +151,8 @@ class UserService {
         fullName: '',
         weightKg: null,
         age: null,
+        heightCm: null,
+        sex: null,
         totalDistanceM: 0,
         totalDurationSec: 0,
         totalSessions: 0,
@@ -173,6 +177,8 @@ class UserService {
     if (!('fullName' in u)) u.fullName = '';
     if (!('weightKg' in u)) u.weightKg = null;
     if (!('age' in u)) u.age = null;
+    if (!('heightCm' in u)) u.heightCm = null;
+    if (!('sex' in u)) u.sex = null;
     if (!('lastLocation' in u)) u.lastLocation = null;
     if (!('hasSeenWelcome' in u)) u.hasSeenWelcome = false;
     if (!u.createdAt) u.createdAt = new Date().toISOString();
@@ -335,6 +341,8 @@ class UserService {
       fullName: typeof session.fullName === 'string' ? session.fullName : '',
       weightKg: Number.isFinite(Number(session.weightKg)) ? Number(session.weightKg) : null,
       age: Number.isFinite(Number(session.age)) ? Number(session.age) : null,
+      heightCm: Number.isFinite(Number(session.heightCm)) ? Math.round(Number(session.heightCm)) : null,
+      sex: session.sex === 'male' || session.sex === 'female' ? session.sex : null,
       hasLocation: Boolean(
         session.lastLocation &&
         Number.isFinite(Number(session.lastLocation.latitude)) &&
@@ -366,6 +374,22 @@ class UserService {
       const next = Number.isFinite(n) && n > 0 ? Math.round(n) : null;
       if (next !== session.age) {
         session.age = next;
+        changed = true;
+      }
+    }
+    if (profilePatch.heightCm !== undefined) {
+      const n = Number(profilePatch.heightCm);
+      const next = Number.isFinite(n) && n >= 50 && n <= 290 ? Math.round(n) : null;
+      if (next !== session.heightCm) {
+        session.heightCm = next;
+        changed = true;
+      }
+    }
+    if (profilePatch.sex !== undefined) {
+      const normalized = String(profilePatch.sex || '').toLowerCase();
+      const next = normalized === 'male' || normalized === 'female' ? normalized : null;
+      if (next !== session.sex) {
+        session.sex = next;
         changed = true;
       }
     }

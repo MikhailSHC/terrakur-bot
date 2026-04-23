@@ -138,6 +138,8 @@ const authToken   = urlParams.get('authToken') || '';
 const activityIdFromUrl = urlParams.get('activityId');
 let userWeightKg = 70;
 let userAge = null;
+let userHeightCm = null;
+let userSex = null;
 const mapProvider = (urlParams.get('mapProvider') || '').toLowerCase();
 const dgisKeyFromUrl = (urlParams.get('dgisKey') || '').trim();
 const miniAppRuntime = window.__MINI_APP_RUNTIME__ || {};
@@ -235,11 +237,28 @@ function getAuthHeaders() {
 }
 
 function estimateCaloriesForUser(distanceM, durationSec) {
-  const base = estimateWorkoutCaloriesKcal(distanceM, durationSec, userWeightKg);
+  const weight = Number(userWeightKg);
   const age = Number(userAge);
-  if (!Number.isFinite(age) || age <= 0) return base;
-  const ageFactor = Math.max(0.9, Math.min(1.1, 1 + (age - 30) * 0.002));
-  return base * ageFactor;
+  const heightCm = Number(userHeightCm);
+  const sexRaw = String(userSex || '').toLowerCase();
+  const sex = sexRaw === 'male' || sexRaw === 'female' ? sexRaw : null;
+  if (!Number.isFinite(weight) || weight <= 0) {
+    return estimateWorkoutCaloriesKcal(distanceM, durationSec, 70);
+  }
+  if (!Number.isFinite(age) || age <= 0 || !Number.isFinite(heightCm) || heightCm < 50 || heightCm > 290 || !sex) {
+    return estimateWorkoutCaloriesKcal(distanceM, durationSec, weight);
+  }
+  const bmr = (10 * weight) + (6.25 * heightCm) - (5 * age) + (sex === 'male' ? 5 : -161);
+  const hours = Math.max(0, Number(durationSec) || 0) / 3600;
+  const activityMetMap = {
+    running: 9.0,
+    nordic_walking: 6.5,
+    cycling: 8.0
+  };
+  const met = activityMetMap[String(activityIdFromUrl || '').toLowerCase()] || 7.0;
+  const kcal = (bmr / 24) * hours * met;
+  if (Number.isFinite(kcal) && kcal > 0) return kcal;
+  return estimateWorkoutCaloriesKcal(distanceM, durationSec, weight);
 }
 
 async function loadUserProfileForCalories() {
@@ -254,6 +273,10 @@ async function loadUserProfileForCalories() {
   userWeightKg = Number.isFinite(weight) && weight > 0 ? weight : 70;
   const age = Number(profile.age);
   userAge = Number.isFinite(age) && age > 0 ? age : null;
+  const height = Number(profile.heightCm);
+  userHeightCm = Number.isFinite(height) && height >= 50 && height <= 290 ? height : null;
+  const sexRaw = String(profile.sex || '').toLowerCase();
+  userSex = sexRaw === 'male' || sexRaw === 'female' ? sexRaw : null;
 }
 
 function mapEventToLngLat(evt) {
@@ -530,6 +553,19 @@ function normalizeLayerPaint(paint = {}) {
   };
 }
 
+function updateCompatSourcePaintByLayer(layerId, paintKey, value) {
+  const layerDef = mapglCompat.layers[layerId];
+  if (!layerDef || !layerDef.source) return;
+  const source = mapglCompat.sources[layerDef.source];
+  if (!source) return;
+  layerDef.paint = {
+    ...(layerDef.paint || {}),
+    [paintKey]: value
+  };
+  source.paint = normalizeLayerPaint(layerDef.paint);
+  renderMapglSource(layerDef.source);
+}
+
 function geoJsonLineCoordinates(data) {
   const feature = data?.features?.[0];
   const coords = feature?.geometry?.type === 'LineString' ? feature.geometry.coordinates : [];
@@ -603,6 +639,9 @@ function installMapglCompat() {
     renderMapglSource(sourceId);
   };
   map.getLayer = (layerId) => mapglCompat.layers[layerId] || null;
+  map.setPaintProperty = (layerId, paintKey, value) => {
+    updateCompatSourcePaintByLayer(layerId, paintKey, value);
+  };
   map.removeLayer = (layerId) => {
     delete mapglCompat.layers[layerId];
   };

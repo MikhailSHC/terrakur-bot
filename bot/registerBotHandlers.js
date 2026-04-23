@@ -63,6 +63,9 @@ function registerBotHandlers(bot, deps) {
       ctx?.user
     ].filter(Boolean);
     for (const user of candidates) {
+      if (user?.is_bot === true || user?.isBot === true || user?.bot === true || user?.type === 'bot') {
+        continue;
+      }
       const first = String(user.first_name || user.firstName || user.name || '').trim();
       const last = String(user.last_name || user.lastName || '').trim();
       const username = String(user.username || user.login || '').trim();
