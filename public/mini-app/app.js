@@ -281,7 +281,7 @@ async function ensureDgisApiKeyLoaded() {
 function getAuthHeaders() {
   const headers = {};
   if (authToken) headers['x-miniapp-auth'] = authToken;
-  if (maxInitDataRaw) headers['x-max-init-data'] = maxInitDataRaw;
+  if (maxInitDataRaw) headers['x-max-init-data'] = encodeURIComponent(maxInitDataRaw);
   return headers;
 }
 

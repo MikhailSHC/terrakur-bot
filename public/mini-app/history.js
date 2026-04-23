@@ -112,7 +112,7 @@ function getParams() {
 function buildAuthHeaders(authToken, maxInitData) {
   const headers = {};
   if (authToken) headers['x-miniapp-auth'] = authToken;
-  if (maxInitData) headers['x-max-init-data'] = maxInitData;
+  if (maxInitData) headers['x-max-init-data'] = encodeURIComponent(maxInitData);
   return headers;
 }
 

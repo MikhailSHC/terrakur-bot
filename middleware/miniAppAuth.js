@@ -9,8 +9,17 @@ function getToken(req) {
 }
 
 function getMaxInitDataRaw(req) {
+  const decodeHeaderValue = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  };
   const fromHeaders = req.headers['x-max-init-data'] || req.headers['x-webapp-data'];
-  if (typeof fromHeaders === 'string' && fromHeaders.trim()) return fromHeaders.trim();
+  if (typeof fromHeaders === 'string' && fromHeaders.trim()) return decodeHeaderValue(fromHeaders);
   if (typeof req.body?.maxInitData === 'string' && req.body.maxInitData.trim()) return req.body.maxInitData.trim();
   return '';
 }
