@@ -2842,6 +2842,170 @@ function animateCompletedPath(trackCoords, options = {}) {
   replayTimerId = scheduleNext(tick);
 }
 
+function getActivityLabelForShare() {
+  const mapById = {
+    running: 'Бег',
+    nordic_walking: 'Скандинавская ходьба',
+    cycling: 'Велопрогулка'
+  };
+  return mapById[String(activityIdFromUrl || '').toLowerCase()] || 'Тренировка';
+}
+
+function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgSpeedText, caloriesText }) {
+  const width = 1200;
+  const height = 630;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const drawRoundRect = (x, y, w, h, r) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  };
+
+  const bg = ctx.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, '#0b1320');
+  bg.addColorStop(1, '#060b12');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  drawRoundRect(40, 32, width - 80, 116, 26);
+  ctx.fillStyle = 'rgba(16, 24, 38, 0.88)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(121, 149, 191, 0.34)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = '#eaf1fb';
+  ctx.font = '600 36px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('TerraKur', 74, 86);
+  ctx.fillStyle = '#97aac6';
+  ctx.font = '500 24px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(`${getActivityLabelForShare()} · ${getRouteNameSafe()}`, 74, 124);
+
+  const metricY = 200;
+  const metricW = 348;
+  const gap = 22;
+  const metricX1 = 40;
+  const metricX2 = metricX1 + metricW + gap;
+  const metricX3 = metricX2 + metricW + gap;
+  const drawMetricCard = (x, title, value) => {
+    drawRoundRect(x, metricY, metricW, 98, 18);
+    ctx.fillStyle = 'rgba(14, 21, 32, 0.9)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(123, 150, 192, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#8ea3c0';
+    ctx.font = '500 20px "Segoe UI", Arial, sans-serif';
+    ctx.fillText(title, x + 18, metricY + 35);
+    ctx.fillStyle = '#f2f7ff';
+    ctx.font = '700 34px "Segoe UI", Arial, sans-serif';
+    ctx.fillText(value, x + 18, metricY + 76);
+  };
+
+  const mins = Math.floor(elapsedSec / 60);
+  const secs = String(Math.floor(elapsedSec % 60)).padStart(2, '0');
+  drawMetricCard(metricX1, 'Расстояние', `${distanceKm} км`);
+  drawMetricCard(metricX2, 'Время', `${mins}:${secs}`);
+  drawMetricCard(metricX3, 'Скорость', avgSpeedText);
+
+  drawRoundRect(40, 322, width - 80, 260, 20);
+  ctx.fillStyle = 'rgba(12, 18, 28, 0.92)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(122, 149, 191, 0.28)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  const coords = Array.isArray(trackCoords) ? trackCoords.filter((p) => Array.isArray(p) && p.length >= 2) : [];
+  if (coords.length >= 2) {
+    let minLon = Infinity;
+    let minLat = Infinity;
+    let maxLon = -Infinity;
+    let maxLat = -Infinity;
+    coords.forEach(([lon, lat]) => {
+      minLon = Math.min(minLon, lon);
+      minLat = Math.min(minLat, lat);
+      maxLon = Math.max(maxLon, lon);
+      maxLat = Math.max(maxLat, lat);
+    });
+    const plotX = 70;
+    const plotY = 350;
+    const plotW = width - 140;
+    const plotH = 202;
+    const spanLon = Math.max(0.000001, maxLon - minLon);
+    const spanLat = Math.max(0.000001, maxLat - minLat);
+    const scale = Math.min(plotW / spanLon, plotH / spanLat);
+    const usedW = spanLon * scale;
+    const usedH = spanLat * scale;
+    const offsetX = plotX + (plotW - usedW) / 2;
+    const offsetY = plotY + (plotH - usedH) / 2;
+    const projected = coords.map(([lon, lat]) => ([
+      offsetX + (lon - minLon) * scale,
+      offsetY + (maxLat - lat) * scale
+    ]));
+
+    ctx.strokeStyle = 'rgba(77, 118, 169, 0.24)';
+    ctx.lineWidth = 16;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    projected.forEach(([x, y], i) => {
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ff7a2f';
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    projected.forEach(([x, y], i) => {
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = '#93a7c2';
+  ctx.font = '500 20px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(`Калории: ${caloriesText}`, 58, 607);
+  ctx.fillText(new Date().toLocaleDateString('ru-RU'), width - 220, 607);
+  return canvas.toDataURL('image/png');
+}
+
+async function handleShareTrackAsPhoto(payload) {
+  const dataUrl = buildTrackShareImageDataUrl(payload);
+  if (!dataUrl) return;
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const file = new File([blob], 'terrakur-route.png', { type: 'image/png' });
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    await navigator.share({
+      title: 'TerraKur маршрут',
+      text: 'Мой пройденный маршрут в TerraKur',
+      files: [file]
+    });
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = 'terrakur-route.png';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showReplay = true, isSaved = false, saveMeta = null }) {
   if (!replayPanelEl) return;
   const km = (distanceM / 1000).toFixed(2);
@@ -2863,7 +3027,33 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Скорость</div><div style="font-size:18px;font-weight:700;">${avgSpeed}</div></div>` +
     `<div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;"><div style="font-size:11px;opacity:0.75;">Ккал (оценка)</div><div style="font-size:18px;font-weight:700;">${kcal}</div><div style="font-size:10px;opacity:0.6;margin-top:2px;">${kcalSub}</div></div>` +
     `</div>` +
+    `<button type="button" id="shareTrackPhotoBtn" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(122,165,255,0.6);background:rgba(64,125,255,0.2);color:#eaf2ff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;">📸 Поделиться как фото</button>` +
+    `<div id="shareTrackPhotoStatus" style="font-size:11px;opacity:0.75;margin-bottom:8px;"></div>` +
     `<div id="saveRouteFlowHost"></div>`;
+
+  const bindSharePhotoAction = () => {
+    const shareBtn = replayPanelEl.querySelector('#shareTrackPhotoBtn');
+    const shareStatusEl = replayPanelEl.querySelector('#shareTrackPhotoStatus');
+    shareBtn?.addEventListener('click', async () => {
+      if (shareStatusEl) shareStatusEl.textContent = 'Готовим карточку...';
+      try {
+        await handleShareTrackAsPhoto({
+          trackCoords,
+          distanceKm: km,
+          elapsedSec,
+          avgSpeedText: avgSpeed,
+          caloriesText: `${kcal} ккал`
+        });
+        if (shareStatusEl) {
+          shareStatusEl.textContent = navigator.share
+            ? 'Ок: фото готово для отправки.'
+            : 'Ок: фото скачано на устройство.';
+        }
+      } catch (err) {
+        if (shareStatusEl) shareStatusEl.textContent = err?.message || 'Не удалось подготовить фото.';
+      }
+    });
+  };
 
   if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
     debugReplay('ui:prepare_replay', `saved=${isSaved}`);
@@ -2902,6 +3092,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
       }
     }
     renderSaveRouteFlow(saveMeta);
+    bindSharePhotoAction();
     return;
   }
 
@@ -2910,6 +3101,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
     `<div style="font-size:11px;opacity:0.75;margin-top:8px;">Пройденная тропа на карте отмечена зелёным.</div>`;
   replayPanelEl.style.display = 'block';
   renderSaveRouteFlow(saveMeta);
+  bindSharePhotoAction();
 }
 
 
