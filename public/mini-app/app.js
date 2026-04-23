@@ -390,7 +390,8 @@ function scheduleFollowResume() {
       const center = [lastKnownPosition.longitude, lastKnownPosition.latitude];
       map.easeTo({
         center,
-        zoom: cinematicDemoEnabled ? 17.2 : 17,
+        // Resume follow in a wider framing (~1.5x farther than previous default).
+        zoom: cinematicDemoEnabled ? 16.6 : 16.4,
         duration: cinematicDemoEnabled ? 700 : 500,
         pitch: cinematicDemoEnabled ? 46 : 0,
         bearing: cinematicDemoEnabled && typeof lastHeadingDeg === 'number' ? lastHeadingDeg : 0
@@ -2894,9 +2895,9 @@ async function loadStaticMapImage({ centerLon, centerLat, zoom, width, height })
   }
 }
 
-async function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgSpeedText, caloriesText }) {
-  const width = 1200;
-  const height = 630;
+async function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgSpeedText }) {
+  const width = 1080;
+  const height = 1920;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -2923,7 +2924,7 @@ async function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
-  drawRoundRect(40, 32, width - 80, 116, 26);
+  drawRoundRect(40, 40, width - 80, 176, 28);
   ctx.fillStyle = 'rgba(16, 24, 38, 0.88)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(121, 149, 191, 0.34)';
@@ -2931,43 +2932,53 @@ async function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec
   ctx.stroke();
 
   ctx.fillStyle = '#eaf1fb';
-  ctx.font = '600 36px "Segoe UI", Arial, sans-serif';
-  ctx.fillText('TerraKur', 74, 86);
+  ctx.font = '600 48px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('TerraKur', 74, 112);
   ctx.fillStyle = '#97aac6';
-  ctx.font = '500 24px "Segoe UI", Arial, sans-serif';
-  ctx.fillText(`${getActivityLabelForShare()} · ${getRouteNameSafe()}`, 74, 124);
+  ctx.font = '500 30px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(`${getActivityLabelForShare()} · ${getRouteNameSafe()}`, 74, 168);
 
-  const metricY = 200;
-  const metricW = 348;
-  const gap = 22;
-  const metricX1 = 40;
-  const metricX2 = metricX1 + metricW + gap;
-  const metricX3 = metricX2 + metricW + gap;
+  const metricY = 248;
+  const metricW = width - 80;
+  const metricH = 118;
   const drawMetricCard = (x, title, value) => {
-    drawRoundRect(x, metricY, metricW, 98, 18);
+    drawRoundRect(x, metricY, metricW, metricH, 20);
     ctx.fillStyle = 'rgba(14, 21, 32, 0.9)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(123, 150, 192, 0.25)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.fillStyle = '#8ea3c0';
-    ctx.font = '500 20px "Segoe UI", Arial, sans-serif';
-    ctx.fillText(title, x + 18, metricY + 35);
+    ctx.font = '500 24px "Segoe UI", Arial, sans-serif';
+    ctx.fillText(title, x + 22, metricY + 44);
     ctx.fillStyle = '#f2f7ff';
-    ctx.font = '700 34px "Segoe UI", Arial, sans-serif';
-    ctx.fillText(value, x + 18, metricY + 76);
+    ctx.font = '700 44px "Segoe UI", Arial, sans-serif';
+    ctx.fillText(value, x + 22, metricY + 92);
   };
 
   const mins = Math.floor(elapsedSec / 60);
   const secs = String(Math.floor(elapsedSec % 60)).padStart(2, '0');
-  drawMetricCard(metricX1, 'Расстояние', `${distanceKm} км`);
-  drawMetricCard(metricX2, 'Время', `${mins}:${secs}`);
-  drawMetricCard(metricX3, 'Скорость', avgSpeedText);
+  drawMetricCard(40, 'Расстояние', `${distanceKm} км`);
+  const secondMetricY = metricY + metricH + 16;
+  drawRoundRect(40, secondMetricY, metricW, metricH, 20);
+  ctx.fillStyle = 'rgba(14, 21, 32, 0.9)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(123, 150, 192, 0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = '#8ea3c0';
+  ctx.font = '500 24px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('Время', 62, secondMetricY + 44);
+  ctx.fillText('Скорость', 560, secondMetricY + 44);
+  ctx.fillStyle = '#f2f7ff';
+  ctx.font = '700 44px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(`${mins}:${secs}`, 62, secondMetricY + 92);
+  ctx.fillText(avgSpeedText, 560, secondMetricY + 92);
 
   const mapCardX = 40;
-  const mapCardY = 322;
+  const mapCardY = secondMetricY + metricH + 18;
   const mapCardW = width - 80;
-  const mapCardH = 260;
+  const mapCardH = height - mapCardY - 40;
   const mapInset = 12;
   const mapPlotX = mapCardX + mapInset;
   const mapPlotY = mapCardY + mapInset;
@@ -3050,10 +3061,6 @@ async function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec
     ctx.restore();
   }
 
-  ctx.fillStyle = '#93a7c2';
-  ctx.font = '500 20px "Segoe UI", Arial, sans-serif';
-  ctx.fillText(`Калории: ${caloriesText}`, 58, 607);
-  ctx.fillText(new Date().toLocaleDateString('ru-RU'), width - 220, 607);
   return canvas.toDataURL('image/png');
 }
 
@@ -3114,8 +3121,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
           trackCoords,
           distanceKm: km,
           elapsedSec,
-          avgSpeedText: avgSpeed,
-          caloriesText: `${kcal} ккал`
+          avgSpeedText: avgSpeed
         });
         if (shareStatusEl) {
           shareStatusEl.textContent = navigator.share
