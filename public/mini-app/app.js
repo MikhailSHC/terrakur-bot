@@ -2851,7 +2851,50 @@ function getActivityLabelForShare() {
   return mapById[String(activityIdFromUrl || '').toLowerCase()] || 'Тренировка';
 }
 
-function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgSpeedText, caloriesText }) {
+function mercatorProject(lon, lat, zoom) {
+  const tileSize = 256;
+  const scale = tileSize * Math.pow(2, zoom);
+  const x = ((lon + 180) / 360) * scale;
+  const latRad = (lat * Math.PI) / 180;
+  const y = (0.5 - Math.log((1 + Math.sin(latRad)) / (1 - Math.sin(latRad))) / (4 * Math.PI)) * scale;
+  return { x, y };
+}
+
+function estimateZoomForBounds(bounds, viewportW, viewportH, padding = 24, maxZoom = 17) {
+  const safeW = Math.max(1, viewportW - padding * 2);
+  const safeH = Math.max(1, viewportH - padding * 2);
+  let best = 9;
+  for (let z = maxZoom; z >= 2; z -= 1) {
+    const a = mercatorProject(bounds.minLon, bounds.minLat, z);
+    const b = mercatorProject(bounds.maxLon, bounds.maxLat, z);
+    const w = Math.abs(b.x - a.x);
+    const h = Math.abs(b.y - a.y);
+    if (w <= safeW && h <= safeH) {
+      best = z;
+      break;
+    }
+  }
+  return best;
+}
+
+async function loadStaticMapImage({ centerLon, centerLat, zoom, width, height }) {
+  if (!dgisApiKey) return null;
+  try {
+    const staticUrl = `https://static.maps.2gis.com/1.0?center=${encodeURIComponent(`${centerLon},${centerLat}`)}&zoom=${encodeURIComponent(String(zoom))}&size=${encodeURIComponent(`${width},${height}`)}&key=${encodeURIComponent(dgisApiKey)}`;
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('static-map-load-failed'));
+      image.src = staticUrl;
+    });
+    return img;
+  } catch {
+    return null;
+  }
+}
+
+async function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgSpeedText, caloriesText }) {
   const width = 1200;
   const height = 630;
   const canvas = document.createElement('canvas');
@@ -2921,7 +2964,17 @@ function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgS
   drawMetricCard(metricX2, 'Время', `${mins}:${secs}`);
   drawMetricCard(metricX3, 'Скорость', avgSpeedText);
 
-  drawRoundRect(40, 322, width - 80, 260, 20);
+  const mapCardX = 40;
+  const mapCardY = 322;
+  const mapCardW = width - 80;
+  const mapCardH = 260;
+  const mapInset = 12;
+  const mapPlotX = mapCardX + mapInset;
+  const mapPlotY = mapCardY + mapInset;
+  const mapPlotW = mapCardW - mapInset * 2;
+  const mapPlotH = mapCardH - mapInset * 2;
+
+  drawRoundRect(mapCardX, mapCardY, mapCardW, mapCardH, 20);
   ctx.fillStyle = 'rgba(12, 18, 28, 0.92)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(122, 149, 191, 0.28)';
@@ -2940,21 +2993,40 @@ function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgS
       maxLon = Math.max(maxLon, lon);
       maxLat = Math.max(maxLat, lat);
     });
-    const plotX = 70;
-    const plotY = 350;
-    const plotW = width - 140;
-    const plotH = 202;
-    const spanLon = Math.max(0.000001, maxLon - minLon);
-    const spanLat = Math.max(0.000001, maxLat - minLat);
-    const scale = Math.min(plotW / spanLon, plotH / spanLat);
-    const usedW = spanLon * scale;
-    const usedH = spanLat * scale;
-    const offsetX = plotX + (plotW - usedW) / 2;
-    const offsetY = plotY + (plotH - usedH) / 2;
-    const projected = coords.map(([lon, lat]) => ([
-      offsetX + (lon - minLon) * scale,
-      offsetY + (maxLat - lat) * scale
-    ]));
+    const centerLon = (minLon + maxLon) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+    const bounds = { minLon, minLat, maxLon, maxLat };
+    const zoom = estimateZoomForBounds(bounds, mapPlotW, mapPlotH, 18, 17);
+    const mapImage = await loadStaticMapImage({
+      centerLon,
+      centerLat,
+      zoom,
+      width: Math.max(300, Math.round(mapPlotW)),
+      height: Math.max(200, Math.round(mapPlotH))
+    });
+
+    drawRoundRect(mapPlotX, mapPlotY, mapPlotW, mapPlotH, 14);
+    ctx.save();
+    ctx.clip();
+    if (mapImage) {
+      ctx.drawImage(mapImage, mapPlotX, mapPlotY, mapPlotW, mapPlotH);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+      ctx.fillRect(mapPlotX, mapPlotY, mapPlotW, mapPlotH);
+    } else {
+      const fallback = ctx.createLinearGradient(0, mapPlotY, 0, mapPlotY + mapPlotH);
+      fallback.addColorStop(0, '#1c2531');
+      fallback.addColorStop(1, '#141c26');
+      ctx.fillStyle = fallback;
+      ctx.fillRect(mapPlotX, mapPlotY, mapPlotW, mapPlotH);
+    }
+
+    const centerPx = mercatorProject(centerLon, centerLat, zoom);
+    const projected = coords.map(([lon, lat]) => {
+      const pt = mercatorProject(lon, lat, zoom);
+      const x = mapPlotX + (mapPlotW / 2) + (pt.x - centerPx.x);
+      const y = mapPlotY + (mapPlotH / 2) + (pt.y - centerPx.y);
+      return [x, y];
+    });
 
     ctx.strokeStyle = 'rgba(77, 118, 169, 0.24)';
     ctx.lineWidth = 16;
@@ -2975,6 +3047,7 @@ function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgS
       else ctx.lineTo(x, y);
     });
     ctx.stroke();
+    ctx.restore();
   }
 
   ctx.fillStyle = '#93a7c2';
@@ -2985,7 +3058,7 @@ function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec, avgS
 }
 
 async function handleShareTrackAsPhoto(payload) {
-  const dataUrl = buildTrackShareImageDataUrl(payload);
+  const dataUrl = await buildTrackShareImageDataUrl(payload);
   if (!dataUrl) return;
   const response = await fetch(dataUrl);
   const blob = await response.blob();
