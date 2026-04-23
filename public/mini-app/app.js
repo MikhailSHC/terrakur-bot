@@ -305,6 +305,8 @@ let uiTimerId = null;
 let lastFlyTime = 0;
 let lastCameraCenter = null;
 let isFollowingUser = true;
+let followResumeTimerId = null;
+const FOLLOW_RESUME_DELAY_MS = 15000;
 let geoRetryTimerId = null;
 const GEO_RETRY_INTERVAL_MS = 15000;
 
@@ -335,6 +337,43 @@ function debugReplay(stage, extra = '') {
   const msg = `[replay] ${stage}${extra ? ` | ${extra}` : ''}`;
   console.log(msg);
   if (statusDiv) statusDiv.innerText = msg;
+}
+
+function clearFollowResumeTimer() {
+  if (followResumeTimerId !== null) {
+    clearTimeout(followResumeTimerId);
+    followResumeTimerId = null;
+  }
+}
+
+function scheduleFollowResume() {
+  clearFollowResumeTimer();
+  followResumeTimerId = setTimeout(() => {
+    isFollowingUser = true;
+    followResumeTimerId = null;
+    if (lastKnownPosition) {
+      const center = [lastKnownPosition.longitude, lastKnownPosition.latitude];
+      map.easeTo({
+        center,
+        zoom: cinematicDemoEnabled ? 17.2 : 17,
+        duration: cinematicDemoEnabled ? 700 : 500,
+        pitch: cinematicDemoEnabled ? 46 : 0,
+        bearing: cinematicDemoEnabled && typeof lastHeadingDeg === 'number' ? lastHeadingDeg : 0
+      });
+    }
+  }, FOLLOW_RESUME_DELAY_MS);
+}
+
+function registerMapUserInteractionPause() {
+  if (!map || typeof map.on !== 'function') return;
+  const pauseFollow = () => {
+    isFollowingUser = false;
+    scheduleFollowResume();
+  };
+  // Any manual map interaction pauses camera follow temporarily.
+  ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart', 'touchstart', 'movestart'].forEach((evt) => {
+    map.on(evt, pauseFollow);
+  });
 }
 
 function stopGeoRetryLoop() {
@@ -657,9 +696,7 @@ function initMap() {
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
   }
   if (typeof map.on === 'function') {
-    map.on('dragstart', () => {
-      isFollowingUser = false;
-    });
+    registerMapUserInteractionPause();
   }
 
 
@@ -797,6 +834,7 @@ function ensureUiEnhancements() {
       ? 'position:fixed;bottom:172px;right:16px;z-index:3;background:rgba(12,18,28,0.72);border:1px solid rgba(255,255,255,0.2);backdrop-filter:blur(8px);border-radius:28px;padding:9px 14px;font-size:13px;font-weight:600;color:#fff;'
       : 'position:fixed;bottom:160px;right:16px;z-index:3;background:rgba(0,0,0,0.75);border:none;border-radius:28px;padding:8px 14px;font-size:13px;font-weight:600;color:#fff;';
     recenterBtn.onclick = () => {
+      clearFollowResumeTimer();
       isFollowingUser = true;
       if (lastKnownPosition) {
         const center = [lastKnownPosition.longitude, lastKnownPosition.latitude];
