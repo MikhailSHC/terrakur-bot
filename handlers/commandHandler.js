@@ -37,18 +37,27 @@ class CommandHandler {
 
     async handleStart(chatId, options = {}) {
         const { withGreeting = false } = options;
+        const sessionBefore = this.userService.getUserSession(chatId);
+        const isFirstVisit = !sessionBefore?.hasSeenWelcome;
 
         this.userService.setUserState(chatId, 'start', {
             hasSeenWelcome: true
         });
 
-        if (withGreeting) {
+        if (withGreeting || isFirstVisit) {
             await this.bot.api.sendMessageToChat(
                 chatId,
                 '🌿 Добро пожаловать в ЗОЖ-маршруты и тропы Ставрополья!\n\n' +
                 'Здесь вы сможете выбрать маршрут по городу, найти тропы рядом с вами и сохранить свои тренировки в истории.\n\n' +
                 'Рад быть вашим проводником к активному отдыху 💚',
                 { parse_mode: 'Markdown' }
+            );
+        }
+
+        if (isFirstVisit) {
+            await this.bot.api.sendMessageToChat(
+                chatId,
+                '👋 Вы здесь впервые. Обязательно откройте «❓ Помощь» — там быстрый сценарий запуска, советы по геолокации и ответы на частые вопросы.'
             );
         }
 

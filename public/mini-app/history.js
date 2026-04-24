@@ -1007,38 +1007,62 @@ async function init() {
         locationRetryTimerId = null;
       }
     };
-    const attemptLocationSave = () => {
+    const resolveLocationErrorMessage = (err) => {
+      const code = Number(err?.code);
+      if (code === 1) return 'Доступ к геолокации запрещен. Разрешите доступ в настройках MAX.';
+      if (code === 2) return 'Не удалось определить координаты. Проверяем снова...';
+      if (code === 3) return 'Превышено время ожидания геолокации. Проверяем снова...';
+      return 'Геолокацию обнаружить не удалось. Проверяем снова...';
+    };
+    const shouldRetryLocation = (err) => {
+      const code = Number(err?.code);
+      return code !== 1;
+    };
+    const requestCurrentPosition = () => {
+      return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos),
+          () => {
+            // Fallback to less strict mode for weak signal / indoors.
+            navigator.geolocation.getCurrentPosition(
+              (pos) => resolve(pos),
+              (errLow) => reject(errLow),
+              { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
+            );
+          },
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+      });
+    };
+    const attemptLocationSave = async () => {
       if (!navigator.geolocation) {
         if (locationStatusEl) locationStatusEl.textContent = 'Геолокация недоступна на устройстве';
         stopLocationRetry();
         return;
       }
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          try {
-            const profile = await saveLocation(chatId, authToken, maxInitData, pos.coords.latitude, pos.coords.longitude);
-            if (locationStatusEl) {
-              locationStatusEl.textContent = profile?.hasLocation
-                ? 'Геолокация сохранена'
-                : 'Геолокация не указана';
-            }
-            stopLocationRetry();
-          } catch (err) {
-            if (locationStatusEl) locationStatusEl.textContent = err.message || 'Ошибка сохранения геолокации';
-          }
-        },
-        () => {
-          if (locationStatusEl) {
-            locationStatusEl.textContent = 'Геолокацию обнаружить не удалось. Проверяем снова...';
-          }
-          if (locationRetryTimerId === null) {
-            locationRetryTimerId = setInterval(() => {
-              attemptLocationSave();
-            }, LOCATION_RETRY_MS);
-          }
-        },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-      );
+      try {
+        const pos = await requestCurrentPosition();
+        const profile = await saveLocation(chatId, authToken, maxInitData, pos.coords.latitude, pos.coords.longitude);
+        if (locationStatusEl) {
+          locationStatusEl.textContent = profile?.hasLocation
+            ? 'Геолокация сохранена'
+            : 'Геолокация не указана';
+        }
+        stopLocationRetry();
+      } catch (err) {
+        if (locationStatusEl) {
+          locationStatusEl.textContent = resolveLocationErrorMessage(err);
+        }
+        if (!shouldRetryLocation(err)) {
+          stopLocationRetry();
+          return;
+        }
+        if (locationRetryTimerId === null) {
+          locationRetryTimerId = setInterval(() => {
+            attemptLocationSave();
+          }, LOCATION_RETRY_MS);
+        }
+      }
     };
     updateLocationBtnEl.addEventListener('click', () => {
       if (!navigator.geolocation) {
