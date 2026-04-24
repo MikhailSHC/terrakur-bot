@@ -1470,6 +1470,50 @@
         "type": "LineString",
         "coordinates": [
           [
+            41.95709364917002,
+            45.0512797449695
+          ],
+          [
+            41.95031993608845,
+            45.0497313674433
+          ],
+          [
+            41.954852664149236,
+            45.0486759798599
+          ],
+          [
+            41.95806683821267,
+            45.049252600717
+          ],
+          [
+            41.957133109634924,
+            45.051260055373334
+          ],
+          [
+            41.95709364917002,
+            45.0512797449695
+          ]
+        ]
+      },
+      "properties": {
+        "id": "komsomolskiy-prud-stavropol",
+        "name": "Комсомольский пруд",
+        "description": "Кольцевой маршрут вокруг пруда для спокойной ходьбы в парковой зоне.",
+        "distanceKm": 1.5,
+        "duration": "16 мин",
+        "difficulty": 1,
+        "locationId": "stavropol",
+        "activities": [
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
             43.1234,
             44.1111
           ],
@@ -1530,6 +1574,123 @@
         "locationId": "kavminvody",
         "activities": [
           "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            42.716803783840525,
+            43.89924491508951
+          ],
+          [
+            42.72038895224748,
+            43.8919983175709
+          ],
+          [
+            42.72045358196199,
+            43.89302955303583
+          ],
+          [
+            42.72036185680439,
+            43.8949362706481
+          ],
+          [
+            42.71709924904359,
+            43.89939250647943
+          ]
+        ]
+      },
+      "properties": {
+        "id": "kislovodsk-terrenkur-1-koltso",
+        "name": "Терренкур №1 (Кольцевой)",
+        "description": "Кольцевой терренкур в Кисловодске для оздоровительной ходьбы и беговых тренировок.",
+        "distanceKm": 1.9,
+        "duration": "20-30 мин",
+        "difficulty": 1,
+        "locationId": "kislovodsk",
+        "activities": [
+          "running",
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            42.7322678619767,
+            43.8999825179791
+          ],
+          [
+            42.7353768603382,
+            43.898631560182
+          ],
+          [
+            42.73649946528575,
+            43.8986107317611
+          ],
+          [
+            42.736552584133655,
+            43.896633319821746
+          ]
+        ]
+      },
+      "properties": {
+        "id": "kislovodsk-terrenkur-2a",
+        "name": "Терренкур 2А",
+        "description": "Короткий терренкурный маршрут в Кисловодске для ходьбы в умеренном темпе.",
+        "distanceKm": 1,
+        "duration": "10-15 мин",
+        "difficulty": 1,
+        "locationId": "kislovodsk",
+        "activities": [
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            42.7242008810741,
+            43.9395776486416
+          ],
+          [
+            42.71745701707501,
+            43.93474187454628
+          ],
+          [
+            42.705533676326986,
+            43.934307710103155
+          ],
+          [
+            42.71479358998217,
+            43.9400995403855
+          ],
+          [
+            42.72362009906664,
+            43.939440680132826
+          ]
+        ]
+      },
+      "properties": {
+        "id": "kislovodsk-ozero-novoe",
+        "name": "Озеро новое",
+        "description": "Протяжённый маршрут в районе озера для беговых тренировок.",
+        "distanceKm": 4.2,
+        "duration": "20-30 мин",
+        "difficulty": 2,
+        "locationId": "kislovodsk",
+        "activities": [
+          "running"
         ]
       }
     },
@@ -1602,6 +1763,252 @@
         "locationId": "kislovodsk",
         "activities": [
           "running"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            43.071197938116,
+            44.0393311374502
+          ],
+          [
+            43.08025608524234,
+            44.0409015797043
+          ],
+          [
+            43.07290380006746,
+            44.0403778129594
+          ],
+          [
+            43.07104668024961,
+            44.04025489925673
+          ],
+          [
+            43.07116242216,
+            44.0393601518053
+          ]
+        ]
+      },
+      "properties": {
+        "id": "pyatigorsk-park-vokrug-istochnika",
+        "name": "Парк вокруг источника",
+        "description": "Кольцевой маршрут вокруг источника в центральной парковой зоне Пятигорска.",
+        "distanceKm": 1.7,
+        "duration": "18-25 мин",
+        "difficulty": 1,
+        "locationId": "pyatigorsk",
+        "activities": [
+          "running",
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            43.079028593279325,
+            44.0405507439028
+          ],
+          [
+            43.08114983693562,
+            44.05608422710364
+          ],
+          [
+            43.0925219538427,
+            44.049758820226636
+          ],
+          [
+            43.08707942803283,
+            44.05205926269908
+          ],
+          [
+            43.08891448858992,
+            44.05077491932565
+          ]
+        ]
+      },
+      "properties": {
+        "id": "pyatigorsk-gora-mashuk-terrenkur-1",
+        "name": "Гора Машук (терренкур №1)",
+        "description": "Протяженный терренкур по склонам Машука с набором высоты и смотровыми зонами.",
+        "distanceKm": 5.1,
+        "duration": "50-70 мин",
+        "difficulty": 2,
+        "locationId": "pyatigorsk",
+        "activities": [
+          "running",
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            43.063276085590914,
+            44.059858805669
+          ],
+          [
+            43.06048710879822,
+            44.0580965518657
+          ],
+          [
+            43.06264981585218,
+            44.0544376070313
+          ],
+          [
+            43.06320101385574,
+            44.0545359846052
+          ],
+          [
+            43.0633030698378,
+            44.0598554712957
+          ]
+        ]
+      },
+      "properties": {
+        "id": "pyatigorsk-komsomolskiy-park-koltso",
+        "name": "Комсомольский парк",
+        "description": "Кольцевой маршрут по Комсомольскому парку, удобный для регулярных коротких тренировок.",
+        "distanceKm": 1.4,
+        "duration": "15-25 мин",
+        "difficulty": 1,
+        "locationId": "pyatigorsk",
+        "activities": [
+          "running",
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            43.08070194344887,
+            44.0365506155797
+          ],
+          [
+            43.08677116621772,
+            44.037371930525715
+          ],
+          [
+            43.0873482577995,
+            44.0394020886369
+          ],
+          [
+            43.08044661660884,
+            44.0368561480115
+          ],
+          [
+            43.08066573732914,
+            44.0365741693509
+          ]
+        ]
+      },
+      "properties": {
+        "id": "pyatigorsk-park-cvetnik-koltso",
+        "name": "Парк цветник (кольцевой)",
+        "description": "Короткий кольцевой маршрут в районе парка Цветник.",
+        "distanceKm": 1.7,
+        "duration": "18-25 мин",
+        "difficulty": 1,
+        "locationId": "pyatigorsk",
+        "activities": [
+          "running",
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            43.00859892825038,
+            44.0358506033431
+          ],
+          [
+            42.99974526310738,
+            44.03527645847967
+          ],
+          [
+            43.010884466698,
+            44.0303249408018
+          ],
+          [
+            43.01110846499907,
+            44.03504284243641
+          ],
+          [
+            43.00885680234277,
+            44.0357807579841
+          ]
+        ]
+      },
+      "properties": {
+        "id": "pyatigorsk-novopyatigorskoe-ozero",
+        "name": "Озеро Новопятигорское",
+        "description": "Маршрут вокруг Новопятигорского озера с длинными прямыми участками.",
+        "distanceKm": 3.1,
+        "duration": "30-45 мин",
+        "difficulty": 2,
+        "locationId": "pyatigorsk",
+        "activities": [
+          "running",
+          "nordic_walking"
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            43.06453389998162,
+            44.0323450374798
+          ],
+          [
+            43.064758058769996,
+            44.03379558662558
+          ],
+          [
+            43.05964242890222,
+            44.0334951176576
+          ],
+          [
+            43.0588885727939,
+            44.0312998594921
+          ],
+          [
+            43.06403324880346,
+            44.03226757362072
+          ]
+        ]
+      },
+      "properties": {
+        "id": "pyatigorsk-park-kirova-koltso",
+        "name": "Парк им. Кирова (кольцевой)",
+        "description": "Кольцевой маршрут через основные аллеи парка им. Кирова.",
+        "distanceKm": 1.5,
+        "duration": "15-25 мин",
+        "difficulty": 1,
+        "locationId": "pyatigorsk",
+        "activities": [
+          "running",
+          "nordic_walking"
         ]
       }
     },

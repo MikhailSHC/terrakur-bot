@@ -16,7 +16,7 @@ const routes = [
 
     name: 'Таманский лес',
 
-    description: 'Красивая лесная тропа с разнообразной флорой и фауной',
+    description: 'Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.',
 
 
 
@@ -68,7 +68,7 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 
@@ -82,7 +82,7 @@ const routes = [
 
     name: 'Татарское городище',
 
-    description: 'Исторический археологический памятник с панорамными видами',
+    description: 'Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.',
 
 
 
@@ -134,7 +134,7 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 
@@ -397,7 +397,7 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 
@@ -659,11 +659,82 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 
 
+
+  {
+
+    id: 'komsomolskiy-prud-stavropol',
+
+    locationId: 'stavropol',
+
+
+
+    name: 'Комсомольский пруд',
+
+    description: 'Кольцевой маршрут вокруг пруда для спокойной ходьбы в парковой зоне.',
+
+
+
+    activities: ['nordic_walking'],
+
+
+
+    difficulty: 1,
+
+    duration: '16 мин',
+
+
+
+    distanceKm: 1.5,
+
+    distanceText: '1.5 км',
+
+
+
+    poi: [
+
+      'Комсомольский пруд',
+
+      'Пешеходные аллеи',
+
+      'Парковые дорожки'
+
+    ],
+
+
+
+    targetAudience: ['beginners', 'families', 'elderly'],
+
+
+
+    center: {
+
+      lat: 45.0499,
+
+      lon: 41.9559
+
+    },
+
+
+
+    track: [
+      [45.0512797449695, 41.95709364917002],
+      [45.0497313674433, 41.95031993608845],
+      [45.0486759798599, 41.954852664149236],
+      [45.049252600717, 41.95806683821267],
+      [45.051260055373334, 41.957133109634924],
+      [45.0512797449695, 41.95709364917002]
+    ],
+
+
+
+    status: 'active'
+
+  },
 
   // ===== KAVMINVODY =====
 
@@ -747,7 +818,7 @@ const routes = [
 
     name: 'Сафонова дача',
 
-    description: 'Государственный природный заповедник с охраняемыми тропами',
+    description: 'Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.',
 
 
 
@@ -797,13 +868,90 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 
 
 
   // ===== KISLOVODSK =====
+
+  {
+    id: 'kislovodsk-terrenkur-1-koltso',
+    locationId: 'kislovodsk',
+    name: 'Терренкур №1 (Кольцевой)',
+    description: 'Кольцевой терренкур в Кисловодске для оздоровительной ходьбы и беговых тренировок.',
+    activities: ['running', 'nordic_walking'],
+    difficulty: 1,
+    duration: '20-30 мин',
+    distanceKm: 1.9,
+    distanceText: '1.9 км',
+    poi: ['Парковые тропы', 'Терренкурные участки', 'Лестничные фрагменты'],
+    targetAudience: ['beginners', 'health_focused', 'elderly'],
+    center: {
+      lat: 43.8959,
+      lon: 42.7194
+    },
+    track: [
+      [43.89924491508951, 42.716803783840525],
+      [43.8919983175709, 42.72038895224748],
+      [43.89302955303583, 42.72045358196199],
+      [43.8949362706481, 42.72036185680439],
+      [43.89939250647943, 42.71709924904359]
+    ],
+    status: 'active'
+  },
+
+  {
+    id: 'kislovodsk-terrenkur-2a',
+    locationId: 'kislovodsk',
+    name: 'Терренкур 2А',
+    description: 'Короткий терренкурный маршрут в Кисловодске для ходьбы в умеренном темпе.',
+    activities: ['nordic_walking'],
+    difficulty: 1,
+    duration: '10-15 мин',
+    distanceKm: 1.0,
+    distanceText: '1.0 км',
+    poi: ['Терренкур 2А', 'Парковые тропы', 'Плавный рельеф'],
+    targetAudience: ['beginners', 'health_focused', 'elderly'],
+    center: {
+      lat: 43.8980,
+      lon: 42.7352
+    },
+    track: [
+      [43.8999825179791, 42.7322678619767],
+      [43.898631560182, 42.7353768603382],
+      [43.8986107317611, 42.73649946528575],
+      [43.896633319821746, 42.736552584133655]
+    ],
+    status: 'active'
+  },
+
+  {
+    id: 'kislovodsk-ozero-novoe',
+    locationId: 'kislovodsk',
+    name: 'Озеро новое',
+    description: 'Протяжённый маршрут в районе озера для беговых тренировок.',
+    activities: ['running'],
+    difficulty: 2,
+    duration: '20-30 мин',
+    distanceKm: 4.2,
+    distanceText: '4.2 км',
+    poi: ['Озерная зона', 'Протяжённые участки', 'Панорамные точки'],
+    targetAudience: ['intermediate', 'running_lovers'],
+    center: {
+      lat: 43.9370,
+      lon: 42.7177
+    },
+    track: [
+      [43.9395776486416, 42.7242008810741],
+      [43.93474187454628, 42.71745701707501],
+      [43.934307710103155, 42.705533676326986],
+      [43.9400995403855, 42.71479358998217],
+      [43.939440680132826, 42.72362009906664]
+    ],
+    status: 'active'
+  },
 
   {
 
@@ -899,7 +1047,7 @@ const routes = [
 
     name: 'Гора Олка',
 
-    description: 'Панорамные виды с горной вершины',
+    description: 'Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.',
 
 
 
@@ -949,13 +1097,169 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 
 
 
   // ===== PYATIGORSK =====
+
+  {
+    id: 'pyatigorsk-park-vokrug-istochnika',
+    locationId: 'pyatigorsk',
+    name: 'Парк вокруг источника',
+    description: 'Кольцевой маршрут вокруг источника в центральной парковой зоне Пятигорска.',
+    activities: ['running', 'nordic_walking'],
+    difficulty: 1,
+    duration: '18-25 мин',
+    distanceKm: 1.7,
+    distanceText: '1.7 км',
+    poi: ['Источник', 'Парковые аллеи', 'Лестничные участки'],
+    targetAudience: ['beginners', 'families', 'elderly'],
+    center: {
+      lat: 44.0401,
+      lon: 43.0751
+    },
+    track: [
+      [44.0393311374502, 43.071197938116],
+      [44.0409015797043, 43.08025608524234],
+      [44.0403778129594, 43.07290380006746],
+      [44.04025489925673, 43.07104668024961],
+      [44.0393601518053, 43.07116242216]
+    ],
+    status: 'active'
+  },
+
+  {
+    id: 'pyatigorsk-gora-mashuk-terrenkur-1',
+    locationId: 'pyatigorsk',
+    name: 'Гора Машук (терренкур №1)',
+    description: 'Протяженный терренкур по склонам Машука с набором высоты и смотровыми зонами.',
+    activities: ['running', 'nordic_walking'],
+    difficulty: 2,
+    duration: '50-70 мин',
+    distanceKm: 5.1,
+    distanceText: '5.1 км',
+    poi: ['Склоны Машука', 'Смотровые участки', 'Терренкурные тропы'],
+    targetAudience: ['intermediate', 'health_focused'],
+    center: {
+      lat: 44.0498,
+      lon: 43.0871
+    },
+    track: [
+      [44.0405507439028, 43.079028593279325],
+      [44.05608422710364, 43.08114983693562],
+      [44.049758820226636, 43.0925219538427],
+      [44.05205926269908, 43.08707942803283],
+      [44.05077491932565, 43.08891448858992]
+    ],
+    status: 'active'
+  },
+
+  {
+    id: 'pyatigorsk-komsomolskiy-park-koltso',
+    locationId: 'pyatigorsk',
+    name: 'Комсомольский парк',
+    description: 'Кольцевой маршрут по Комсомольскому парку, удобный для регулярных коротких тренировок.',
+    activities: ['running', 'nordic_walking'],
+    difficulty: 1,
+    duration: '15-25 мин',
+    distanceKm: 1.4,
+    distanceText: '1.4 км',
+    poi: ['Аллеи Комсомольского парка', 'Зоны отдыха', 'Короткие петли'],
+    targetAudience: ['beginners', 'families', 'elderly'],
+    center: {
+      lat: 44.0579,
+      lon: 43.0629
+    },
+    track: [
+      [44.059858805669, 43.063276085590914],
+      [44.0580965518657, 43.06048710879822],
+      [44.0544376070313, 43.06264981585218],
+      [44.0545359846052, 43.06320101385574],
+      [44.0598554712957, 43.0633030698378]
+    ],
+    status: 'active'
+  },
+
+  {
+    id: 'pyatigorsk-park-cvetnik-koltso',
+    locationId: 'pyatigorsk',
+    name: 'Парк цветник (кольцевой)',
+    description: 'Короткий кольцевой маршрут в районе парка Цветник.',
+    activities: ['running', 'nordic_walking'],
+    difficulty: 1,
+    duration: '18-25 мин',
+    distanceKm: 1.7,
+    distanceText: '1.7 км',
+    poi: ['Парк Цветник', 'Лестничные фрагменты', 'Пешеходные петли'],
+    targetAudience: ['beginners', 'families'],
+    center: {
+      lat: 44.0373,
+      lon: 43.0832
+    },
+    track: [
+      [44.0365506155797, 43.08070194344887],
+      [44.037371930525715, 43.08677116621772],
+      [44.0394020886369, 43.0873482577995],
+      [44.0368561480115, 43.08044661660884],
+      [44.0365741693509, 43.08066573732914]
+    ],
+    status: 'active'
+  },
+
+  {
+    id: 'pyatigorsk-novopyatigorskoe-ozero',
+    locationId: 'pyatigorsk',
+    name: 'Озеро Новопятигорское',
+    description: 'Маршрут вокруг Новопятигорского озера с длинными прямыми участками.',
+    activities: ['running', 'nordic_walking'],
+    difficulty: 2,
+    duration: '30-45 мин',
+    distanceKm: 3.1,
+    distanceText: '3.1 км',
+    poi: ['Озеро Новопятигорское', 'Набережные тропы', 'Панорамные точки'],
+    targetAudience: ['intermediate', 'nature_lovers'],
+    center: {
+      lat: 44.0349,
+      lon: 43.0068
+    },
+    track: [
+      [44.0358506033431, 43.00859892825038],
+      [44.03527645847967, 42.99974526310738],
+      [44.0303249408018, 43.010884466698],
+      [44.03504284243641, 43.01110846499907],
+      [44.0357807579841, 43.00885680234277]
+    ],
+    status: 'active'
+  },
+
+  {
+    id: 'pyatigorsk-park-kirova-koltso',
+    locationId: 'pyatigorsk',
+    name: 'Парк им. Кирова (кольцевой)',
+    description: 'Кольцевой маршрут через основные аллеи парка им. Кирова.',
+    activities: ['running', 'nordic_walking'],
+    difficulty: 1,
+    duration: '15-25 мин',
+    distanceKm: 1.5,
+    distanceText: '1.5 км',
+    poi: ['Парк им. Кирова', 'Центральные аллеи', 'Петли для интервальных тренировок'],
+    targetAudience: ['beginners', 'families', 'elderly'],
+    center: {
+      lat: 44.0328,
+      lon: 43.0626
+    },
+    track: [
+      [44.0323450374798, 43.06453389998162],
+      [44.03379558662558, 43.064758058769996],
+      [44.0334951176576, 43.05964242890222],
+      [44.0312998594921, 43.0588885727939],
+      [44.03226757362072, 43.06403324880346]
+    ],
+    status: 'active'
+  },
 
   {
 
@@ -967,7 +1271,7 @@ const routes = [
 
     name: 'Озеро Провал и гора Машук',
 
-    description: 'Живописная озёрная местность с горными видами',
+    description: 'Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.',
 
 
 
@@ -1017,7 +1321,7 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 
@@ -1031,7 +1335,7 @@ const routes = [
 
     name: 'Горский парк тропы',
 
-    description: 'Городской парк с множеством пешеходных дорожек',
+    description: 'Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.',
 
 
 
@@ -1081,7 +1385,7 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   }
 
