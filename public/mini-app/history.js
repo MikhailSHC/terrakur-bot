@@ -109,6 +109,36 @@ function getParams() {
   };
 }
 
+let closeConfirmationBound = false;
+function enableMiniAppCloseConfirmation() {
+  if (closeConfirmationBound) return;
+  closeConfirmationBound = true;
+  const webApp = window.WebApp || window.Telegram?.WebApp || null;
+  if (!webApp) return;
+  try {
+    if (typeof webApp.ready === 'function') webApp.ready();
+  } catch {
+    // noop
+  }
+  try {
+    if (typeof webApp.enableClosingConfirmation === 'function') webApp.enableClosingConfirmation();
+  } catch {
+    // noop
+  }
+  try {
+    if (typeof webApp.setClosingConfirmation === 'function') webApp.setClosingConfirmation(true);
+  } catch {
+    // noop
+  }
+  try {
+    if (typeof webApp.setupClosingBehavior === 'function') {
+      webApp.setupClosingBehavior({ need_confirmation: true });
+    }
+  } catch {
+    // noop
+  }
+}
+
 function buildAuthHeaders(authToken, maxInitData) {
   const headers = {};
   if (authToken) headers['x-miniapp-auth'] = authToken;
@@ -166,7 +196,7 @@ async function fetchWithRetry(input, init = {}, options = {}) {
 }
 
 function getSessionsCacheKey(chatId) {
-  return `terrakur.history.payload.v1:${String(chatId || 'unknown')}`;
+  return `livetrack.history.payload.v1:${String(chatId || 'unknown')}`;
 }
 
 function saveSessionsPayloadCache(chatId, payload) {
@@ -648,6 +678,7 @@ async function deleteHistoryEntry(chatId, authToken, maxInitData, entry) {
 }
 
 async function init() {
+  enableMiniAppCloseConfirmation();
   const { chatId, authToken, maxInitData } = getParams();
   const statusEl = document.getElementById('status');
   const errorBox = document.getElementById('errorBox');

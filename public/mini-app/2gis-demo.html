@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <title>TerraKur 2GIS Demo</title>
+  <title>LiveTrack — Живая Тропа 2GIS Demo</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -172,7 +172,7 @@
   <div id="status">Подготовка 2GIS демо...</div>
   <div id="topBar" class="glass">
     <div>
-      <strong>TerraKur • 2GIS Demo</strong><br>
+      <strong>LiveTrack — Живая Тропа • 2GIS Demo</strong><br>
       <span id="routeTitle">Маршрут</span>
     </div>
     <button id="startBtn" type="button">Старт</button>
@@ -411,7 +411,7 @@
           running = false;
           progressInner.style.width = '100%';
           statusEl.textContent = cleanMode
-            ? 'TerraKur demo complete'
+            ? 'LiveTrack — Живая Тропа demo complete'
             : 'Готово для записи: дубль завершен';
           completionCard.classList.add('show');
         } catch (err) {

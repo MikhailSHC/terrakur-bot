@@ -2,9 +2,7 @@
 
 // ==================== ГЛАВНОЕ МЕНЮ ====================
 function getMainMenuKeyboard(historyUrl) {
-  const historyButton = historyUrl
-    ? { type: 'link', text: '📊 Моя история', url: historyUrl }
-    : { type: 'callback', text: '📊 Моя история', payload: 'my_history' };
+  void historyUrl;
 
   return {
     type: 'inline_keyboard',
@@ -19,7 +17,6 @@ function getMainMenuKeyboard(historyUrl) {
         [
           { type: 'callback', text: '📍 Рядом со мной', payload: 'nearby_routes' }
         ],
-        [historyButton],
         [
           { type: 'callback', text: '❓ Помощь', payload: 'help' }
         ]

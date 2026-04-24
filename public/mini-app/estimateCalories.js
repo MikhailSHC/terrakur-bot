@@ -1,6 +1,6 @@
 const TERRAKUR_DEFAULT_WEIGHT_KG = 70;
 
-function terrakurMetFromSpeedKmh(v) {
+function liveTrackMetFromSpeedKmh(v) {
   if (!Number.isFinite(v) || v < 0) return 5;
   if (v < 3.5) return 3.3;
   if (v < 5) return 4.3;
@@ -17,7 +17,7 @@ function createEstimateWorkoutCaloriesKcal(distanceM, durationSec, weightKg = TE
   const t = Number(durationSec) || 0;
   if (d <= 0 || t <= 0) return 0;
   const kmh = (d / 1000) / (t / 3600);
-  return terrakurMetFromSpeedKmh(kmh) * weightKg * (t / 3600);
+  return liveTrackMetFromSpeedKmh(kmh) * weightKg * (t / 3600);
 }
 
 function createFormatCaloriesKcalShort(kcal) {

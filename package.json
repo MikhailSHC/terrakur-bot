@@ -1,7 +1,7 @@
 {
-  "name": "max-terrakur-bot",
+  "name": "livetrack-zhivaya-tropa-bot",
   "version": "1.0.0",
-  "description": "TerraKur bot for MAX messenger",
+  "description": "LiveTrack — Живая Тропа bot for MAX messenger",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

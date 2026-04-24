@@ -1,4 +1,4 @@
-# TerraKur Bot
+# LiveTrack - Живая Тропа
 
 Node.js bot for MAX messenger with an Express API and mini-app tracker.
 

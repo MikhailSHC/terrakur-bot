@@ -1,4 +1,4 @@
-// app.js – TerraKur беговой трекер (улучшенный GPS-фильтр)
+// app.js - LiveTrack - Живая Тропа (улучшенный GPS-фильтр)
 
 
 
@@ -251,6 +251,36 @@ async function ensureDgisApiKeyLoaded() {
     } catch {
       return '';
     }
+
+let closeConfirmationBound = false;
+function enableMiniAppCloseConfirmation() {
+  if (closeConfirmationBound) return;
+  closeConfirmationBound = true;
+  const webApp = window.WebApp || window.Telegram?.WebApp || null;
+  if (!webApp) return;
+  try {
+    if (typeof webApp.ready === 'function') webApp.ready();
+  } catch {
+    // noop
+  }
+  try {
+    if (typeof webApp.enableClosingConfirmation === 'function') webApp.enableClosingConfirmation();
+  } catch {
+    // noop
+  }
+  try {
+    if (typeof webApp.setClosingConfirmation === 'function') webApp.setClosingConfirmation(true);
+  } catch {
+    // noop
+  }
+  try {
+    if (typeof webApp.setupClosingBehavior === 'function') {
+      webApp.setupClosingBehavior({ need_confirmation: true });
+    }
+  } catch {
+    // noop
+  }
+}
   };
   try {
     const res = await fetchWithRetry('/api/runtime-config', { cache: 'no-store' }, { retries: 2, timeoutMs: 10000 });
@@ -3070,7 +3100,7 @@ async function buildTrackShareImageDataUrl({ trackCoords, distanceKm, elapsedSec
 
   ctx.fillStyle = '#eaf1fb';
   ctx.font = '600 48px "Segoe UI", Arial, sans-serif';
-  ctx.fillText('TerraKur', 74, 112);
+  ctx.fillText('LiveTrack — Живая Тропа', 74, 112);
   ctx.fillStyle = '#97aac6';
   ctx.font = '500 30px "Segoe UI", Arial, sans-serif';
   ctx.fillText(`${getActivityLabelForShare()} · ${getRouteNameSafe()}`, 74, 168);
@@ -3206,18 +3236,18 @@ async function handleShareTrackAsPhoto(payload) {
   if (!dataUrl) return;
   const response = await fetch(dataUrl);
   const blob = await response.blob();
-  const file = new File([blob], 'terrakur-route.png', { type: 'image/png' });
+  const file = new File([blob], 'livetrack-route.png', { type: 'image/png' });
   if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     await navigator.share({
-      title: 'TerraKur маршрут',
-      text: 'Мой пройденный маршрут в TerraKur',
+      title: 'LiveTrack — Живая Тропа',
+      text: 'Мой пройденный маршрут в LiveTrack — Живая Тропа',
       files: [file]
     });
     return;
   }
   const link = document.createElement('a');
   link.href = dataUrl;
-  link.download = 'terrakur-route.png';
+  link.download = 'livetrack-route.png';
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -3252,6 +3282,15 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
     `<div id="shareTrackPhotoStatus" style="font-size:11px;opacity:0.75;margin-bottom:8px;"></div>` +
     `<div id="saveRouteFlowHost"></div>`;
 
+  const showSummaryPanel = (extraText = '') => {
+    replayPanelEl.innerHTML =
+      summaryCard +
+      `<div style="font-size:11px;opacity:0.75;margin-top:8px;">${extraText || 'Пройденная тропа на карте отмечена зелёным.'}</div>`;
+    replayPanelEl.style.display = 'block';
+    renderSaveRouteFlow(saveMeta);
+    bindSharePhotoAction();
+  };
+
   const bindSharePhotoAction = () => {
     const shareBtn = replayPanelEl.querySelector('#shareTrackPhotoBtn');
     const shareStatusEl = replayPanelEl.querySelector('#shareTrackPhotoStatus');
@@ -3277,14 +3316,13 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
 
   if (showReplay && Array.isArray(trackCoords) && trackCoords.length >= 2) {
     debugReplay('ui:prepare_replay', `saved=${isSaved}`);
-    replayPanelEl.innerHTML =
-      summaryCard +
-      `<div id="replayPhase" style="font-size:11px;opacity:0.75;margin-top:6px;">Подготовка воспроизведения...</div>`;
+    replayPanelEl.innerHTML = `<div id="replayPhase" style="font-size:12px;opacity:0.85;margin-top:2px;">Подготовка воспроизведения...</div>`;
     replayPanelEl.style.display = 'block';
     const phaseEl = replayPanelEl.querySelector('#replayPhase');
     const replayWatchdogId = setTimeout(() => {
       if (phaseEl && /Подготовка/.test(phaseEl.textContent || '')) {
-        phaseEl.textContent = 'Запуск воспроизведения занял слишком долго. Показан итог тренировки.';
+        phaseEl.textContent = 'Запуск воспроизведения занял слишком долго. Показываем итог тренировки.';
+        showSummaryPanel('Воспроизведение недоступно, показан итог тренировки.');
       }
     }, 2500);
     try {
@@ -3296,32 +3334,26 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
         onDone: (err) => {
           clearTimeout(replayWatchdogId);
           debugReplay('ui:replay_onDone', err ? String(err.message || err) : 'ok');
-          if (phaseEl) {
-            if (err) phaseEl.textContent = 'Воспроизведение недоступно, показан итог тренировки.';
-            else phaseEl.remove();
-          }
+          if (phaseEl) phaseEl.remove();
           removeStartMarker();
           removeFinishMarker();
+          showSummaryPanel(
+            err
+              ? 'Воспроизведение недоступно, показан итог тренировки.'
+              : 'Воспроизведение завершено. Итог тренировки доступен ниже.'
+          );
         }
       });
     } catch (err) {
       clearTimeout(replayWatchdogId);
       debugReplay('ui:replay_start_failed', err.message || 'unknown');
-      if (phaseEl) {
-        phaseEl.textContent = 'Не удалось запустить воспроизведение, показан итог тренировки.';
-      }
+      if (phaseEl) phaseEl.textContent = 'Не удалось запустить воспроизведение, показан итог тренировки.';
+      showSummaryPanel('Не удалось запустить воспроизведение, показан итог тренировки.');
     }
-    renderSaveRouteFlow(saveMeta);
-    bindSharePhotoAction();
     return;
   }
 
-  replayPanelEl.innerHTML =
-    summaryCard +
-    `<div style="font-size:11px;opacity:0.75;margin-top:8px;">Пройденная тропа на карте отмечена зелёным.</div>`;
-  replayPanelEl.style.display = 'block';
-  renderSaveRouteFlow(saveMeta);
-  bindSharePhotoAction();
+  showSummaryPanel('Пройденная тропа на карте отмечена зелёным.');
 }
 
 
@@ -4035,6 +4067,7 @@ if (stopBtnEl) {
 
 ensureCinematicStyles();
 ensureUiEnhancements();
+enableMiniAppCloseConfirmation();
 syncStopButtonVisibility();
 ensureDgisApiKeyLoaded().finally(() => {
   loadUserProfileForCalories().finally(() => {
