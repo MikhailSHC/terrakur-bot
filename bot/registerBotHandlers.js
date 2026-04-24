@@ -306,7 +306,20 @@ function registerBotHandlers(bot, deps) {
       if (!prev.lastLocation) {
         await bot.api.sendMessageToChat(
           chatId,
-          '⚠️ Для раздела «Рядом со мной» сначала нажмите «📡 Поделиться геолокацией» в главном меню.'
+          '⚠️ Для раздела «Рядом со мной» сначала нажмите «📡 Поделиться геолокацией» в главном меню.',
+          {
+            attachments: [
+              {
+                type: 'inline_keyboard',
+                payload: {
+                  buttons: [
+                    [{ type: 'callback', text: '📡 Поделиться геолокацией', payload: 'share_location' }],
+                    [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+                  ]
+                }
+              }
+            ]
+          }
         );
         return;
       }
@@ -328,7 +341,20 @@ function registerBotHandlers(bot, deps) {
       if (!session.lastLocation) {
         await bot.api.sendMessageToChat(
           chatId,
-          '⚠️ Геолокация не указана. Нажмите «📡 Поделиться геолокацией» в главном меню.'
+          '⚠️ Геолокация не указана. Нажмите «📡 Поделиться геолокацией» в главном меню.',
+          {
+            attachments: [
+              {
+                type: 'inline_keyboard',
+                payload: {
+                  buttons: [
+                    [{ type: 'callback', text: '📡 Поделиться геолокацией', payload: 'share_location' }],
+                    [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+                  ]
+                }
+              }
+            ]
+          }
         );
         return;
       }
