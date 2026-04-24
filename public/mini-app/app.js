@@ -2930,7 +2930,11 @@ function estimateZoomForBounds(bounds, viewportW, viewportH, padding = 24, maxZo
 async function loadStaticMapImage({ centerLon, centerLat, zoom, width, height }) {
   if (!dgisApiKey) return null;
   try {
-    const staticUrl = `https://static.maps.2gis.com/1.0?center=${encodeURIComponent(`${centerLon},${centerLat}`)}&zoom=${encodeURIComponent(String(zoom))}&size=${encodeURIComponent(`${width},${height}`)}&key=${encodeURIComponent(dgisApiKey)}`;
+    // 2GIS static API can reject too large image sizes.
+    // Share card map area is tall, so we clamp request size and then scale it on canvas.
+    const safeWidth = Math.min(1000, Math.max(300, Math.round(Number(width) || 0)));
+    const safeHeight = Math.min(1000, Math.max(200, Math.round(Number(height) || 0)));
+    const staticUrl = `https://static.maps.2gis.com/1.0?center=${encodeURIComponent(`${centerLon},${centerLat}`)}&zoom=${encodeURIComponent(String(zoom))}&size=${encodeURIComponent(`${safeWidth},${safeHeight}`)}&key=${encodeURIComponent(dgisApiKey)}`;
     const img = await new Promise((resolve, reject) => {
       const image = new Image();
       image.crossOrigin = 'anonymous';
