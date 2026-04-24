@@ -8,10 +8,10 @@ describe('RouteService', () => {
   });
 
   it('returns active route by id for API with location meta', () => {
-    const route = routeService.getRouteByIdForApi('tamanskiy-les');
+    const route = routeService.getRouteByIdForApi('kholodnye-rodniki');
 
     expect(route).toBeTruthy();
-    expect(route.id).toBe('tamanskiy-les');
+    expect(route.id).toBe('kholodnye-rodniki');
     expect(route.location).toBeTruthy();
     expect(route.location.id).toBe('stavropol');
   });

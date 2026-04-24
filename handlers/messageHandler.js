@@ -138,7 +138,7 @@ class MessageHandler {
             activity = this.routeService.getActivityById('running');
         } else if (messageText === '🥾 Скандинавская ходьба' || messageText === '🥾 Nordic Walking') {
             activity = this.routeService.getActivityById('nordic_walking');
-        } else if (messageText === '🚲 Велосипед' || messageText === '🚲 Cycling') {
+        } else if (messageText === '🚲 Велопрогулка' || messageText === '🚲 Велосипед' || messageText === '🚲 Cycling') {
             activity = this.routeService.getActivityById('cycling');
         }
         
@@ -260,7 +260,7 @@ class MessageHandler {
         } else {
             await this.bot.api.sendMessageToChat(
                 chatId,
-                '❌ Маршрут не найден. Попробуйте еще раз.'
+                '❌ Маршрут не найден. Вернитесь к списку и выберите другой.'
             );
         }
     }

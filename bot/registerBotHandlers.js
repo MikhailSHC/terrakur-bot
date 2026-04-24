@@ -293,7 +293,7 @@ function registerBotHandlers(bot, deps) {
       if (!prev.lastLocation) {
         await bot.api.sendMessageToChat(
           chatId,
-          '⚠️ Для раздела «Рядом со мной» сначала укажите геолокацию в mini-app: «Моя история» → «Пользовательские данные».'
+          '⚠️ Для раздела «Рядом со мной» сначала укажите геолокацию в мини-приложении: «Моя история» → «Настройки».'
         );
         return;
       }
@@ -315,7 +315,7 @@ function registerBotHandlers(bot, deps) {
       if (!session.lastLocation) {
         await bot.api.sendMessageToChat(
           chatId,
-          '⚠️ Геолокация не указана. Добавьте её в mini-app: «Моя история» → «Пользовательские данные».'
+          '⚠️ Геолокация не указана. Добавьте её в мини-приложении: «Моя история» → «Настройки».'
         );
         return;
       }
@@ -330,7 +330,7 @@ function registerBotHandlers(bot, deps) {
     if (callbackData === 'change_location' || callbackData === 'settings') {
       await bot.api.sendMessageToChat(
         chatId,
-        '⚙️ Настройки геолокации перенесены в mini-app: «Моя история» → «Пользовательские данные».'
+        '⚙️ Настройки геолокации находятся в мини-приложении: «Моя история» → «Настройки».'
       );
       return;
     }
@@ -438,7 +438,7 @@ function registerBotHandlers(bot, deps) {
       });
       await bot.api.sendMessageToChat(
         chatId,
-        `✅ Вы выбрали маршрут «${route.name}».\n\nОткройте карту по кнопке ниже и нажмите «Старт» в mini-app.`,
+        `✅ Вы выбрали маршрут «${route.name}».\n\nОткройте карту по кнопке ниже и нажмите «Старт» на экране маршрута.`,
         {
           parse_mode: 'Markdown',
           attachments: getOpenRouteKeyboard(navUrl)

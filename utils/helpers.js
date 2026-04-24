@@ -17,7 +17,7 @@ function formatRouteList(routes) {
     .map((route, index) => {
       const num = index + 1;
       const name = route.name || `Маршрут ${num}`;
-      const distance = route.distance;   // '3-5 km'
+      const distance = route.distance || route.distanceText || (route.distanceKm ? `${route.distanceKm} км` : null);
       const duration = route.duration;   // '1-2 hours'
       const difficulty = route.difficulty;
 
@@ -61,8 +61,9 @@ function formatRouteDetails(route, options = {}) {
     lines.push(`Активность: ${activityName}`);
   }
 
-  if (route.distance) {
-    lines.push(`Дистанция: ${route.distance}`);
+  const distance = route.distance || route.distanceText || (route.distanceKm ? `${route.distanceKm} км` : null);
+  if (distance) {
+    lines.push(`Дистанция: ${distance}`);
   }
 
   if (route.duration) {
@@ -73,14 +74,16 @@ function formatRouteDetails(route, options = {}) {
     lines.push(`Сложность: ${difficultyLabel(route.difficulty)}`);
   }
 
-  if (Array.isArray(route.target_audience) && route.target_audience.length > 0) {
-    lines.push(`Для кого: ${route.target_audience.join(', ')}`);
+  const targetAudience = Array.isArray(route.targetAudience) ? route.targetAudience : route.target_audience;
+  if (Array.isArray(targetAudience) && targetAudience.length > 0) {
+    lines.push(`Для кого: ${targetAudience.join(', ')}`);
   }
 
-  if (Array.isArray(route.points) && route.points.length > 0) {
+  const poi = Array.isArray(route.poi) ? route.poi : route.points;
+  if (Array.isArray(poi) && poi.length > 0) {
     lines.push('');
     lines.push('Основные точки маршрута:');
-    route.points.forEach((p, idx) => {
+    poi.forEach((p, idx) => {
       lines.push(`  ${idx + 1}. ${p}`);
     });
   }

@@ -172,7 +172,7 @@
   <div id="status">Подготовка 2GIS демо...</div>
   <div id="topBar" class="glass">
     <div>
-      <strong>LiveTrack — Живая Тропа • 2GIS Demo</strong><br>
+      <strong>LiveTrack — Живая Тропа • 2GIS Демо</strong><br>
       <span id="routeTitle">Маршрут</span>
     </div>
     <button id="startBtn" type="button">Старт</button>
@@ -211,7 +211,7 @@
       if (cleanMode) document.body.classList.add('clean-mode');
 
       if (!dgisKey) {
-        statusEl.textContent = 'Нет dgisKey в URL. Добавьте &dgisKey=YOUR_KEY';
+        statusEl.textContent = 'Не найден ключ 2GIS. Добавьте параметр dgisKey в URL.';
         return;
       }
 
@@ -431,7 +431,7 @@
 
       statusEl.textContent = autoStart
         ? `Запуск демо... (${quality}, x${speedBoost}${export60 ? ', 60fps' : ''})`
-        : `Нажмите "Старт" (${quality}, x${speedBoost}${export60 ? ', 60fps' : ''})`;
+        : `Нажмите «Старт» (${quality}, x${speedBoost}${export60 ? ', 60fps' : ''})`;
     })().catch((err) => {
       const statusEl = document.getElementById('status');
       if (statusEl) statusEl.textContent = `Ошибка демо: ${err.message}`;

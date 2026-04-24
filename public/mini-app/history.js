@@ -501,7 +501,7 @@ function renderRouteHistory(container, historyRecords, sessions, selectedActivit
   if (!normalized.length) {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = '<div class="row-meta">Пока нет сохраненных маршрутов. Начните первую тренировку в mini-app.</div>';
+    row.innerHTML = '<div class="row-meta">Пока нет сохраненных маршрутов. Начните первую тренировку в мини-приложении.</div>';
     container.appendChild(row);
     return;
   }
@@ -704,7 +704,7 @@ async function init() {
   const updateLocationBtnEl = document.getElementById('updateLocationBtn');
 
   if (!chatId && !maxInitData) {
-    errorBox.textContent = 'Не удалось авторизоваться в mini-app. Откройте экран снова из бота.';
+    errorBox.textContent = 'Не удалось авторизоваться в мини-приложении. Откройте экран снова из бота.';
     statusEl.textContent = 'Ошибка авторизации';
     return;
   }
@@ -995,7 +995,7 @@ async function init() {
         if (userProfileStatusEl) userProfileStatusEl.textContent = 'Данные сохранены';
         renderAll();
       } catch (err) {
-        if (userProfileStatusEl) userProfileStatusEl.textContent = err.message || 'Ошибка сохранения профиля';
+        if (userProfileStatusEl) userProfileStatusEl.textContent = 'Не удалось сохранить данные профиля';
       }
     });
   }

@@ -671,7 +671,7 @@ function renderSaveRouteFlow(meta) {
               </div>
             `;
           } catch (err) {
-            if (resultEl) resultEl.textContent = err.message || 'Ошибка сохранения';
+            if (resultEl) resultEl.textContent = err.message || 'Не удалось сохранить маршрут';
             activityButtons.forEach((b) => {
               b.disabled = false;
             });
@@ -891,7 +891,7 @@ function initMap() {
 
   const onMapReady = () => {
     if (dgisRequested && !dgisRasterEnabled) {
-      statusDiv.innerText = '2GIS карта для маршрута не включена: ключ не найден (DGIS_API_KEY/dgisKey). Используется стандартная карта.';
+      statusDiv.innerText = 'Не найден ключ 2GIS. Используется стандартная карта.';
     } else if (isNativeMapGl) {
       statusDiv.innerText = 'Native 2GIS MapGL включен';
     } else if (dgisRasterEnabled) {
@@ -1685,8 +1685,7 @@ async function loadPlannedRoute(id) {
   } catch (err) {
 
     console.error(err);
-    const msg = (err && typeof err.message === 'string') ? err.message : 'unknown error';
-    statusDiv.innerText = `❌ Ошибка загрузки маршрута: ${msg}`;
+    statusDiv.innerText = '❌ Не удалось загрузить маршрут. Попробуйте снова.';
 
   }
 
@@ -2419,7 +2418,7 @@ async function searchAndAddCustomWaypoint() {
     map.easeTo({ center: point, zoom: 16, duration: 650 });
     statusDiv.innerText = `Добавлено: ${first.title || q}`;
   } catch (err) {
-    statusDiv.innerText = `Ошибка поиска: ${err.message}`;
+    statusDiv.innerText = 'Не удалось выполнить поиск. Проверьте запрос и попробуйте снова.';
   }
 }
 
@@ -2466,7 +2465,7 @@ async function buildCustomRouteFromWaypoints() {
       customRouteBuilderEl.style.display = 'none';
     }
   } catch (err) {
-    statusDiv.innerText = `Ошибка сборки: ${err.message}`;
+    statusDiv.innerText = 'Не удалось собрать маршрут. Добавьте точки и попробуйте снова.';
   }
 }
 
@@ -3369,7 +3368,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
     const phaseEl = replayPanelEl.querySelector('#replayPhase');
     const replayWatchdogId = setTimeout(() => {
       if (phaseEl && /Подготовка/.test(phaseEl.textContent || '')) {
-        phaseEl.textContent = 'Запуск воспроизведения занял слишком долго. Показываем итог тренировки.';
+        phaseEl.textContent = 'Воспроизведение заняло слишком много времени. Показываю итог тренировки.';
         showSummaryPanel('Воспроизведение недоступно, показан итог тренировки.');
       }
     }, 2500);
