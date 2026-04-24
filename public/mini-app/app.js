@@ -238,20 +238,6 @@ function isCustomPlannedRoute() {
   return sessionMode === 'planned_route' && plannedRoute?.properties?.id === 'custom-user-route';
 }
 
-async function ensureDgisApiKeyLoaded() {
-  if (!dgisRequested || dgisApiKey) return;
-  const tryExtractFromRuntimeScript = (text) => {
-    if (!text || text.includes('<!DOCTYPE') || text.includes('<html')) return '';
-    const match = text.match(/window\.__MINI_APP_RUNTIME__\s*=\s*(\{[\s\S]*?\})\s*;/);
-    if (!match) return '';
-    try {
-      const parsed = JSON.parse(match[1]);
-      const apiKey = typeof parsed?.DGIS_API_KEY === 'string' ? parsed.DGIS_API_KEY.trim() : '';
-      return apiKey;
-    } catch {
-      return '';
-    }
-
 let closeConfirmationBound = false;
 function enableMiniAppCloseConfirmation() {
   if (closeConfirmationBound) return;
@@ -281,6 +267,20 @@ function enableMiniAppCloseConfirmation() {
     // noop
   }
 }
+
+async function ensureDgisApiKeyLoaded() {
+  if (!dgisRequested || dgisApiKey) return;
+  const tryExtractFromRuntimeScript = (text) => {
+    if (!text || text.includes('<!DOCTYPE') || text.includes('<html')) return '';
+    const match = text.match(/window\.__MINI_APP_RUNTIME__\s*=\s*(\{[\s\S]*?\})\s*;/);
+    if (!match) return '';
+    try {
+      const parsed = JSON.parse(match[1]);
+      const apiKey = typeof parsed?.DGIS_API_KEY === 'string' ? parsed.DGIS_API_KEY.trim() : '';
+      return apiKey;
+    } catch {
+      return '';
+    }
   };
   try {
     const res = await fetchWithRetry('/api/runtime-config', { cache: 'no-store' }, { retries: 2, timeoutMs: 10000 });
