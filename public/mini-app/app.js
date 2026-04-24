@@ -252,7 +252,7 @@ async function ensureDgisApiKeyLoaded() {
     }
   };
   try {
-    const res = await fetch('/api/runtime-config', { cache: 'no-store' });
+    const res = await fetchWithRetry('/api/runtime-config', { cache: 'no-store' }, { retries: 2, timeoutMs: 10000 });
     if (res.ok) {
       const data = await res.json();
       const apiKey = typeof data?.DGIS_API_KEY === 'string' ? data.DGIS_API_KEY.trim() : '';
@@ -266,7 +266,11 @@ async function ensureDgisApiKeyLoaded() {
     // Continue with fallback source below.
   }
   try {
-    const runtimeRes = await fetch(`/mini-app/runtime-config.js?v=${Date.now()}`, { cache: 'no-store' });
+    const runtimeRes = await fetchWithRetry(
+      `/mini-app/runtime-config.js?v=${Date.now()}`,
+      { cache: 'no-store' },
+      { retries: 2, timeoutMs: 10000 }
+    );
     if (!runtimeRes.ok) return;
     const runtimeText = await runtimeRes.text();
     const runtimeKey = tryExtractFromRuntimeScript(runtimeText);
@@ -283,6 +287,46 @@ function getAuthHeaders() {
   if (authToken) headers['x-miniapp-auth'] = authToken;
   if (maxInitDataRaw) headers['x-max-init-data'] = encodeURIComponent(maxInitDataRaw);
   return headers;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(input, init = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function fetchWithRetry(input, init = {}, options = {}) {
+  const retries = Number.isFinite(options.retries) ? options.retries : 2;
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 12000;
+  const retryDelays = Array.isArray(options.retryDelays) ? options.retryDelays : [900, 1800, 3200];
+  const retryStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(input, init, timeoutMs);
+      if (retryStatuses.has(response.status) && attempt < retries) {
+        await sleep(retryDelays[Math.min(attempt, retryDelays.length - 1)] || 1000);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries) break;
+      await sleep(retryDelays[Math.min(attempt, retryDelays.length - 1)] || 1000);
+    }
+  }
+  throw lastError || new Error('network-request-failed');
 }
 
 function estimateCaloriesForUser(distanceM, durationSec) {
@@ -313,7 +357,11 @@ function estimateCaloriesForUser(distanceM, durationSec) {
 async function loadUserProfileForCalories() {
   const query = new URLSearchParams({ chatId });
   if (authToken) query.set('authToken', authToken);
-  const res = await fetch(`/api/profile?${query.toString()}`, { headers: getAuthHeaders() });
+  const res = await fetchWithRetry(
+    `/api/profile?${query.toString()}`,
+    { headers: getAuthHeaders() },
+    { retries: 2, timeoutMs: 12000 }
+  );
   if (!res.ok) return;
   const data = await res.json();
   if (!data?.ok) return;
@@ -1408,9 +1456,11 @@ async function loadPlannedRoute(id) {
   try {
 
     statusDiv.innerText = 'Загрузка маршрута...';
-    const res  = await fetch(`/api/routes/${id}/geojson`, {
-      cache: 'no-store'
-    });
+    const res  = await fetchWithRetry(
+      `/api/routes/${id}/geojson`,
+      { cache: 'no-store' },
+      { retries: 2, timeoutMs: 12000 }
+    );
 
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
     const rawText = await res.text();
@@ -1425,7 +1475,11 @@ async function loadPlannedRoute(id) {
     }
     if (!res.ok || !data || !data.ok) {
       // Fallback when /api proxy returns HTML or malformed payload.
-      const localRes = await fetch('./routes.geojson?v=20260422-1', { cache: 'no-store' });
+      const localRes = await fetchWithRetry(
+        './routes.geojson?v=20260422-1',
+        { cache: 'no-store' },
+        { retries: 1, timeoutMs: 10000 }
+      );
       if (!localRes.ok) {
         if (!data) throw new Error(`Сервер вернул не JSON (content-type: ${contentType || 'unknown'})`);
         throw new Error(data?.error || `HTTP ${res.status}`);
@@ -2261,9 +2315,11 @@ async function searchAndAddCustomWaypoint() {
   }
   statusDiv.innerText = 'Поиск точки через 2GIS...';
   try {
-    const r = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`, {
-      headers: getAuthHeaders()
-    });
+    const r = await fetchWithRetry(
+      `/api/geocode?q=${encodeURIComponent(q)}`,
+      { headers: getAuthHeaders() },
+      { retries: 2, timeoutMs: 12000 }
+    );
     const data = await r.json();
     const first = data?.items?.[0];
     if (!r.ok || !first) {

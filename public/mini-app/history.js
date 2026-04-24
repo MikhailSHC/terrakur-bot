@@ -125,6 +125,76 @@ function buildAuthQuery(chatId, authToken, maxInitData) {
   return query;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(input, init = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function fetchWithRetry(input, init = {}, options = {}) {
+  const retries = Number.isFinite(options.retries) ? options.retries : 2;
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 12000;
+  const retryDelays = Array.isArray(options.retryDelays) ? options.retryDelays : [900, 1800, 3200];
+  const retryStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(input, init, timeoutMs);
+      if (retryStatuses.has(response.status) && attempt < retries) {
+        await sleep(retryDelays[Math.min(attempt, retryDelays.length - 1)] || 1000);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries) break;
+      await sleep(retryDelays[Math.min(attempt, retryDelays.length - 1)] || 1000);
+    }
+  }
+  throw lastError || new Error('network-request-failed');
+}
+
+function getSessionsCacheKey(chatId) {
+  return `terrakur.history.payload.v1:${String(chatId || 'unknown')}`;
+}
+
+function saveSessionsPayloadCache(chatId, payload) {
+  try {
+    localStorage.setItem(
+      getSessionsCacheKey(chatId),
+      JSON.stringify({
+        cachedAt: new Date().toISOString(),
+        payload
+      })
+    );
+  } catch {
+    // Ignore storage failures on restricted webviews.
+  }
+}
+
+function readSessionsPayloadCache(chatId) {
+  try {
+    const raw = localStorage.getItem(getSessionsCacheKey(chatId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.payload !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 function formatDuration(totalSec) {
   const sec = Number(totalSec) || 0;
   const h = Math.floor(sec / 3600);
@@ -514,9 +584,11 @@ function switchTab(tabId) {
 
 async function fetchSessions(chatId, authToken, maxInitData) {
   const query = buildAuthQuery(chatId, authToken, maxInitData);
-  const resp = await fetch(`/api/sessions?${query.toString()}`, {
-    headers: buildAuthHeaders(authToken, maxInitData)
-  });
+  const resp = await fetchWithRetry(
+    `/api/sessions?${query.toString()}`,
+    { headers: buildAuthHeaders(authToken, maxInitData) },
+    { retries: 2, timeoutMs: 12000 }
+  );
   const contentType = (resp.headers.get('content-type') || '').toLowerCase();
   const rawText = await resp.text();
   if (!contentType.includes('application/json')) {
@@ -534,14 +606,14 @@ async function fetchSessions(chatId, authToken, maxInitData) {
 
 async function saveProfile(chatId, authToken, maxInitData, profile) {
   const query = buildAuthQuery(chatId, authToken, maxInitData);
-  const resp = await fetch(`/api/profile?${query.toString()}`, {
+  const resp = await fetchWithRetry(`/api/profile?${query.toString()}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...buildAuthHeaders(authToken, maxInitData)
     },
     body: JSON.stringify(profile)
-  });
+  }, { retries: 0, timeoutMs: 12000 });
   const json = await resp.json();
   if (!resp.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить профиль');
   return json.profile || {};
@@ -549,14 +621,14 @@ async function saveProfile(chatId, authToken, maxInitData, profile) {
 
 async function saveLocation(chatId, authToken, maxInitData, latitude, longitude) {
   const query = buildAuthQuery(chatId, authToken, maxInitData);
-  const resp = await fetch(`/api/profile/location?${query.toString()}`, {
+  const resp = await fetchWithRetry(`/api/profile/location?${query.toString()}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...buildAuthHeaders(authToken, maxInitData)
     },
     body: JSON.stringify({ latitude, longitude })
-  });
+  }, { retries: 0, timeoutMs: 12000 });
   const json = await resp.json();
   if (!resp.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить местоположение');
   return json.profile || {};
@@ -566,10 +638,10 @@ async function deleteHistoryEntry(chatId, authToken, maxInitData, entry) {
   const query = buildAuthQuery(chatId, authToken, maxInitData);
   query.set('routeId', String(entry.routeId || ''));
   query.set('timestamp', String(entry.timestamp || ''));
-  const resp = await fetch(`/api/history?${query.toString()}`, {
+  const resp = await fetchWithRetry(`/api/history?${query.toString()}`, {
     method: 'DELETE',
     headers: buildAuthHeaders(authToken, maxInitData)
-  });
+  }, { retries: 0, timeoutMs: 12000 });
   const json = await resp.json();
   if (!resp.ok || !json?.ok) throw new Error(json?.error || 'Не удалось удалить запись истории');
   return true;
@@ -607,12 +679,25 @@ async function init() {
   }
 
   let payload;
+  let loadedFromCache = false;
   try {
     payload = await fetchSessions(chatId, authToken, maxInitData);
   } catch (err) {
-    statusEl.textContent = 'Ошибка загрузки';
-    errorBox.textContent = err.message;
-    return;
+    const cached = readSessionsPayloadCache(chatId);
+    if (!cached?.payload) {
+      statusEl.textContent = 'Ошибка загрузки';
+      errorBox.textContent = err.message;
+      return;
+    }
+    payload = cached.payload;
+    loadedFromCache = true;
+    statusEl.textContent = 'Офлайн-режим';
+    errorBox.textContent = 'Сеть нестабильна. Показаны последние сохранённые данные.';
+  }
+  saveSessionsPayloadCache(chatId, payload);
+  if (!loadedFromCache) {
+    statusEl.textContent = 'Данные загружены';
+    errorBox.textContent = '';
   }
 
   const allSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
