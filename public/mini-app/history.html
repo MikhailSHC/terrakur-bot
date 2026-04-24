@@ -237,8 +237,8 @@
   </style>
 </head>
 <body>
-  <h1>Навигация</h1>
-  <div class="muted" id="status">Загрузка статистики...</div>
+  <h1>Моя история</h1>
+  <div class="muted" id="status">Загружаю данные...</div>
 
   <div class="tabs">
     <button type="button" class="tab-btn active" data-tab="home">Главная</button>
@@ -322,7 +322,7 @@
   <section class="tab-panel" id="panel-user">
     <div class="card">
       <div class="row-title">Пользовательские настройки</div>
-      <div class="row-meta" style="margin-bottom:8px;">Заполните данные для более точного расчета калорий.</div>
+      <div class="row-meta" style="margin-bottom:8px;">Заполните данные, чтобы точнее считать калории.</div>
       <div style="display:grid;gap:8px;">
         <label class="row-meta" for="userWeightInput">Вес (кг)</label>
         <input id="userWeightInput" type="number" min="10" max="250" step="0.1" placeholder="Например, 72.5" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2a3440;background:#11161c;color:#eef2f7;" />
@@ -338,7 +338,7 @@
         </select>
         <button type="button" id="saveUserProfileBtn" class="chip active">Сохранить данные</button>
       </div>
-      <div class="row-meta" id="userProfileStatus" style="margin-top:8px;">Если поля не заполнены, используются примерные расчеты.</div>
+      <div class="row-meta" id="userProfileStatus" style="margin-top:8px;">Если поля пустые, используем приблизительный расчет.</div>
     </div>
     <div class="card">
       <div class="row-title">Местоположение для “Рядом со мной”</div>

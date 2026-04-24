@@ -9,7 +9,7 @@ function getMainMenuKeyboard(historyUrl) {
     payload: {
       buttons: [
         [
-          { type: 'callback', text: '🧭 Построить маршрут', payload: 'start_free_track' }
+          { type: 'callback', text: '🧭 Построить свой маршрут', payload: 'start_free_track' }
         ],
         [
           { type: 'callback', text: '📋 Маршруты Ставрополья', payload: 'find_routes' }
@@ -33,7 +33,7 @@ const locationKeyboard = {
     buttons: [
       [
         { type: 'callback', text: 'Ставрополь', payload: 'location_stavropol' },
-        { type: 'callback', text: 'Минводы', payload: 'location_kavminvody' }
+        { type: 'callback', text: 'Минеральные Воды', payload: 'location_kavminvody' }
       ],
       [
         { type: 'callback', text: 'Кисловодск', payload: 'location_kislovodsk' },
@@ -55,7 +55,7 @@ const activityKeyboard = {
         { type: 'callback', text: '🏃 Бег', payload: 'activity_running' }
       ],
       [
-        { type: 'callback', text: '🚲 Велосипед', payload: 'activity_cycling' }
+        { type: 'callback', text: '🚲 Велопрогулка', payload: 'activity_cycling' }
       ],
       [
         { type: 'callback', text: '⬅️ К выбору города', payload: 'back_to_locations' }
@@ -123,7 +123,7 @@ function getRouteDetailKeyboard(routeId, options = {}) {
   } else {
     buttons.push([{ type: 'callback', text: '✅ Начать маршрут', payload: `start_route_${routeId}` }]);
   }
-  buttons.push([{ type: 'callback', text: '⬅️ К списку маршрутов', payload: 'back_to_routes' }]);
+    buttons.push([{ type: 'callback', text: '⬅️ Вернуться к списку', payload: 'back_to_routes' }]);
   buttons.push([{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]);
 
   return {
@@ -178,11 +178,11 @@ const nearbyActivityPickKeyboard = {
   payload: {
     buttons: [
       [
-        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_nearby_activity_nordic_walking' },
+        { type: 'callback', text: '🥾 Скандинавская ходьба', payload: 'pick_nearby_activity_nordic_walking' },
         { type: 'callback', text: '🏃 Бег', payload: 'pick_nearby_activity_running' }
       ],
       [
-        { type: 'callback', text: '🚲 Велосипед', payload: 'pick_nearby_activity_cycling' }
+        { type: 'callback', text: '🚲 Велопрогулка', payload: 'pick_nearby_activity_cycling' }
       ],
       [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
     ]
@@ -195,11 +195,11 @@ const freeTrackActivityPickKeyboard = {
   payload: {
     buttons: [
       [
-        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_free_activity_nordic_walking' },
+        { type: 'callback', text: '🥾 Скандинавская ходьба', payload: 'pick_free_activity_nordic_walking' },
         { type: 'callback', text: '🏃 Бег', payload: 'pick_free_activity_running' }
       ],
       [
-        { type: 'callback', text: '🚲 Велосипед', payload: 'pick_free_activity_cycling' }
+        { type: 'callback', text: '🚲 Велопрогулка', payload: 'pick_free_activity_cycling' }
       ],
       [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
     ]
@@ -213,11 +213,11 @@ const profileActivityPickKeyboard = {
     buttons: [
       [{ type: 'callback', text: '📊 Все виды сразу', payload: 'pick_profile_activity_all' }],
       [
-        { type: 'callback', text: '🥾 Сканд. ходьба', payload: 'pick_profile_activity_nordic_walking' },
+        { type: 'callback', text: '🥾 Скандинавская ходьба', payload: 'pick_profile_activity_nordic_walking' },
         { type: 'callback', text: '🏃 Бег', payload: 'pick_profile_activity_running' }
       ],
       [
-        { type: 'callback', text: '🚲 Велосипед', payload: 'pick_profile_activity_cycling' }
+        { type: 'callback', text: '🚲 Велопрогулка', payload: 'pick_profile_activity_cycling' }
       ],
       [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
     ]

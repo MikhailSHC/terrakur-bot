@@ -822,7 +822,7 @@ const routes = [
 
     name: 'Гора Стрижамент',
 
-    description: 'Экологическая тропа на горе Стрижамент',
+    description: 'Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.',
 
 
 
@@ -878,7 +878,7 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 
@@ -1311,7 +1311,7 @@ const routes = [
 
     name: 'Кисловодский парк Терренкур #3',
 
-    description: 'Оздоровительная тропа в Кисловодском парке',
+    description: 'Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.',
 
 
 
@@ -1381,7 +1381,7 @@ const routes = [
 
 
 
-    status: 'active'
+    status: 'inactive'
 
   },
 

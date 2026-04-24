@@ -37,7 +37,7 @@ class MessageHandler {
         if (messageText === '📍 Маршруты рядом со мной') {
             await this.bot.api.sendMessageToChat(
                 chatId,
-                'Сначала выберите вид активности — затем при необходимости поделитесь геолокацией (как в главном меню по кнопке «Рядом со мной»):',
+                'Выберите вид активности — подберу ближайшие маршруты рядом с вами:',
                 { attachments: [keyboards.nearbyActivityPickKeyboard] }
             );
             return;
@@ -75,7 +75,7 @@ class MessageHandler {
         else {
             await this.bot.api.sendMessageToChat(
                 chatId,
-                '🌲 Добро пожаловать!',
+                'Выберите действие в главном меню:',
                 { attachments: [keyboards.getMainMenuKeyboard()] }
             );
         }
@@ -102,7 +102,7 @@ class MessageHandler {
             
             await this.bot.api.sendMessageToChat(
                 chatId,
-                `✅ Отлично! Вы выбрали ${location.name}. Теперь выберите активность:`,
+                `✅ Вы выбрали город: ${location.name}.\nТеперь выберите активность:`,
                 { attachments: [keyboards.activityKeyboard] }
             );
         } else {
@@ -124,7 +124,7 @@ class MessageHandler {
             return;
         }
         
-        if (messageText === '⬅️ Back to locations') {
+        if (messageText === '⬅️ К выбору города' || messageText === '⬅️ Back to locations') {
             await this.bot.api.sendMessageToChat(
                 chatId,
                 'Выберите город:',
@@ -134,11 +134,11 @@ class MessageHandler {
         }
         
         let activity = null;
-        if (messageText === '🏃 Running') {
+        if (messageText === '🏃 Бег' || messageText === '🏃 Running') {
             activity = this.routeService.getActivityById('running');
-        } else if (messageText === '🥾 Nordic Walking') {
+        } else if (messageText === '🥾 Скандинавская ходьба' || messageText === '🥾 Nordic Walking') {
             activity = this.routeService.getActivityById('nordic_walking');
-        } else if (messageText === '🚲 Cycling') {
+        } else if (messageText === '🚲 Велосипед' || messageText === '🚲 Cycling') {
             activity = this.routeService.getActivityById('cycling');
         }
         
@@ -162,7 +162,7 @@ class MessageHandler {
             
             let text = `📍 Найдено ${routes.length} маршрутов для ${activity.name} в ${location.name}:\n\n`;
             text += formatRouteList(routes.slice(0, 5));
-            text += '\nВведите номер маршрута чтобы увидеть детали:';
+            text += '\nВыберите номер маршрута кнопкой ниже:';
             
             this.userService.setUserState(chatId, 'routes_shown', {
                 availableRoutes: routes,
@@ -177,7 +177,7 @@ class MessageHandler {
         } else {
             await this.bot.api.sendMessageToChat(
                 chatId,
-                `❌ К сожалению для выбранного города ${location.name} для активности ${activity.name} маршрутов нет.`,
+                `❌ Для города ${location.name} пока нет маршрутов для активности «${activity.name}».`,
                 {
                     attachments: [
                         {
@@ -201,7 +201,7 @@ class MessageHandler {
         const routes = session.availableRoutes || [];
         const location = session.selectedLocation;
         
-        if (messageText === '⬅️ Back to activities' && location) {
+        if ((messageText === '⬅️ К выбору активности' || messageText === '⬅️ Back to activities') && location) {
             await this.bot.api.sendMessageToChat(
                 chatId,
                 `Выберите активность для ${location.name}:`,
@@ -210,7 +210,7 @@ class MessageHandler {
             return;
         }
         
-        if (messageText === '🏠 Main menu') {
+        if (messageText === '🏠 Главное меню' || messageText === '🏠 Main menu') {
             await this.commandHandler.handleStart(chatId);
             return;
         }

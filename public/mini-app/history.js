@@ -501,7 +501,7 @@ function renderRouteHistory(container, historyRecords, sessions, selectedActivit
   if (!normalized.length) {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = '<div class="row-meta">Пока нет сохраненных маршрутов</div>';
+    row.innerHTML = '<div class="row-meta">Пока нет сохраненных маршрутов. Начните первую тренировку в mini-app.</div>';
     container.appendChild(row);
     return;
   }
@@ -704,8 +704,8 @@ async function init() {
   const updateLocationBtnEl = document.getElementById('updateLocationBtn');
 
   if (!chatId && !maxInitData) {
-    errorBox.textContent = 'Отсутствуют параметры авторизации mini-app.';
-    statusEl.textContent = 'Ошибка параметров';
+    errorBox.textContent = 'Не удалось авторизоваться в mini-app. Откройте экран снова из бота.';
+    statusEl.textContent = 'Ошибка авторизации';
     return;
   }
 
@@ -716,18 +716,18 @@ async function init() {
   } catch (err) {
     const cached = readSessionsPayloadCache(chatId);
     if (!cached?.payload) {
-      statusEl.textContent = 'Ошибка загрузки';
+      statusEl.textContent = 'Не удалось загрузить данные';
       errorBox.textContent = err.message;
       return;
     }
     payload = cached.payload;
     loadedFromCache = true;
-    statusEl.textContent = 'Офлайн-режим';
-    errorBox.textContent = 'Сеть нестабильна. Показаны последние сохранённые данные.';
+    statusEl.textContent = 'Вы офлайн';
+    errorBox.textContent = 'Сеть нестабильна. Показываю последние сохранённые данные.';
   }
   saveSessionsPayloadCache(chatId, payload);
   if (!loadedFromCache) {
-    statusEl.textContent = 'Данные загружены';
+    statusEl.textContent = 'Данные обновлены';
     errorBox.textContent = '';
   }
 
@@ -1010,9 +1010,9 @@ async function init() {
     const resolveLocationErrorMessage = (err) => {
       const code = Number(err?.code);
       if (code === 1) return 'Доступ к геолокации запрещен. Разрешите доступ в настройках MAX.';
-      if (code === 2) return 'Не удалось определить координаты. Проверяем снова...';
-      if (code === 3) return 'Превышено время ожидания геолокации. Проверяем снова...';
-      return 'Геолокацию обнаружить не удалось. Проверяем снова...';
+      if (code === 2) return 'Не удалось определить координаты. Попробуйте выйти на открытое место.';
+      if (code === 3) return 'Превышено время ожидания геолокации. Проверьте интернет и попробуйте снова.';
+      return 'Не удалось получить геолокацию. Попробуйте снова через несколько секунд.';
     };
     const shouldRetryLocation = (err) => {
       const code = Number(err?.code);
@@ -1069,7 +1069,7 @@ async function init() {
         if (locationStatusEl) locationStatusEl.textContent = 'Геолокация недоступна на устройстве';
         return;
       }
-      if (locationStatusEl) locationStatusEl.textContent = 'Определяем местоположение...';
+      if (locationStatusEl) locationStatusEl.textContent = 'Определяю местоположение...';
       stopLocationRetry();
       attemptLocationSave();
     });

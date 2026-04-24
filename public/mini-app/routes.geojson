@@ -1822,7 +1822,7 @@
       "properties": {
         "id": "gora-strizhament",
         "name": "Гора Стрижамент",
-        "description": "Экологическая тропа на горе Стрижамент",
+        "description": "Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.",
         "distanceKm": 10,
         "duration": "3-4 часа",
         "difficulty": 3,
@@ -3108,7 +3108,7 @@
       "properties": {
         "id": "kislovodsk-park-3",
         "name": "Кисловодский парк Терренкур #3",
-        "description": "Оздоровительная тропа в Кисловодском парке",
+        "description": "Маршрут еще не добавлен: ожидаем корректный JSON-трек из 2GIS для точной геометрии.",
         "distanceKm": 3,
         "duration": "1-2 часа",
         "difficulty": 1,

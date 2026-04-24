@@ -112,7 +112,7 @@ function registerBotHandlers(bot, deps) {
         text += `   • Длина маршрута: ${routeLengthText}\n`;
         text += `   • Локация: ${location}\n\n`;
       });
-      text += '\nВыберите маршрут (кнопкой ниже):';
+      text += '\nНажмите кнопку с номером маршрута ниже:';
       keyboardOptions = {
         page: currentPage,
         pageSize: ROUTES_PAGE_SIZE,
@@ -138,7 +138,7 @@ function registerBotHandlers(bot, deps) {
         text += `   • Время: ${duration}\n`;
         text += `   • Сложность: ${routeDifficulty}\n\n`;
       });
-      text += '\nВыберите маршрут (кнопкой ниже):';
+      text += '\nНажмите кнопку с номером маршрута ниже:';
       keyboardOptions = {
         page: currentPage,
         pageSize: ROUTES_PAGE_SIZE,
@@ -251,7 +251,7 @@ function registerBotHandlers(bot, deps) {
       const navUrl = buildMiniAppUrl(config, chatId);
       await bot.api.sendMessageToChat(
         chatId,
-        '🧭 Нажмите кнопку ниже, чтобы начать построение маршрута в трекере.',
+        '🧭 Откройте карту по кнопке ниже, чтобы начать собственный маршрут.',
         {
           parse_mode: 'Markdown',
           attachments: getOpenRouteKeyboard(navUrl)
@@ -271,7 +271,7 @@ function registerBotHandlers(bot, deps) {
       });
       await bot.api.sendMessageToChat(
         chatId,
-        '🧭 Откройте трекер по кнопке ниже. После тренировки данные попадут в «Моя история» для выбранного вида.',
+        '🧭 Откройте трекер по кнопке ниже. После завершения тренировки результат сохранится в «Моей истории».',
         {
           parse_mode: 'Markdown',
           attachments: getOpenRouteKeyboard(navUrl)
@@ -358,7 +358,7 @@ function registerBotHandlers(bot, deps) {
       if (!routes.length) {
         await bot.api.sendMessageToChat(
           chatId,
-          `❌ К сожалению для выбранного города ${session.selectedLocation.name} для активности ${activity.name} маршрутов нет.`,
+        `❌ Для города ${session.selectedLocation.name} пока нет маршрутов для активности «${activity.name}».`,
           {
             attachments: [
               {
@@ -426,7 +426,7 @@ function registerBotHandlers(bot, deps) {
       const routeId = callbackData.replace('start_route_', '');
       const route = routeService.findRouteById(routeId);
       if (!route) {
-        await bot.api.sendMessageToChat(chatId, '❌ Маршрут не найден. Попробуйте ещё раз.');
+        await bot.api.sendMessageToChat(chatId, '❌ Маршрут не найден. Вернитесь к списку и выберите другой.');
         return;
       }
       userService.addRouteToHistory(chatId, route.name, routeId);
@@ -438,7 +438,7 @@ function registerBotHandlers(bot, deps) {
       });
       await bot.api.sendMessageToChat(
         chatId,
-        `✅ Маршрут ${route.name} начат!\n\nНажмите кнопку ниже, чтобы открыть навигатор.`,
+        `✅ Вы выбрали маршрут «${route.name}».\n\nОткройте карту по кнопке ниже и нажмите «Старт» в mini-app.`,
         {
           parse_mode: 'Markdown',
           attachments: getOpenRouteKeyboard(navUrl)
@@ -500,7 +500,7 @@ function registerBotHandlers(bot, deps) {
           userService.setUserState(chatId, sessionBefore.state, { locationShareIntent: null });
           await bot.api.sendMessageToChat(
             chatId,
-            '✅ Местоположение сохранено. Его можно использовать в «Рядом со мной».'
+          '✅ Геолокация сохранена. Теперь раздел «📍 Рядом со мной» будет работать корректно.'
           );
           return;
         }
@@ -518,7 +518,7 @@ function registerBotHandlers(bot, deps) {
 
         await bot.api.sendMessageToChat(
           chatId,
-          '✅ Геолокация сохранена. Чтобы найти маршруты рядом: главное меню → «📍 Рядом со мной» → вид активности.'
+          '✅ Геолокация сохранена.\nДалее: «📍 Рядом со мной» → выберите активность.'
         );
         return;
       }

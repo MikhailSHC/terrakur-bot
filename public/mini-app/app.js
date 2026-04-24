@@ -1494,7 +1494,7 @@ async function loadPlannedRoute(id) {
 
   try {
 
-    statusDiv.innerText = 'Загрузка маршрута...';
+    statusDiv.innerText = 'Загружаю маршрут...';
     const res  = await fetchWithRetry(
       `/api/routes/${id}/geojson`,
       { cache: 'no-store' },
@@ -1710,7 +1710,7 @@ function getUserLocation() {
 
 
 
-  statusDiv.innerText = '📍 Запрос местоположения...';
+    statusDiv.innerText = '📍 Получаю местоположение...';
 
 
 
@@ -1754,7 +1754,7 @@ function getUserLocation() {
 
       console.error(err);
 
-      statusDiv.innerText = '❌ Нет доступа к геолокации. Проверяю снова...';
+      statusDiv.innerText = '❌ Нет доступа к геолокации. Разрешите доступ и повторите.';
       startGeoRetryLoop();
 
     },
@@ -1803,7 +1803,7 @@ function initializeRouteProgress() {
 
   if (routeProgressEl) {
     routeProgressEl.style.display = 'block';
-    routeProgressEl.innerText = 'Прогресс: 0% | До финиша: --';
+    routeProgressEl.innerText = 'Прогресс: 0% · До финиша: --';
   }
 }
 
@@ -2397,10 +2397,10 @@ function renderCustomRouteDraft() {
 async function searchAndAddCustomWaypoint() {
   const q = (customSearchInputEl?.value || '').trim();
   if (!q) {
-    statusDiv.innerText = 'Введите адрес/место для поиска';
+    statusDiv.innerText = 'Введите адрес или место для поиска';
     return;
   }
-  statusDiv.innerText = 'Поиск точки через 2GIS...';
+  statusDiv.innerText = 'Ищу точку через 2GIS...';
   try {
     const r = await fetchWithRetry(
       `/api/geocode?q=${encodeURIComponent(q)}`,
@@ -2428,7 +2428,7 @@ async function buildCustomRouteFromWaypoints() {
     statusDiv.innerText = 'Добавьте минимум 2 точки маршрута';
     return;
   }
-  statusDiv.innerText = 'Сборка пользовательского маршрута...';
+  statusDiv.innerText = 'Собираю пользовательский маршрут...';
   try {
     const r = await fetch('/api/routes/build-custom', {
       method: 'POST',
@@ -2448,7 +2448,7 @@ async function buildCustomRouteFromWaypoints() {
     }
     const feature = data?.geojson?.features?.[0];
     if (!feature?.geometry?.coordinates?.length) {
-      statusDiv.innerText = 'Маршрут пустой';
+      statusDiv.innerText = 'Маршрут пустой. Добавьте больше точек.';
       return;
     }
     feature.properties = {
@@ -2461,7 +2461,7 @@ async function buildCustomRouteFromWaypoints() {
     hasReachedStart = true;
     clearNavToStartLine();
     removeStartMarker();
-    statusDiv.innerText = '✅ Пользовательский маршрут готов. Можно сразу нажимать "Старт".';
+    statusDiv.innerText = '✅ Маршрут готов. Нажмите «Старт», чтобы начать тренировку.';
     if (customRouteBuilderEl) {
       customRouteBuilderEl.style.display = 'none';
     }
@@ -3343,7 +3343,7 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
     const shareBtn = replayPanelEl.querySelector('#shareTrackPhotoBtn');
     const shareStatusEl = replayPanelEl.querySelector('#shareTrackPhotoStatus');
     shareBtn?.addEventListener('click', async () => {
-      if (shareStatusEl) shareStatusEl.textContent = 'Готовим карточку...';
+      if (shareStatusEl) shareStatusEl.textContent = 'Готовлю карточку...';
       try {
         await handleShareTrackAsPhoto({
           trackCoords,
@@ -3485,7 +3485,7 @@ function onGPSPosition(pos) {
       finalizePlannedRouteMapProgress();
       routeProgress.isOnRoute = false;
       removeFinishMarker();
-      statusDiv.innerText = '🏁 Финиш! Маршрут завершён!';
+      statusDiv.innerText = '🏁 Финиш! Тренировка завершена.';
       setTimeout(() => {
         if (statusDiv.innerText.includes('Финиш')) {
           statusDiv.innerText = '';
@@ -3628,7 +3628,7 @@ function startRun() {
   // Для готового маршрута: требуем дойти до старта
 
   if (sessionMode === 'planned_route' && !plannedRoute) {
-    statusDiv.innerText = '⏳ Маршрут еще загружается. Подождите пару секунд.';
+    statusDiv.innerText = '⏳ Маршрут еще загружается. Подождите несколько секунд.';
     syncStopButtonVisibility();
     return;
   }
@@ -3648,7 +3648,7 @@ function startRun() {
     if (hasReachedStart) {
       // fall through and start tracking
     } else {
-      statusDiv.innerText = '🏁 Сначала подойдите к стартовому флажку на карте';
+      statusDiv.innerText = '🏁 Подойдите к стартовому флажку на карте, чтобы начать.';
       syncStopButtonVisibility();
       return;
     }
@@ -3705,7 +3705,7 @@ function startRun() {
 
 
 
-    statusDiv.innerText = '🏃 Тренировка началась...';
+    statusDiv.innerText = '🏃 Тренировка началась';
 
 
 
@@ -3756,7 +3756,7 @@ function startRun() {
 
     startBtn.textContent = '⏸ Пауза';
 
-    statusDiv.innerText  = '▶️ Продолжаем...';
+    statusDiv.innerText  = '▶️ Тренировка продолжена';
 
     setTimeout(() => {
 
@@ -3996,7 +3996,7 @@ async function stopAndSave() {
 
   let saveSucceeded = false;
   try {
-    statusDiv.innerText = 'Сохранение...';
+    statusDiv.innerText = 'Сохраняю тренировку...';
     debugReplay('save:start', `points=${trackPoints.length}`);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort('save-timeout'), 9000);
@@ -4014,7 +4014,7 @@ async function stopAndSave() {
 
     const data = await res.json();
 
-    statusDiv.innerText = data.ok ? '' : '⚠️ Ошибка сохранения';
+    statusDiv.innerText = data.ok ? '' : '⚠️ Не удалось сохранить. Попробуйте еще раз.';
     saveSucceeded = Boolean(data.ok);
     debugReplay('save:response', `ok=${saveSucceeded}`);
 
@@ -4022,7 +4022,7 @@ async function stopAndSave() {
 
     console.error(err);
 
-    statusDiv.innerText = '❌ Не удалось сохранить';
+    statusDiv.innerText = '❌ Не удалось сохранить тренировку';
     debugReplay('save:error', err.message || 'unknown');
 
   }
@@ -4064,7 +4064,7 @@ async function stopAndSave() {
   debugReplay('save:after', `replayPoints=${replayCoordinates.length}`);
   await new Promise((resolve) => setTimeout(resolve, saveSucceeded ? 120 : 80));
   if (!saveSucceeded) {
-    statusDiv.innerText = 'Подготовка воспроизведения...';
+    statusDiv.innerText = 'Подготавливаю воспроизведение...';
   }
   const defaultRouteName = sessionMode === 'planned_route' ? getRouteNameSafe() : 'Мой маршрут';
   const finalRouteId =
