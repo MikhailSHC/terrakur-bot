@@ -19,6 +19,13 @@
     body.clean-mode #completionCard {
       display: none !important;
     }
+    /* Presentation mode: keep video clean, no overlays. */
+    #topBar,
+    #bottomBar,
+    #status,
+    #completionCard {
+      display: none !important;
+    }
     #map {
       position: fixed;
       inset: 0;
@@ -109,6 +116,10 @@
       pointer-events: none;
     }
     #startBtn {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 30;
       border: 0;
       border-radius: 999px;
       padding: 8px 14px;
@@ -175,7 +186,7 @@
       <strong>LiveTrack — Живая Тропа • 2GIS Демо</strong><br>
       <span id="routeTitle">Маршрут</span>
     </div>
-    <button id="startBtn" type="button">Старт</button>
+    <button id="startBtnLegacy" type="button">Старт</button>
   </div>
   <div id="bottomBar" class="glass">
     <div class="pulse-dot"></div>
@@ -186,6 +197,7 @@
     <strong>Дубль завершен</strong>
     <span>Маршрут пройден. Можно сохранять запись.</span>
   </div>
+  <button id="startBtn" type="button">Старт</button>
 
   <script src="https://mapgl.2gis.com/api/js/v1"></script>
   <script>
@@ -199,7 +211,8 @@
       const cleanMode = params.get('clean') === '1';
       const export60 = params.get('fps') === '60' || params.get('export') === '60fps';
       const durationSecRaw = Math.max(20, Number(params.get('durationSec')) || 90);
-      const speedBoost = 2.5;
+      const speedBoostRaw = Number(params.get('speed'));
+      const speedBoost = Number.isFinite(speedBoostRaw) && speedBoostRaw > 0 ? speedBoostRaw : 1.5;
       const durationSec = Math.max(8, durationSecRaw / speedBoost);
       const autoStart = params.get('autostart') === '1';
       const statusEl = document.getElementById('status');
@@ -230,7 +243,7 @@
         return;
       }
 
-      routeTitleEl.textContent = featureName || routeId;
+      if (routeTitleEl) routeTitleEl.textContent = featureName || routeId;
       const bounds = getBounds(coordinates);
       const center = [
         (bounds.minLng + bounds.maxLng) / 2,
@@ -305,7 +318,7 @@
         playbackPhase = 'intro';
         finalState = null;
         startBtn.style.display = 'none';
-        completionCard.classList.remove('show');
+        if (completionCard) completionCard.classList.remove('show');
         statusEl.textContent = `2GIS cinematic playback • quality: ${quality} • speed: x${speedBoost}${cleanMode ? ' • clean' : ''}${export60 ? ' • 60fps' : ''}`;
         lastSmoothedBearing = calcBearing(coordinates[0], coordinates[1]);
         tick();
@@ -330,8 +343,8 @@
               zoom: introZoom,
               qualityConfig
             });
-            progressInner.style.width = '0%';
-            timeText.textContent = '00:00';
+          if (progressInner) progressInner.style.width = '0%';
+          if (timeText) timeText.textContent = '00:00';
             rafId = requestAnimationFrame(tick);
             return;
           }
@@ -378,8 +391,8 @@
             qualityConfig
           });
 
-          progressInner.style.width = `${(smooth * 100).toFixed(2)}%`;
-          timeText.textContent = formatTime(Math.floor(elapsedMs / 1000));
+          if (progressInner) progressInner.style.width = `${(smooth * 100).toFixed(2)}%`;
+          if (timeText) timeText.textContent = formatTime(Math.floor(elapsedMs / 1000));
 
           if (t < 1) {
             rafId = requestAnimationFrame(tick);
@@ -409,11 +422,11 @@
           }
 
           running = false;
-          progressInner.style.width = '100%';
+          if (progressInner) progressInner.style.width = '100%';
           statusEl.textContent = cleanMode
             ? 'LiveTrack — Живая Тропа demo complete'
             : 'Готово для записи: дубль завершен';
-          completionCard.classList.add('show');
+          // Keep final frame clean for recording: do not show completion card.
         } catch (err) {
           running = false;
           statusEl.textContent = `Ошибка playback: ${err.message}`;
@@ -421,7 +434,7 @@
         }
       }
 
-      startBtn.addEventListener('click', startPlayback);
+      startBtn?.addEventListener('click', startPlayback);
       if (autoStart) startPlayback();
 
       window.addEventListener('beforeunload', () => {

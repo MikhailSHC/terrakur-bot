@@ -51,6 +51,35 @@ class RouteService {
     return R * c;
   }
 
+  getRouteCenter(route) {
+    if (route?.center && typeof route.center.lat === 'number' && typeof route.center.lon === 'number') {
+      return {
+        lat: route.center.lat,
+        lon: route.center.lon
+      };
+    }
+
+    if (!Array.isArray(route?.track) || route.track.length === 0) {
+      return null;
+    }
+
+    const valid = route.track.filter(
+      (point) =>
+        Array.isArray(point) &&
+        point.length >= 2 &&
+        Number.isFinite(Number(point[0])) &&
+        Number.isFinite(Number(point[1]))
+    );
+    if (!valid.length) return null;
+
+    // Fallback center from track geometry (middle point) keeps nearby ranking usable.
+    const mid = valid[Math.floor(valid.length / 2)];
+    return {
+      lat: Number(mid[0]),
+      lon: Number(mid[1])
+    };
+  }
+
   /**
    * Все маршруты, отсортированные по расстоянию до пользователя.
    * userLat, userLon — координаты пользователя.
@@ -63,13 +92,14 @@ class RouteService {
     for (const route of routes) {
       if (route.status !== 'active') continue;
       if (activityId && !route.activities.includes(activityId)) continue;
-      if (!route.center || typeof route.center.lat !== 'number' || typeof route.center.lon !== 'number') continue;
+      const center = this.getRouteCenter(route);
+      if (!center) continue;
 
       const distanceKm = this.getDistanceKm(
         userLat,
         userLon,
-        route.center.lat,
-        route.center.lon
+        center.lat,
+        center.lon
       );
 
       const location = this.getLocationById(route.locationId);
