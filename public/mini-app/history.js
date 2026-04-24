@@ -664,21 +664,6 @@ async function saveProfile(chatId, authToken, maxInitData, profile) {
   return json.profile || {};
 }
 
-async function saveLocation(chatId, authToken, maxInitData, latitude, longitude) {
-  const query = buildAuthQuery(chatId, authToken, maxInitData);
-  const resp = await fetchWithRetry(`/api/profile/location?${query.toString()}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...buildAuthHeaders(authToken, maxInitData)
-    },
-    body: JSON.stringify({ latitude, longitude })
-  }, { retries: 0, timeoutMs: 12000 });
-  const json = await resp.json();
-  if (!resp.ok || !json?.ok) throw new Error(json?.error || 'Не удалось сохранить местоположение');
-  return json.profile || {};
-}
-
 async function deleteHistoryEntry(chatId, authToken, maxInitData, entry) {
   const query = buildAuthQuery(chatId, authToken, maxInitData);
   query.set('routeId', String(entry.routeId || ''));
@@ -715,8 +700,6 @@ async function init() {
   const userSexSelectEl = document.getElementById('userSexSelect');
   const saveUserProfileBtnEl = document.getElementById('saveUserProfileBtn');
   const userProfileStatusEl = document.getElementById('userProfileStatus');
-  const locationStatusEl = document.getElementById('locationStatus');
-  const updateLocationBtnEl = document.getElementById('updateLocationBtn');
 
   if (!chatId && !maxInitData) {
     errorBox.textContent = 'Не удалось авторизоваться в мини-приложении. Откройте экран снова из бота.';
@@ -764,12 +747,6 @@ async function init() {
   if (userAgeInputEl) userAgeInputEl.value = Number.isFinite(Number(profileAge)) ? String(profileAge) : '';
   if (userHeightInputEl) userHeightInputEl.value = Number.isFinite(Number(profileHeightCm)) ? String(profileHeightCm) : '';
   if (userSexSelectEl) userSexSelectEl.value = (profileSex === 'male' || profileSex === 'female') ? profileSex : '';
-  if (locationStatusEl) {
-    locationStatusEl.textContent = payload?.profile?.hasLocation
-      ? 'Геолокация указана'
-      : 'Геолокация не указана';
-  }
-
   let listSessions = [...allSessions];
   let selectedActivity = 'all';
   let selectedPeriodDays = 7;
@@ -781,8 +758,6 @@ async function init() {
   let currentHoverIndex = null;
   let chartAnimationRafId = null;
   let chartAnimationToken = 0;
-  let locationRetryTimerId = null;
-  const LOCATION_RETRY_MS = 15000;
 
   function hideChartTooltip() {
     if (!chartTooltipEl) return;
@@ -1021,109 +996,6 @@ async function init() {
     });
   }
 
-  if (updateLocationBtnEl) {
-    const stopLocationRetry = () => {
-      if (locationRetryTimerId !== null) {
-        clearInterval(locationRetryTimerId);
-        locationRetryTimerId = null;
-      }
-    };
-    let locationSaveInFlight = false;
-    const resolveLocationErrorMessage = (err) => {
-      const code = Number(err?.code);
-      if (code === 1) return 'Доступ к геолокации запрещен. Разрешите доступ в настройках MAX.';
-      if (code === 2) return 'Не удалось определить координаты. Попробуйте выйти на открытое место.';
-      if (code === 3) return 'Превышено время ожидания геолокации. Проверьте интернет и попробуйте снова.';
-      return 'Не удалось получить геолокацию. Попробуйте снова через несколько секунд.';
-    };
-    const shouldRetryLocation = (err) => {
-      const code = Number(err?.code);
-      return code !== 1;
-    };
-    const requestPositionOnce = (options) => new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, options);
-    });
-    const requestPositionViaWatch = (options, timeoutMs = 22000) => {
-      return new Promise((resolve, reject) => {
-        let done = false;
-        let watchId = null;
-        let timerId = null;
-        const finalize = (fn, payload) => {
-          if (done) return;
-          done = true;
-          if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-          if (timerId !== null) clearTimeout(timerId);
-          fn(payload);
-        };
-        watchId = navigator.geolocation.watchPosition(
-          (pos) => finalize(resolve, pos),
-          (err) => finalize(reject, err),
-          options
-        );
-        timerId = setTimeout(() => {
-          finalize(reject, { code: 3, message: 'watch-timeout' });
-        }, timeoutMs);
-      });
-    };
-    const requestCurrentPosition = async () => {
-      try {
-        return await requestPositionOnce({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
-      } catch (errHigh) {
-        if (Number(errHigh?.code) === 1) throw errHigh;
-      }
-      try {
-        // Мягкий fallback: допускаем кэш и пониженную точность для слабого сигнала.
-        return await requestPositionOnce({ enableHighAccuracy: false, timeout: 20000, maximumAge: 120000 });
-      } catch (errLow) {
-        if (Number(errLow?.code) === 1) throw errLow;
-      }
-      // Последний fallback: получаем первую доступную точку через watchPosition.
-      return requestPositionViaWatch({ enableHighAccuracy: false, timeout: 20000, maximumAge: 180000 }, 25000);
-    };
-    const attemptLocationSave = async () => {
-      if (locationSaveInFlight) return;
-      if (!navigator.geolocation) {
-        if (locationStatusEl) locationStatusEl.textContent = 'Геолокация недоступна на устройстве';
-        stopLocationRetry();
-        return;
-      }
-      locationSaveInFlight = true;
-      try {
-        const pos = await requestCurrentPosition();
-        const profile = await saveLocation(chatId, authToken, maxInitData, pos.coords.latitude, pos.coords.longitude);
-        if (locationStatusEl) {
-          locationStatusEl.textContent = profile?.hasLocation
-            ? 'Геолокация сохранена'
-            : 'Геолокация не указана';
-        }
-        stopLocationRetry();
-      } catch (err) {
-        if (locationStatusEl) {
-          locationStatusEl.textContent = resolveLocationErrorMessage(err);
-        }
-        if (!shouldRetryLocation(err)) {
-          stopLocationRetry();
-          return;
-        }
-        if (locationRetryTimerId === null) {
-          locationRetryTimerId = setInterval(() => {
-            attemptLocationSave();
-          }, LOCATION_RETRY_MS);
-        }
-      } finally {
-        locationSaveInFlight = false;
-      }
-    };
-    updateLocationBtnEl.addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        if (locationStatusEl) locationStatusEl.textContent = 'Геолокация недоступна на устройстве';
-        return;
-      }
-      if (locationStatusEl) locationStatusEl.textContent = 'Определяю местоположение...';
-      stopLocationRetry();
-      attemptLocationSave();
-    });
-  }
 }
 
 init();

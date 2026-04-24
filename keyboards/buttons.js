@@ -18,6 +18,9 @@ function getMainMenuKeyboard(historyUrl) {
           { type: 'callback', text: '📍 Рядом со мной', payload: 'nearby_routes' }
         ],
         [
+          { type: 'callback', text: '📡 Поделиться геолокацией', payload: 'share_location' }
+        ],
+        [
           { type: 'callback', text: '❓ Помощь', payload: 'help' }
         ]
       ]

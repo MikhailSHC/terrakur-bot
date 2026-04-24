@@ -240,6 +240,16 @@ function registerBotHandlers(bot, deps) {
     if (callbackData === 'main_menu') return commandHandler.handleStart(chatId);
     if (callbackData === 'help') return commandHandler.handleHelp(chatId);
     if (callbackData === 'my_history') return commandHandler.handleProfile(chatId);
+    if (callbackData === 'share_location') {
+      const prev = userService.getUserSession(chatId);
+      userService.setUserState(chatId, prev.state, { locationShareIntent: 'update_only' });
+      await bot.api.sendMessageToChat(
+        chatId,
+        '📡 Нажмите кнопку ниже и отправьте геолокацию. Сохраним её для раздела «📍 Рядом со мной».',
+        { attachments: [keyboards.geoRequestKeyboard] }
+      );
+      return;
+    }
 
     if (callbackData.startsWith('pick_profile_activity_')) {
       const raw = callbackData.replace('pick_profile_activity_', '');
@@ -296,7 +306,7 @@ function registerBotHandlers(bot, deps) {
       if (!prev.lastLocation) {
         await bot.api.sendMessageToChat(
           chatId,
-          '⚠️ Для раздела «Рядом со мной» сначала укажите геолокацию в мини-приложении: «Моя история» → «Настройки».'
+          '⚠️ Для раздела «Рядом со мной» сначала нажмите «📡 Поделиться геолокацией» в главном меню.'
         );
         return;
       }
@@ -318,7 +328,7 @@ function registerBotHandlers(bot, deps) {
       if (!session.lastLocation) {
         await bot.api.sendMessageToChat(
           chatId,
-          '⚠️ Геолокация не указана. Добавьте её в мини-приложении: «Моя история» → «Настройки».'
+          '⚠️ Геолокация не указана. Нажмите «📡 Поделиться геолокацией» в главном меню.'
         );
         return;
       }
@@ -334,7 +344,7 @@ function registerBotHandlers(bot, deps) {
     if (callbackData === 'change_location' || callbackData === 'settings') {
       await bot.api.sendMessageToChat(
         chatId,
-        '⚙️ Настройки геолокации находятся в мини-приложении: «Моя история» → «Настройки».'
+        '⚙️ Геолокацию можно обновить через кнопку «📡 Поделиться геолокацией» в главном меню.'
       );
       return;
     }
