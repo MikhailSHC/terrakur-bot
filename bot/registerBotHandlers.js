@@ -540,7 +540,20 @@ function registerBotHandlers(bot, deps) {
           userService.setUserState(chatId, sessionBefore.state, { locationShareIntent: null });
           await bot.api.sendMessageToChat(
             chatId,
-          '✅ Геолокация сохранена. Теперь раздел «📍 Рядом со мной» будет работать корректно.'
+            '✅ Геолокация сохранена. Теперь раздел «📍 Рядом со мной» будет работать корректно.',
+            {
+              attachments: [
+                {
+                  type: 'inline_keyboard',
+                  payload: {
+                    buttons: [
+                      [{ type: 'callback', text: '📍 Рядом со мной', payload: 'nearby_routes' }],
+                      [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+                    ]
+                  }
+                }
+              ]
+            }
           );
           return;
         }
@@ -558,7 +571,20 @@ function registerBotHandlers(bot, deps) {
 
         await bot.api.sendMessageToChat(
           chatId,
-          '✅ Геолокация сохранена.\nДалее: «📍 Рядом со мной» → выберите активность.'
+          '✅ Геолокация сохранена.\nДалее: «📍 Рядом со мной» → выберите активность.',
+          {
+            attachments: [
+              {
+                type: 'inline_keyboard',
+                payload: {
+                  buttons: [
+                    [{ type: 'callback', text: '📍 Рядом со мной', payload: 'nearby_routes' }],
+                    [{ type: 'callback', text: '🏠 Главное меню', payload: 'main_menu' }]
+                  ]
+                }
+              }
+            ]
+          }
         );
         return;
       }

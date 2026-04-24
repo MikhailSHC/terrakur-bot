@@ -187,6 +187,19 @@ const maxInitDataRaw = readMaxInitDataRaw();
 const chatId      = urlParams.get('chatId') || extractChatIdFromInitData(maxInitDataRaw) || 'test_user';
 const authToken   = urlParams.get('authToken') || '';
 const activityIdFromUrl = urlParams.get('activityId');
+function normalizeActivityId(rawActivityId) {
+  const normalized = String(rawActivityId || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (!normalized) return null;
+  if (normalized === 'run') return 'running';
+  if (normalized === 'bike') return 'cycling';
+  if (normalized === 'nordicwalking' || normalized === 'nordic_walk') return 'nordic_walking';
+  if (normalized === 'running' || normalized === 'nordic_walking' || normalized === 'cycling') return normalized;
+  return null;
+}
+const normalizedActivityIdFromUrl = normalizeActivityId(activityIdFromUrl);
 let userWeightKg = 70;
 let userAge = null;
 let userHeightCm = null;
@@ -389,7 +402,7 @@ function estimateCaloriesForUser(distanceM, durationSec) {
     nordic_walking: 6.5,
     cycling: 8.0
   };
-  const met = activityMetMap[String(activityIdFromUrl || '').toLowerCase()] || 7.0;
+  const met = activityMetMap[normalizedActivityIdFromUrl] || 7.0;
   const kcal = (bmr / 24) * hours * met;
   if (Number.isFinite(kcal) && kcal > 0) return kcal;
   return estimateWorkoutCaloriesKcal(distanceM, durationSec, weight);
@@ -3069,7 +3082,7 @@ function getActivityLabelForShare() {
     nordic_walking: 'Скандинавская ходьба',
     cycling: 'Велопрогулка'
   };
-  return mapById[String(activityIdFromUrl || '').toLowerCase()] || 'Тренировка';
+  return mapById[normalizedActivityIdFromUrl] || 'Тренировка';
 }
 
 function mercatorProject(lon, lat, zoom) {
@@ -3977,7 +3990,7 @@ async function stopAndSave() {
 
     mode: sessionMode,
 
-    activityId: activityIdFromUrl || null
+    activityId: normalizedActivityIdFromUrl
 
   };
 
@@ -3999,6 +4012,12 @@ async function stopAndSave() {
 
       }
 
+    }
+
+    // Если activityId не пришел в URL, пробуем взять его из карточки системного маршрута.
+    if (!session.activityId && plannedRoute?.properties?.activities && Array.isArray(plannedRoute.properties.activities)) {
+      const inferred = normalizeActivityId(plannedRoute.properties.activities[0]);
+      if (inferred) session.activityId = inferred;
     }
 
   }

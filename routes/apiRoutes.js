@@ -258,8 +258,13 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       const profile = typeof userService.getUserProfile === 'function'
         ? userService.getUserProfile(chatId)
         : {};
-      const estCaloriesKcal = Math.round(estimateMifflinWorkoutKcal(distanceM, durationSec, profile, session.activityId));
-      const normalizedActivityId = normalizeActivityId(session.activityId);
+      let normalizedActivityId = normalizeActivityId(session.activityId);
+      if (!normalizedActivityId && session.plannedRouteId && typeof routeService?.findRouteById === 'function') {
+        const route = routeService.findRouteById(session.plannedRouteId);
+        const fallbackActivity = Array.isArray(route?.activities) ? route.activities[0] : null;
+        normalizedActivityId = normalizeActivityId(fallbackActivity);
+      }
+      const estCaloriesKcal = Math.round(estimateMifflinWorkoutKcal(distanceM, durationSec, profile, normalizedActivityId));
       const sessionRecord = {
         id: sessionId,
         startedAt: session.startedAt,
