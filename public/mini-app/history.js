@@ -27,6 +27,20 @@ const ACTIVITY_MET = {
   unknown: 7.0
 };
 
+function normalizeActivityId(rawActivityId) {
+  const normalized = String(rawActivityId || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  if (!normalized) return 'unknown';
+  if (normalized === 'all') return 'all';
+  if (normalized === 'run') return 'running';
+  if (normalized === 'bike') return 'cycling';
+  if (normalized === 'nordicwalking' || normalized === 'nordic_walk') return 'nordic_walking';
+  if (Object.prototype.hasOwnProperty.call(ACTIVITY_LABELS, normalized)) return normalized;
+  return 'unknown';
+}
+
 let profileWeightKg = null;
 let profileAge = null;
 let profileHeightCm = null;
@@ -49,7 +63,7 @@ function estimateCaloriesWithProfile(distanceM, durationSec, activityId = null) 
   const p = resolveProfileForCalories();
   const bmr = (10 * p.weightKg) + (6.25 * p.heightCm) - (5 * p.age) + (p.sex === 'male' ? 5 : -161);
   const hours = Math.max(0, Number(durationSec) || 0) / 3600;
-  const met = ACTIVITY_MET[String(activityId || 'unknown').toLowerCase()] || ACTIVITY_MET.unknown;
+  const met = ACTIVITY_MET[normalizeActivityId(activityId)] || ACTIVITY_MET.unknown;
   const kcal = (bmr / 24) * hours * met;
   if (Number.isFinite(kcal) && kcal > 0) return kcal;
   return estimateWorkoutCaloriesKcal(distanceM, durationSec, p.weightKg);
@@ -270,7 +284,7 @@ function buildMetricSeries(sessions, periodDays, metric) {
     const bySession = Number(s.estCaloriesKcal);
     const fallbackCalories = estimateCaloriesWithProfile(s.distanceM, s.durationSec, s.activityId);
     agg.estCaloriesKcal += Number.isFinite(bySession) && bySession > 0 ? bySession : fallbackCalories;
-    const activityId = s.activityId || 'unknown';
+    const activityId = normalizeActivityId(s.activityId);
     if (!agg.activities[activityId]) agg.activities[activityId] = 0;
     agg.activities[activityId] += Number(s.distanceM) || 0;
   });
@@ -314,8 +328,9 @@ function getChartTitle(metric) {
 }
 
 function getActivityLabel(activityId) {
-  if (!activityId || activityId === 'unknown') return 'Смешанные';
-  return ACTIVITY_LABELS[activityId] || 'Смешанные';
+  const normalized = normalizeActivityId(activityId);
+  if (!normalized || normalized === 'unknown') return 'Смешанные';
+  return ACTIVITY_LABELS[normalized] || 'Смешанные';
 }
 
 function prepareCanvas(canvas, cssHeight = 220) {
@@ -482,9 +497,9 @@ function renderMetricFilters(container, selected, onSelect) {
 
 function inferRouteActivity(routeId, sessions) {
   const linked = sessions
-    .filter((s) => String(s.plannedRouteId || '') === String(routeId) && s.activityId)
+    .filter((s) => String(s.plannedRouteId || '') === String(routeId) && normalizeActivityId(s.activityId) !== 'unknown')
     .sort((a, b) => new Date(b.finishedAt || b.startedAt) - new Date(a.finishedAt || a.startedAt));
-  return linked[0]?.activityId || 'all';
+  return normalizeActivityId(linked[0]?.activityId || 'all');
 }
 
 function renderRouteHistory(container, historyRecords, sessions, selectedActivity, onDelete) {
@@ -492,7 +507,7 @@ function renderRouteHistory(container, historyRecords, sessions, selectedActivit
   const normalized = historyRecords
     .map((item) => ({
       ...item,
-      activityId: item.activityId || inferRouteActivity(item.routeId, sessions)
+      activityId: normalizeActivityId(item.activityId || inferRouteActivity(item.routeId, sessions))
     }))
     .filter((item) => selectedActivity === 'all' || item.activityId === selectedActivity)
     .slice()
@@ -731,8 +746,14 @@ async function init() {
     errorBox.textContent = '';
   }
 
-  const allSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
-  let historyRecords = Array.isArray(payload.history) ? [...payload.history] : [];
+  const allSessions = (Array.isArray(payload.sessions) ? payload.sessions : []).map((session) => ({
+    ...session,
+    activityId: normalizeActivityId(session?.activityId)
+  }));
+  let historyRecords = (Array.isArray(payload.history) ? payload.history : []).map((entry) => ({
+    ...entry,
+    activityId: normalizeActivityId(entry?.activityId)
+  }));
   const fullName = (payload.profile && typeof payload.profile.fullName === 'string' && payload.profile.fullName.trim()) || 'Пользователь';
   profileWeightKg = payload?.profile?.weightKg ?? null;
   profileAge = payload?.profile?.age ?? null;

@@ -23,6 +23,18 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     const normalized = String(value || '').toLowerCase();
     return normalized === 'male' || normalized === 'female' ? normalized : null;
   };
+  const normalizeActivityId = (value) => {
+    const normalized = String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, '_');
+    if (!normalized) return null;
+    if (normalized === 'run') return 'running';
+    if (normalized === 'bike') return 'cycling';
+    if (normalized === 'nordicwalking' || normalized === 'nordic_walk') return 'nordic_walking';
+    if (normalized === 'running' || normalized === 'nordic_walking' || normalized === 'cycling') return normalized;
+    return null;
+  };
   // Расчёт калорий с учётом профиля:
   // - используем формулу Миффлина, если профиль заполнен,
   // - иначе применяем резервную оценку по дистанции и времени.
@@ -44,7 +56,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       nordic_walking: 6.5,
       cycling: 8.0
     };
-    const met = activityMetMap[String(activityId || '').toLowerCase()] || 7.0;
+    const met = activityMetMap[normalizeActivityId(activityId)] || 7.0;
     const workoutKcal = (bmr / 24) * hours * met;
     return Math.max(0, workoutKcal);
   };
@@ -247,6 +259,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
         ? userService.getUserProfile(chatId)
         : {};
       const estCaloriesKcal = Math.round(estimateMifflinWorkoutKcal(distanceM, durationSec, profile, session.activityId));
+      const normalizedActivityId = normalizeActivityId(session.activityId);
       const sessionRecord = {
         id: sessionId,
         startedAt: session.startedAt,
@@ -258,10 +271,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
         geojson: session.geojson,
         mode: session.mode,
         plannedRouteId: session.plannedRouteId || null,
-        activityId:
-          typeof session.activityId === 'string' && session.activityId.length > 0
-            ? session.activityId
-            : null
+        activityId: normalizedActivityId
       };
 
       userService.addSession(chatId, sessionRecord);
