@@ -112,6 +112,7 @@ function getParams() {
 function buildAuthHeaders(authToken, maxInitData) {
   const headers = {};
   if (authToken) headers['x-miniapp-auth'] = authToken;
+  if (maxInitData) headers['x-max-init-data'] = encodeURIComponent(maxInitData);
   return headers;
 }
 
@@ -119,7 +120,8 @@ function buildAuthQuery(chatId, authToken, maxInitData) {
   const query = new URLSearchParams();
   if (chatId) query.set('chatId', String(chatId));
   if (authToken) query.set('authToken', authToken);
-  if (!authToken && maxInitData) query.set('maxInitData', maxInitData);
+  // Keep maxInitData out of URL to avoid very long query strings in WebView/proxy chains.
+  void maxInitData;
   return query;
 }
 
