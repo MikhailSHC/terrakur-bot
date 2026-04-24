@@ -1028,6 +1028,7 @@ async function init() {
         locationRetryTimerId = null;
       }
     };
+    let locationSaveInFlight = false;
     const resolveLocationErrorMessage = (err) => {
       const code = Number(err?.code);
       if (code === 1) return 'Доступ к геолокации запрещен. Разрешите доступ в настройках MAX.';
@@ -1039,28 +1040,54 @@ async function init() {
       const code = Number(err?.code);
       return code !== 1;
     };
-    const requestCurrentPosition = () => {
+    const requestPositionOnce = (options) => new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, options);
+    });
+    const requestPositionViaWatch = (options, timeoutMs = 22000) => {
       return new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve(pos),
-          () => {
-            // Режим с менее строгими параметрами для слабого сигнала/помещений.
-            navigator.geolocation.getCurrentPosition(
-              (pos) => resolve(pos),
-              (errLow) => reject(errLow),
-              { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
-            );
-          },
-          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        let done = false;
+        let watchId = null;
+        let timerId = null;
+        const finalize = (fn, payload) => {
+          if (done) return;
+          done = true;
+          if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+          if (timerId !== null) clearTimeout(timerId);
+          fn(payload);
+        };
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => finalize(resolve, pos),
+          (err) => finalize(reject, err),
+          options
         );
+        timerId = setTimeout(() => {
+          finalize(reject, { code: 3, message: 'watch-timeout' });
+        }, timeoutMs);
       });
     };
+    const requestCurrentPosition = async () => {
+      try {
+        return await requestPositionOnce({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+      } catch (errHigh) {
+        if (Number(errHigh?.code) === 1) throw errHigh;
+      }
+      try {
+        // Мягкий fallback: допускаем кэш и пониженную точность для слабого сигнала.
+        return await requestPositionOnce({ enableHighAccuracy: false, timeout: 20000, maximumAge: 120000 });
+      } catch (errLow) {
+        if (Number(errLow?.code) === 1) throw errLow;
+      }
+      // Последний fallback: получаем первую доступную точку через watchPosition.
+      return requestPositionViaWatch({ enableHighAccuracy: false, timeout: 20000, maximumAge: 180000 }, 25000);
+    };
     const attemptLocationSave = async () => {
+      if (locationSaveInFlight) return;
       if (!navigator.geolocation) {
         if (locationStatusEl) locationStatusEl.textContent = 'Геолокация недоступна на устройстве';
         stopLocationRetry();
         return;
       }
+      locationSaveInFlight = true;
       try {
         const pos = await requestCurrentPosition();
         const profile = await saveLocation(chatId, authToken, maxInitData, pos.coords.latitude, pos.coords.longitude);
@@ -1083,6 +1110,8 @@ async function init() {
             attemptLocationSave();
           }, LOCATION_RETRY_MS);
         }
+      } finally {
+        locationSaveInFlight = false;
       }
     };
     updateLocationBtnEl.addEventListener('click', () => {
