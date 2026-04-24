@@ -410,7 +410,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     try {
       const chatId = req.chatId;
       const routeName = String(req.body?.routeName || '').trim();
-      const activityId = String(req.body?.activityId || '').trim();
+      const activityId = normalizeActivityId(req.body?.activityId);
       const routeIdRaw = String(req.body?.routeId || '').trim();
       const sourceSessionId = String(req.body?.sourceSessionId || '').trim();
 
@@ -426,6 +426,9 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
         activityId,
         sourceSessionId: sourceSessionId || null
       });
+      if (sourceSessionId && typeof userService.setSessionActivityId === 'function') {
+        userService.setSessionActivityId(chatId, sourceSessionId, activityId);
+      }
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });

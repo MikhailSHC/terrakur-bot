@@ -435,6 +435,19 @@ class UserService {
     return true;
   }
 
+  setSessionActivityId(chatId, sessionId, activityId) {
+    const session = this.getUserSession(chatId);
+    if (!Array.isArray(session.sessions) || !session.sessions.length) return false;
+    const normalizedSessionId = String(sessionId || '');
+    if (!normalizedSessionId) return false;
+    const target = session.sessions.find((s) => String(s?.id || '') === normalizedSessionId);
+    if (!target) return false;
+    target.activityId = typeof activityId === 'string' && activityId.length > 0 ? activityId : null;
+    session.lastUpdated = new Date().toISOString();
+    this.saveData();
+    return true;
+  }
+
   getLifetimeStats(chatId) {
     const session = this.getUserSession(chatId);
     return {
