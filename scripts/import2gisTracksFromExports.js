@@ -43,7 +43,7 @@ function extractAllJsonObjects(text) {
         try {
           objects.push(JSON.parse(candidate));
         } catch (err) {
-          // ignore invalid fragments
+          // пропускаем невалидные фрагменты
         }
         start = -1;
       }
@@ -139,7 +139,7 @@ function findBestRouteMatch(payload) {
     }
   }
 
-  // Tight threshold: endpoints must be near existing schematic track.
+  // Строгий порог: начало/конец должны быть рядом с текущим схематичным треком.
   if (!best || best.score > 0.02) return null;
   return best.route;
 }

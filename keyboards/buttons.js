@@ -1,4 +1,4 @@
-// keyboards/buttons.js
+// Кнопки и inline-клавиатуры бота
 
 // ==================== ГЛАВНОЕ МЕНЮ ====================
 function getMainMenuKeyboard(historyUrl) {

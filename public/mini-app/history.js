@@ -84,14 +84,14 @@ function getParams() {
       try {
         attempts.push(decodeURIComponent(value));
       } catch {
-        // ignore
+        // игнорируем ошибку декодирования
       }
       for (const item of attempts) {
         try {
           const parsed = JSON.parse(item);
           if (parsed && typeof parsed === 'object') return parsed;
         } catch {
-          // ignore
+          // игнорируем ошибку парсинга
         }
       }
       return null;
@@ -118,24 +118,24 @@ function enableMiniAppCloseConfirmation() {
   try {
     if (typeof webApp.ready === 'function') webApp.ready();
   } catch {
-    // noop
+    // без действия
   }
   try {
     if (typeof webApp.enableClosingConfirmation === 'function') webApp.enableClosingConfirmation();
   } catch {
-    // noop
+    // без действия
   }
   try {
     if (typeof webApp.setClosingConfirmation === 'function') webApp.setClosingConfirmation(true);
   } catch {
-    // noop
+    // без действия
   }
   try {
     if (typeof webApp.setupClosingBehavior === 'function') {
       webApp.setupClosingBehavior({ need_confirmation: true });
     }
   } catch {
-    // noop
+    // без действия
   }
 }
 
@@ -150,7 +150,7 @@ function buildAuthQuery(chatId, authToken, maxInitData) {
   const query = new URLSearchParams();
   if (chatId) query.set('chatId', String(chatId));
   if (authToken) query.set('authToken', authToken);
-  // Keep maxInitData out of URL to avoid very long query strings in WebView/proxy chains.
+  // Держим maxInitData вне URL, чтобы не раздувать query-строку в WebView/прокси-цепочках.
   void maxInitData;
   return query;
 }
@@ -209,7 +209,7 @@ function saveSessionsPayloadCache(chatId, payload) {
       })
     );
   } catch {
-    // Ignore storage failures on restricted webviews.
+    // В ограниченных WebView localStorage может быть недоступен — молча пропускаем.
   }
 }
 
@@ -1023,7 +1023,7 @@ async function init() {
         navigator.geolocation.getCurrentPosition(
           (pos) => resolve(pos),
           () => {
-            // Fallback to less strict mode for weak signal / indoors.
+            // Режим с менее строгими параметрами для слабого сигнала/помещений.
             navigator.geolocation.getCurrentPosition(
               (pos) => resolve(pos),
               (errLow) => reject(errLow),

@@ -23,6 +23,9 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     const normalized = String(value || '').toLowerCase();
     return normalized === 'male' || normalized === 'female' ? normalized : null;
   };
+  // Расчёт калорий с учётом профиля:
+  // - используем формулу Миффлина, если профиль заполнен,
+  // - иначе применяем резервную оценку по дистанции и времени.
   const estimateMifflinWorkoutKcal = (distanceM, durationSec, profile = {}, activityId = null) => {
     const weightKg = Number(profile.weightKg);
     const age = Number(profile.age);
@@ -45,16 +48,12 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     const workoutKcal = (bmr / 24) * hours * met;
     return Math.max(0, workoutKcal);
   };
-  const estimateWithProfile = (distanceM, durationSec, profile = {}) => {
-    return estimateMifflinWorkoutKcal(distanceM, durationSec, profile, null);
-  };
-
-  // Service health probe for bot + mini-app uptime checks.
+  // Проба работоспособности сервиса для проверок доступности бота и мини-приложения.
   router.get('/health', (req, res) => {
     res.json({ ok: true, message: 'API is alive' });
   });
 
-  // Dev-only helper to validate MAX launch auth resolution.
+  // Вспомогательный отладочный эндпоинт (только вне production) для проверки MAX-авторизации.
   if (process.env.NODE_ENV !== 'production') {
     router.get('/auth/debug', miniAppAuth, (req, res) => {
       res.json({
@@ -66,7 +65,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     });
   }
 
-  // 2GIS proxy endpoints isolate external failures from mini-app clients.
+  // Прокси-эндпоинты 2GIS изолируют сбои внешнего API от клиентов мини-приложения.
   router.get('/geocode', async (req, res) => {
     const query = String(req.query.q || '').trim();
     if (!query) {
@@ -139,7 +138,10 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     }
   });
 
-  // Route catalog API (system + generated routes).
+  // Каталог маршрутов:
+  // - /routes возвращает карточки маршрутов и geojson из сгенерированного файла,
+  // - /routes/:id возвращает расширенные метаданные из routeService,
+  // - /routes/:id/geojson возвращает геометрию одного маршрута.
   router.post('/routes/build-custom', miniAppAuth, (req, res) => {
     const waypoints = Array.isArray(req.body?.waypoints) ? req.body.waypoints : [];
     const providerRaw = String(req.body?.provider || 'legacy').toLowerCase();
@@ -152,7 +154,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
       return res.status(400).json({ ok: false, error: 'At least 2 waypoints are required' });
     }
 
-    // Keep provider marker in response to trace route-building strategy.
+    // Возвращаем поле provider в ответе, чтобы отслеживать стратегию сборки маршрута.
     const geojson = {
       type: 'FeatureCollection',
       features: [
@@ -225,7 +227,7 @@ function createApiRouter({ userService, routeService, miniAppAuth, config }) {
     }
   });
 
-  // Session and profile APIs are protected by mini-app auth middleware.
+  // API сессий и профиля защищены middleware авторизации мини-приложения.
   router.post('/sessions', miniAppAuth, (req, res) => {
     const chatId = req.chatId;
     const { session } = req.body;

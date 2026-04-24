@@ -79,7 +79,7 @@ function extractAllJsonObjects(text) {
         try {
           objects.push(JSON.parse(candidate));
         } catch (err) {
-          // Ignore invalid JSON fragments.
+          // Пропускаем невалидные JSON-фрагменты.
         }
         start = -1;
       }

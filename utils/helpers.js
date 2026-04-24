@@ -1,4 +1,4 @@
-// utils/helpers.js
+// Вспомогательные функции форматирования
 
 function difficultyLabel(level) {
   if (level === 1) return 'легкий';
@@ -18,7 +18,7 @@ function formatRouteList(routes) {
       const num = index + 1;
       const name = route.name || `Маршрут ${num}`;
       const distance = route.distance || route.distanceText || (route.distanceKm ? `${route.distanceKm} км` : null);
-      const duration = route.duration;   // '1-2 hours'
+      const duration = route.duration;   // например: '1-2 часа'
       const difficulty = route.difficulty;
 
       let line = `${num}. ${name}`;

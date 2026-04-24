@@ -1,4 +1,4 @@
-// services/routeService.js
+// Сервис работы с маршрутами
 
 const routes = require('../data/routesData');
 const LOCATIONS = require('../data/locationsData');
@@ -29,7 +29,7 @@ class RouteService {
     return routes.find(route => route.id === routeId && route.status === 'active') || null;
   }
 
-  // Расстояние в км между двумя точками (haversine)
+  // Расстояние в км между двумя точками (формула гаверсинусов)
   getDistanceKm(lat1Deg, lon1Deg, lat2Deg, lon2Deg) {
     const toRad = deg => (Math.PI / 180) * deg;
     const R = 6371;
@@ -72,7 +72,7 @@ class RouteService {
     );
     if (!valid.length) return null;
 
-    // Fallback center from track geometry (middle point) keeps nearby ranking usable.
+    // Резервный центр из геометрии трека (средняя точка), чтобы корректно работал рейтинг "рядом".
     const mid = valid[Math.floor(valid.length / 2)];
     return {
       lat: Number(mid[0]),

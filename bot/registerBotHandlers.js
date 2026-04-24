@@ -232,10 +232,11 @@ function registerBotHandlers(bot, deps) {
       try {
         await bot.api.deleteMessage(callbackMessageId);
       } catch {
-        // Best effort: если удаление не поддерживается/сообщение уже недоступно, продолжаем.
+        // Мягкий режим: если удаление не поддерживается или сообщение уже недоступно, продолжаем.
       }
     }
 
+    // Глобальная навигация, доступная почти с любого экрана.
     if (callbackData === 'main_menu') return commandHandler.handleStart(chatId);
     if (callbackData === 'help') return commandHandler.handleHelp(chatId);
     if (callbackData === 'my_history') return commandHandler.handleProfile(chatId);
@@ -247,6 +248,7 @@ function registerBotHandlers(bot, deps) {
       return commandHandler.handleProfileForActivity(chatId, activityFilter);
     }
 
+    // Точки входа в свободную тренировку (с выбором активности и без).
     if (callbackData === 'start_free_track') {
       const navUrl = buildMiniAppUrl(config, chatId);
       await bot.api.sendMessageToChat(
@@ -288,6 +290,7 @@ function registerBotHandlers(bot, deps) {
       return;
     }
 
+    // Сценарий "Рядом со мной": нужна сохранённая геолокация, затем фильтрация по активности.
     if (callbackData === 'nearby_routes') {
       const prev = userService.getUserSession(chatId);
       if (!prev.lastLocation) {
@@ -327,6 +330,7 @@ function registerBotHandlers(bot, deps) {
       );
     }
 
+    // Быстрые переходы в настройки мини-приложения (профиль/геолокация).
     if (callbackData === 'change_location' || callbackData === 'settings') {
       await bot.api.sendMessageToChat(
         chatId,

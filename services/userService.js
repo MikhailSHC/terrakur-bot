@@ -32,7 +32,7 @@ class UserService {
       mode: record.mode || null,
       plannedRouteId: record.plannedRouteId || null,
       activityId: record.activityId || null,
-      // Keep geojson only for recent sessions to avoid bloating user_data.json.
+      // Храним geojson только для недавних сессий, чтобы не раздувать user_data.json.
       geojson: record.geojson || null
     };
   }
@@ -86,7 +86,7 @@ class UserService {
 
       result[String(chatId)] = {
         chatId: String(chatId),
-        // Persist only fields required by runtime and analytics.
+        // Сохраняем только поля, нужные для runtime-логики и аналитики.
         history,
         sessions,
         fullName: typeof user.fullName === 'string' ? user.fullName : '',
@@ -135,7 +135,7 @@ class UserService {
     }
   }
 
-  // Returns normalized user record with all required fields.
+  // Возвращает нормализованную запись пользователя со всеми обязательными полями.
   getUserSession(chatId) {
     const id = String(chatId);
 
@@ -168,7 +168,7 @@ class UserService {
 
     const u = this.userData[id];
 
-    // Schema guard for old snapshots and partially filled records.
+    // Защита схемы для старых снимков и частично заполненных записей.
     if (!Array.isArray(u.history)) u.history = [];
     if (!Array.isArray(u.sessions)) u.sessions = [];
     if (typeof u.totalDistanceM !== 'number') u.totalDistanceM = 0;
@@ -219,7 +219,7 @@ class UserService {
     if (lastEntry && lastEntry.routeId === routeId) {
       const lastTsMs = Date.parse(lastEntry.timestamp || '');
       if (Number.isFinite(lastTsMs) && nowMs - lastTsMs <= 15000) {
-        // Deduplicate accidental double-save of the same route in short interval.
+        // Убираем случайное двойное сохранение одного и того же маршрута в коротком интервале.
         return;
       }
     }
@@ -429,7 +429,7 @@ class UserService {
     session.sessions = session.sessions.filter((s) => String(s?.id || '') !== String(sessionId));
     const removed = session.sessions.length !== beforeLen;
     if (!removed) return false;
-    // Product rule: deleting one session does not rewrite lifetime aggregates.
+    // Продуктовое правило: удаление одной сессии не пересчитывает агрегаты за всё время.
     session.lastUpdated = new Date().toISOString();
     this.saveData();
     return true;

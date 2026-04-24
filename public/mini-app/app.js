@@ -1,4 +1,5 @@
-// app.js - LiveTrack - Живая Тропа (улучшенный GPS-фильтр)
+// Основной скрипт мини-приложения LiveTrack - Живая Тропа (улучшенный GPS-фильтр)
+/* Глобальные объекты браузера: Image, File */
 
 
 
@@ -33,7 +34,7 @@ let lastSavedPoint = null;
 /** Сглаженная позиция конца трека только для отрисовки (дистанция — по trackPoints) */
 let trailDisplayLat = null;
 let trailDisplayLng = null;
-// Smoothness tuning (prev: alpha=0.38, lag=42) kept for quick rollback.
+// Тюнинг сглаживания (раньше: alpha=0.38, lag=42) сохранен для быстрого отката.
 const TRAIL_DISPLAY_SMOOTH_ALPHA = 0.52;
 const TRAIL_DISPLAY_MAX_LAG_M = 24;
 const TRAIL_DISPLAY_MAX_STEP_M = 8;
@@ -96,15 +97,15 @@ const NAV_TO_START_BLINK_INTERVAL_MS = 620;
 const cinematicDemoEnabled = /(?:\?|&)demo=(?:cinematic|1|true)(?:&|$)/i.test(window.location.search);
 
 
-// Camera tuning (prev: interval=2500, minMove=8) kept for quick rollback.
+// Тюнинг камеры (раньше: interval=2500, minMove=8) сохранен для быстрого отката.
 const CAMERA_UPDATE_INTERVAL_MS = cinematicDemoEnabled ? 700 : 1200;
 const CAMERA_MIN_MOVE_M = cinematicDemoEnabled ? 2 : 4;
-// Replay tuning (prev: duration=6000, step interval=60ms) kept for quick rollback.
+// Тюнинг реплея (раньше: duration=6000, step interval=60ms) сохранен для быстрого отката.
 const REPLAY_DURATION_MS = cinematicDemoEnabled ? 9800 : 7600;
 
 
 
-// DOM-элементы
+// Элементы DOM
 
 const statsPanel   = document.getElementById('statsPanel');
 
@@ -126,7 +127,9 @@ const controlsEl   = document.querySelector('.controls');
 
 
 
-// Параметры из URL
+// === ИНИЦИАЛИЗАЦИЯ URL И АВТОРИЗАЦИИ ===
+// Параметры запуска и initData MAX читаем централизованно:
+// это делает старт предсказуемым и для обычного запуска, и для WebView.
 
 const urlParams   = new URLSearchParams(window.location.search);
 
@@ -157,14 +160,14 @@ function extractChatIdFromInitData(rawInitData) {
     try {
       attempts.push(decodeURIComponent(value));
     } catch {
-      // ignore
+      // игнорируем и пробуем запасной путь
     }
     for (const item of attempts) {
       try {
         const parsed = JSON.parse(item);
         if (parsed && typeof parsed === 'object') return parsed;
       } catch {
-        // ignore
+        // игнорируем и пробуем запасной путь
       }
     }
     return null;
@@ -247,24 +250,24 @@ function enableMiniAppCloseConfirmation() {
   try {
     if (typeof webApp.ready === 'function') webApp.ready();
   } catch {
-    // noop
+    // без действия
   }
   try {
     if (typeof webApp.enableClosingConfirmation === 'function') webApp.enableClosingConfirmation();
   } catch {
-    // noop
+    // без действия
   }
   try {
     if (typeof webApp.setClosingConfirmation === 'function') webApp.setClosingConfirmation(true);
   } catch {
-    // noop
+    // без действия
   }
   try {
     if (typeof webApp.setupClosingBehavior === 'function') {
       webApp.setupClosingBehavior({ need_confirmation: true });
     }
   } catch {
-    // noop
+    // без действия
   }
 }
 
@@ -294,7 +297,7 @@ async function ensureDgisApiKeyLoaded() {
       }
     }
   } catch {
-    // Continue with fallback source below.
+    // Продолжаем с запасным источником ниже.
   }
   try {
     const runtimeRes = await fetchWithRetry(
@@ -309,7 +312,7 @@ async function ensureDgisApiKeyLoaded() {
     dgisApiKey = runtimeKey;
     dgisRasterEnabled = true;
   } catch {
-    // Keep silent fallback: map continues with standard tiles if API key is unavailable.
+    // Тихий резервный сценарий: карта продолжает работу на стандартных тайлах без API-ключа.
   }
 }
 
@@ -320,8 +323,15 @@ function getAuthHeaders() {
   return headers;
 }
 
+// === СЕТЕВОЙ СЛОЙ ===
+// Все запросы мини-приложения к API идут через эти обёртки, чтобы
+// переживать нестабильную мобильную сеть и кратковременные сбои.
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(attempt, retryDelays) {
+  return retryDelays[Math.min(attempt, retryDelays.length - 1)] || 1000;
 }
 
 async function fetchWithTimeout(input, init = {}, timeoutMs = 12000) {
@@ -347,14 +357,14 @@ async function fetchWithRetry(input, init = {}, options = {}) {
     try {
       const response = await fetchWithTimeout(input, init, timeoutMs);
       if (retryStatuses.has(response.status) && attempt < retries) {
-        await sleep(retryDelays[Math.min(attempt, retryDelays.length - 1)] || 1000);
+        await sleep(getRetryDelayMs(attempt, retryDelays));
         continue;
       }
       return response;
     } catch (error) {
       lastError = error;
       if (attempt >= retries) break;
-      await sleep(retryDelays[Math.min(attempt, retryDelays.length - 1)] || 1000);
+      await sleep(getRetryDelayMs(attempt, retryDelays));
     }
   }
   throw lastError || new Error('network-request-failed');
@@ -442,29 +452,29 @@ function syncStopButtonVisibility() {
 
 
 
-// === GPS FILTERING ===
+// === ФИЛЬТРАЦИЯ GPS ===
 
 
 
-// Base parameters for filtering GPS
+// Базовые параметры фильтрации GPS
 
-const BASE_MIN_DISTANCE_METERS   = 2;    // smoother visual track updates
+const BASE_MIN_DISTANCE_METERS   = 2;    // более плавное визуальное обновление трека
 
-const BASE_MAX_JUMP_METERS       = 60;   // outlier if too far in short interval
+const BASE_MAX_JUMP_METERS       = 60;   // выброс, если слишком далеко за короткий интервал
 
-const BASE_MAX_ACCURACY_METERS   = 35;   // keep tracking alive in weak-signal conditions
+const BASE_MAX_ACCURACY_METERS   = 35;   // сохраняем трекинг при слабом сигнале
 
-const BASE_MAX_SPEED_M_S         = 7;    // ~25 km/h - everything above is considered outlier (for running/jogging)
+const BASE_MAX_SPEED_M_S         = 7;    // ~25 км/ч — выше считаем выбросом (для ходьбы/бега)
 
 
 
-// Adaptive filtering state
+// Состояние адаптивной фильтрации
 
-let recentSpeeds = [];          // last few speed measurements for averaging
+let recentSpeeds = [];          // несколько последних измерений скорости для усреднения
 
-const SPEED_HISTORY_SIZE = 5;   // how many recent speeds to average
+const SPEED_HISTORY_SIZE = 5;   // сколько последних скоростей усредняем
 
-const LOW_SPEED_THRESHOLD_M_S = 2; // m/s - low-speed profile for stricter GPS filtering
+const LOW_SPEED_THRESHOLD_M_S = 2; // м/с — профиль низкой скорости для более строгой фильтрации
 
 // Таймер для UI
 
@@ -526,7 +536,7 @@ function scheduleFollowResume() {
       const center = [lastKnownPosition.longitude, lastKnownPosition.latitude];
       map.easeTo({
         center,
-        // Resume follow in a wider framing (~1.5x farther than previous default).
+        // Возвращаем следование с более широким кадром (~1.5x дальше прежнего дефолта).
         zoom: cinematicDemoEnabled ? 16.6 : 16.4,
         duration: cinematicDemoEnabled ? 700 : 500,
         pitch: cinematicDemoEnabled ? 46 : 0,
@@ -542,7 +552,7 @@ function registerMapUserInteractionPause() {
     isFollowingUser = false;
     scheduleFollowResume();
   };
-  // Any manual map interaction pauses camera follow temporarily.
+  // Любое ручное действие с картой временно ставит автоследование на паузу.
   ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart', 'touchstart', 'movestart'].forEach((evt) => {
     map.on(evt, pauseFollow);
   });
@@ -1304,7 +1314,7 @@ function updateNavToStartLineIfNeeded(userLat, userLng) {
 }
 
 function updateGPSQuality(_accuracy) {
-  // intentionally hidden in MVP UI to reduce visual noise
+  // Намеренно скрыто в MVP-интерфейсе, чтобы уменьшить визуальный шум.
 }
 
 function smoothCameraFollow(center, now) {
@@ -1440,7 +1450,7 @@ function startCinematicRoutePlayback() {
     cinematicPlaybackRafId = window.requestAnimationFrame(tick);
   };
 
-  // Start exactly at route start for presentation consistency.
+  // Стартуем строго в начале маршрута для консистентной презентации.
   emitSyntheticGpsPoint(coords[0][1], coords[0][0], 3);
   cinematicPlaybackRafId = window.requestAnimationFrame(tick);
 }
@@ -1513,7 +1523,7 @@ async function loadPlannedRoute(id) {
       }
     }
     if (!res.ok || !data || !data.ok) {
-      // Fallback when /api proxy returns HTML or malformed payload.
+      // Резервный сценарий, если /api-прокси вернул HTML или некорректные данные.
       const localRes = await fetchWithRetry(
         './routes.geojson?v=20260422-1',
         { cache: 'no-store' },
@@ -1528,7 +1538,7 @@ async function loadPlannedRoute(id) {
         }
       }
 
-      // Final fallback: route details endpoint (works when route catalog is newer than geojson file).
+      // Финальный резервный сценарий: эндпоинт деталей маршрута (когда каталог новее файла geojson).
       if (!data || !data.ok || !data.route) {
         const detailsRes = await fetchWithRetry(
           `/api/routes/${id}`,
@@ -1540,7 +1550,7 @@ async function loadPlannedRoute(id) {
         if (route) {
           let coordinates = [];
           if (Array.isArray(route.track) && route.track.length >= 2) {
-            // routesData stores track points as [lat, lon], GeoJSON requires [lon, lat].
+            // В routesData точки лежат как [lat, lon], а GeoJSON требует [lon, lat].
             coordinates = route.track
               .map((point) => [Number(point?.[1]), Number(point?.[0])])
               .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
@@ -1589,7 +1599,7 @@ async function loadPlannedRoute(id) {
     // Старт и финиш уже синхронизированы в applyPlannedRouteFeature.
 
     // Один поток геолокации: не вызывать getUserLocation() здесь — второй getCurrentPosition
-    // с другим timeout давал гонку: при timeout 5s срабатывал error и карта улетала в центр линии
+    // с другим таймаутом давал гонку: при таймауте 5s срабатывала ошибка, и карта улетала в центр линии
     // маршрута, хотя позже приходил успешный фикс с реальной позицией пользователя.
     ensurePassiveLocationWatch();
 
@@ -2417,7 +2427,7 @@ async function searchAndAddCustomWaypoint() {
     renderCustomRouteDraft();
     map.easeTo({ center: point, zoom: 16, duration: 650 });
     statusDiv.innerText = `Добавлено: ${first.title || q}`;
-  } catch (err) {
+  } catch {
     statusDiv.innerText = 'Не удалось выполнить поиск. Проверьте запрос и попробуйте снова.';
   }
 }
@@ -2456,7 +2466,7 @@ async function buildCustomRouteFromWaypoints() {
       name: 'Собственный маршрут'
     };
     applyPlannedRouteFeature(feature);
-    // Custom user route should start tracking immediately from current position.
+    // Для пользовательского маршрута трекинг нужно запускать сразу от текущей позиции.
     hasReachedStart = true;
     clearNavToStartLine();
     removeStartMarker();
@@ -2464,7 +2474,7 @@ async function buildCustomRouteFromWaypoints() {
     if (customRouteBuilderEl) {
       customRouteBuilderEl.style.display = 'none';
     }
-  } catch (err) {
+  } catch {
     statusDiv.innerText = 'Не удалось собрать маршрут. Добавьте точки и попробуйте снова.';
   }
 }
@@ -2502,7 +2512,7 @@ function ensureCustomRouteBuilderUi() {
 
 
 
-// === ADAPTIVE FILTERING ===
+// === АДАПТИВНАЯ ФИЛЬТРАЦИЯ ===
 
 
 
@@ -2539,13 +2549,13 @@ function getAdaptiveFilters() {
 
   return {
 
-    maxAccuracy: isLowSpeed ? 28 : BASE_MAX_ACCURACY_METERS,  // avoid full freeze on weak GPS indoors
+    maxAccuracy: isLowSpeed ? 28 : BASE_MAX_ACCURACY_METERS,  // избегаем полной "заморозки" на слабом GPS в помещениях
 
-    maxJump: isLowSpeed ? 30 : BASE_MAX_JUMP_METERS,           // smaller jumps in low-speed mode
+    maxJump: isLowSpeed ? 30 : BASE_MAX_JUMP_METERS,           // уменьшаем допустимые скачки в режиме низкой скорости
 
     minDistance: isLowSpeed ? 1.5 : BASE_MIN_DISTANCE_METERS,
 
-    maxSpeed: isLowSpeed ? 4 : BASE_MAX_SPEED_M_S,             // lower max in low-speed mode
+    maxSpeed: isLowSpeed ? 4 : BASE_MAX_SPEED_M_S,             // снижаем верхнюю скорость в режиме низкой скорости
 
     minTime: isLowSpeed ? 850 : 700
 
@@ -2587,23 +2597,25 @@ function detectMovementPattern() {
 
   
 
-  if (variance < 0.5) return 'steady';      // stable speed
+  if (variance < 0.5) return 'steady';      // стабильная скорость
 
-  if (variance > 2.0) return 'erratic';     // lots of speed changes
+  if (variance > 2.0) return 'erratic';     // много резких изменений скорости
 
-  return 'normal';                          // normal variation
+  return 'normal';                          // нормальная вариативность
 
 }
 
 
 
-// === ЛОГИКА ФИЛЬТРАЦИИ GPS ===
+// === КОНТУР ФИЛЬТРАЦИИ GPS ===
+// Здесь решается, какие сырые GPS-точки попадут в сохранённый трек.
+// Цель: отфильтровать шум/выбросы и сохранить ощущение "живого" движения.
 
 
 
 function shouldSavePoint(lat, lng, now, accuracy) {
 
-  // Get adaptive filters based on current movement pattern
+  // Подбираем адаптивные фильтры по текущему характеру движения
 
   const filters = getAdaptiveFilters();
 
@@ -2611,7 +2623,7 @@ function shouldSavePoint(lat, lng, now, accuracy) {
 
   
 
-  // Dynamic accuracy threshold
+  // Динамический порог точности
 
   if (typeof accuracy === 'number' && accuracy > filters.maxAccuracy) {
 
@@ -2633,7 +2645,7 @@ function shouldSavePoint(lat, lng, now, accuracy) {
 
 
 
-  // Update speed tracking
+  // Обновляем историю скорости
 
   if (timeDiff > 0) {
 
@@ -2643,7 +2655,7 @@ function shouldSavePoint(lat, lng, now, accuracy) {
 
     
 
-    // Dynamic speed threshold
+    // Динамический порог скорости
 
     if (speed > filters.maxSpeed && dist > filters.minDistance) {
 
@@ -2657,7 +2669,7 @@ function shouldSavePoint(lat, lng, now, accuracy) {
 
 
 
-  // Dynamic jump detection
+  // Динамическая проверка скачков
 
   if (dist > filters.maxJump && timeDiff < filters.minTime) {
 
@@ -2669,16 +2681,14 @@ function shouldSavePoint(lat, lng, now, accuracy) {
 
 
 
-  // Dynamic distance/time thresholds
+  // Динамические пороги дистанции/времени
 
   const shouldSave = dist >= filters.minDistance || timeDiff >= filters.minTime;
 
   
 
-  if (!shouldSave) {
-
-    console.log(`Point too close/fast: dist=${dist.toFixed(1)} m (min: ${filters.minDistance} m), dt=${timeDiff} ms (min: ${filters.minTime} ms), pattern: ${pattern}`);
-
+  if (!shouldSave && replayDebugEnabled) {
+    console.log(`Point filtered: dist=${dist.toFixed(1)} m, dt=${timeDiff} ms, pattern=${pattern}`);
   }
 
 
@@ -2705,7 +2715,7 @@ function updateTrailDisplayHead(rawLat, rawLng) {
   }
   const lag = haversineDistance(trailDisplayLat, trailDisplayLng, rawLat, rawLng);
   if (lag > TRAIL_DISPLAY_MAX_LAG_M) {
-    // Avoid visual teleporting to user position on noisy GPS.
+    // Избегаем визуальной "телепортации" к позиции пользователя при шумном GPS.
     const step = Math.min(TRAIL_DISPLAY_MAX_STEP_M, lag * 0.32);
     if (step <= 0.01 || lag <= 0.01) {
       trailDisplayLat = rawLat;
@@ -2814,7 +2824,7 @@ function redrawTrack() {
 
   if (!map || !map.getSource('run-track')) return;
 
-  // For planned route, keep a short cyan live tail so movement feels responsive.
+  // Для готового маршрута держим короткий "живой" бирюзовый хвост для отзывчивости.
   if (sessionMode === 'planned_route') {
     const plannedCoords = trackPoints.map(p => [p.lng, p.lat]);
     const tail = plannedCoords.length > 90 ? plannedCoords.slice(-90) : plannedCoords;
@@ -2936,6 +2946,8 @@ function hideLiveMarkerForReplay() {
 }
 
 function animateCompletedPath(trackCoords, options = {}) {
+  // Воспроизведение изолировано от live-трекинга:
+  // скрываем live-слои, анимируем replay-линию, затем возвращаем интерактив карты.
   const { onProgress, onDone } = options;
   debugReplay('animate:start', `points=${Array.isArray(trackCoords) ? trackCoords.length : 0}`);
   if (!Array.isArray(trackCoords) || trackCoords.length < 2 || !map) {
@@ -2957,7 +2969,7 @@ function animateCompletedPath(trackCoords, options = {}) {
   isReplayViewLocked = true;
   setReplayMapStatic(true);
 
-  // Hide live red track so replay animation is clearly visible.
+  // Скрываем live-красный трек, чтобы анимация реплея была хорошо видна.
   if (map.getSource('run-track')) {
     map.getSource('run-track').setData({
       type: 'FeatureCollection',
@@ -2984,7 +2996,7 @@ function animateCompletedPath(trackCoords, options = {}) {
     [[trackCoords[0][0], trackCoords[0][1]], [trackCoords[0][0], trackCoords[0][1]]]
   );
 
-  // Keep room for summary panel, but avoid excessive zoom-out.
+  // Оставляем место для панели итогов, но избегаем чрезмерного отдаления.
   try {
     const replayBottomPadding = Math.max(12, Math.round(window.innerHeight * 0.01));
     debugReplay('animate:fitBounds');
@@ -2995,7 +3007,7 @@ function animateCompletedPath(trackCoords, options = {}) {
     });
   } catch {
     debugReplay('animate:fitBounds_failed');
-    // fitBounds can fail in some WebView/MapGL states; replay should still continue.
+    // В некоторых состояниях WebView/MapGL fitBounds может падать; реплей должен продолжаться.
   }
 
   const scheduleNext = (fn) => setTimeout(fn, 16);
@@ -3016,7 +3028,7 @@ function animateCompletedPath(trackCoords, options = {}) {
       replayCoords.push(interpolated);
       setReplayCoordinates(replayCoords);
       if (map && interpolated) {
-        // Replay camera must be deterministic in WebView; avoid queueing many ease animations.
+        // Камера реплея в WebView должна быть детерминированной; не копим очередь ease-анимаций.
         map.jumpTo({
           center: interpolated,
           pitch: cinematicDemoEnabled ? 44 : 0,
@@ -3472,7 +3484,7 @@ function onGPSPosition(pos) {
     }
   }
 
-  // Check finish point for planned routes
+  // Проверяем точку финиша для готовых маршрутов
   if (sessionMode === 'planned_route' && plannedFinish && !hasReachedFinish) {
     const distToFinish = haversineDistance(
       plannedFinish[1], plannedFinish[0],
@@ -3491,7 +3503,7 @@ function onGPSPosition(pos) {
         }
       }, 3000);
       
-      // Auto stop training when finish reached
+      // Автоматически завершаем тренировку при достижении финиша
       setTimeout(() => {
         stopAndSave();
       }, 1000);
@@ -3645,7 +3657,7 @@ function startRun() {
       );
     }
     if (hasReachedStart) {
-      // fall through and start tracking
+      // переходим дальше и запускаем трекинг
     } else {
       statusDiv.innerText = '🏁 Подойдите к стартовому флажку на карте, чтобы начать.';
       syncStopButtonVisibility();

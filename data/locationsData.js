@@ -1,4 +1,4 @@
-// data/locationsData.js
+// Справочник локаций
 
 const LOCATIONS = [
   {

@@ -1,4 +1,4 @@
-// data/activitiesData.js
+// Справочник активностей
 
 const ACTIVITIES = [
   { id: 'running',        name: 'Бег',                   emoji: '🏃', description: 'Бег и джоггинг для поддержания формы' },

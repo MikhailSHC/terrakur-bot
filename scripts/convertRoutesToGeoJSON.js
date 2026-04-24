@@ -1,4 +1,4 @@
-// scripts/convertRoutesToGeoJSON.js
+// Скрипт сборки GeoJSON из routesData
 
 const fs = require('fs');
 
@@ -13,7 +13,7 @@ function buildFallbackTrack(route) {
     return [];
   }
 
-  // Approximate loop around center so each route has a start/finish geometry in MVP.
+  // Примерный контур вокруг центра, чтобы у каждого маршрута в MVP была геометрия старта/финиша.
   const radiusM = Math.max(80, Math.min(250, (Number(route.distanceKm) || 1) * 120));
   const dLat = radiusM / 111320;
   const dLon = radiusM / (111320 * Math.cos((centerLat * Math.PI) / 180));
@@ -72,7 +72,7 @@ const geojsonRoutes = routes.map(route => {
     };
 
   } else {
-    // Если трека нет, создаём fallback LineString вокруг центра.
+    // Если трека нет, создаём резервный LineString вокруг центра.
     const fallbackTrack = buildFallbackTrack(route);
 
     geojson = {

@@ -1,4 +1,4 @@
-// config.js
+// Конфигурация приложения
 
 require('dotenv').config();
 

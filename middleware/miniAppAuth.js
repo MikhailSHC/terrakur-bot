@@ -61,14 +61,14 @@ function decodeMaybeJson(rawValue) {
   try {
     attempts.push(decodeURIComponent(rawValue));
   } catch {
-    // ignore
+    // игнорируем и идем дальше по запасному сценарию
   }
   for (const candidate of attempts) {
     try {
       const parsed = JSON.parse(candidate);
       if (parsed && typeof parsed === 'object') return parsed;
     } catch {
-      // ignore
+      // игнорируем и идем дальше по запасному сценарию
     }
   }
   return null;

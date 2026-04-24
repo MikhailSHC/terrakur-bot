@@ -19,7 +19,7 @@
     body.clean-mode #completionCard {
       display: none !important;
     }
-    /* Presentation mode: keep video clean, no overlays. */
+    /* Режим презентации: чистое видео без оверлеев. */
     #topBar,
     #bottomBar,
     #status,
@@ -266,7 +266,7 @@
         });
       });
 
-      // Route base + glow + passed segment for cinematic look.
+      // Базовый маршрут + свечение + пройденный сегмент для кинематографичного вида.
       new mapgl.Polyline(map, {
         coordinates,
         color: '#80a3c1',
@@ -426,7 +426,7 @@
           statusEl.textContent = cleanMode
             ? 'LiveTrack — Живая Тропа demo complete'
             : 'Готово для записи: дубль завершен';
-          // Keep final frame clean for recording: do not show completion card.
+          // Оставляем финальный кадр чистым для записи: не показываем карточку завершения.
         } catch (err) {
           running = false;
           statusEl.textContent = `Ошибка playback: ${err.message}`;
@@ -501,7 +501,7 @@
             continue;
           }
           const prev = merged[merged.length - 1];
-          // Drop overlapping seam points when segment #2 starts from last point of #1.
+          // Убираем дубли на стыке, когда сегмент №2 начинается с последней точки сегмента №1.
           if (distanceM(prev, point) < 0.6) continue;
           merged.push(point);
         }
@@ -606,7 +606,7 @@
     }
 
     function cinematicProgress(t) {
-      // Keep cinematic acceleration but avoid "frozen" first seconds on long takes.
+      // Сохраняем плавное ускорение, но избегаем "застывшего" начала на длинных дублях.
       const eased = easeInOutCubic(t);
       return Math.min(1, 0.22 * t + 0.78 * eased);
     }
