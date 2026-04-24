@@ -36,6 +36,7 @@ let trailDisplayLng = null;
 // Smoothness tuning (prev: alpha=0.38, lag=42) kept for quick rollback.
 const TRAIL_DISPLAY_SMOOTH_ALPHA = 0.52;
 const TRAIL_DISPLAY_MAX_LAG_M = 24;
+const TRAIL_DISPLAY_MAX_STEP_M = 8;
 
 let startMarker = null;    // маркер точки старта маршрута
 let finishMarker = null;   // маркер точки финиша маршрута
@@ -417,11 +418,11 @@ function syncStopButtonVisibility() {
 
 // Base parameters for filtering GPS
 
-const BASE_MIN_DISTANCE_METERS   = 3;    // smoother visual track updates
+const BASE_MIN_DISTANCE_METERS   = 2;    // smoother visual track updates
 
 const BASE_MAX_JUMP_METERS       = 60;   // outlier if too far in short interval
 
-const BASE_MAX_ACCURACY_METERS   = 30;   // discard points with accuracy worse than 30 m
+const BASE_MAX_ACCURACY_METERS   = 35;   // keep tracking alive in weak-signal conditions
 
 const BASE_MAX_SPEED_M_S         = 7;    // ~25 km/h - everything above is considered outlier (for running/jogging)
 
@@ -2461,15 +2462,15 @@ function getAdaptiveFilters() {
 
   return {
 
-    maxAccuracy: isLowSpeed ? 20 : BASE_MAX_ACCURACY_METERS,  // stricter in low-speed mode
+    maxAccuracy: isLowSpeed ? 28 : BASE_MAX_ACCURACY_METERS,  // avoid full freeze on weak GPS indoors
 
     maxJump: isLowSpeed ? 30 : BASE_MAX_JUMP_METERS,           // smaller jumps in low-speed mode
 
-    minDistance: isLowSpeed ? 2 : BASE_MIN_DISTANCE_METERS,
+    minDistance: isLowSpeed ? 1.5 : BASE_MIN_DISTANCE_METERS,
 
     maxSpeed: isLowSpeed ? 4 : BASE_MAX_SPEED_M_S,             // lower max in low-speed mode
 
-    minTime: isLowSpeed ? 1000 : 800
+    minTime: isLowSpeed ? 850 : 700
 
   };
 
@@ -2627,8 +2628,16 @@ function updateTrailDisplayHead(rawLat, rawLng) {
   }
   const lag = haversineDistance(trailDisplayLat, trailDisplayLng, rawLat, rawLng);
   if (lag > TRAIL_DISPLAY_MAX_LAG_M) {
-    trailDisplayLat = rawLat;
-    trailDisplayLng = rawLng;
+    // Avoid visual teleporting to user position on noisy GPS.
+    const step = Math.min(TRAIL_DISPLAY_MAX_STEP_M, lag * 0.32);
+    if (step <= 0.01 || lag <= 0.01) {
+      trailDisplayLat = rawLat;
+      trailDisplayLng = rawLng;
+      return;
+    }
+    const ratio = step / lag;
+    trailDisplayLat = trailDisplayLat + (rawLat - trailDisplayLat) * ratio;
+    trailDisplayLng = trailDisplayLng + (rawLng - trailDisplayLng) * ratio;
     return;
   }
   const a = TRAIL_DISPLAY_SMOOTH_ALPHA;
