@@ -1519,17 +1519,65 @@ async function loadPlannedRoute(id) {
         { cache: 'no-store' },
         { retries: 1, timeoutMs: 10000 }
       );
-      if (!localRes.ok) {
+      if (localRes.ok) {
+        const localFc = await localRes.json();
+        const feature = (localFc.features || []).find((f) => f?.properties?.id === id);
+        if (feature) {
+          data = { ok: true, route: feature };
+          usedLocalFallback = true;
+        }
+      }
+
+      // Final fallback: route details endpoint (works when route catalog is newer than geojson file).
+      if (!data || !data.ok || !data.route) {
+        const detailsRes = await fetchWithRetry(
+          `/api/routes/${id}`,
+          { cache: 'no-store' },
+          { retries: 1, timeoutMs: 10000 }
+        );
+        const detailsJson = detailsRes.ok ? await detailsRes.json() : null;
+        const route = detailsJson?.ok ? detailsJson.route : null;
+        if (route) {
+          let coordinates = [];
+          if (Array.isArray(route.track) && route.track.length >= 2) {
+            // routesData stores track points as [lat, lon], GeoJSON requires [lon, lat].
+            coordinates = route.track
+              .map((point) => [Number(point?.[1]), Number(point?.[0])])
+              .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+          }
+          if (coordinates.length < 2 && route.center && Number.isFinite(Number(route.center.lon)) && Number.isFinite(Number(route.center.lat))) {
+            const lon = Number(route.center.lon);
+            const lat = Number(route.center.lat);
+            const d = 0.0018;
+            coordinates = [
+              [lon, lat + d],
+              [lon + d, lat],
+              [lon, lat - d],
+              [lon - d, lat],
+              [lon, lat + d]
+            ];
+          }
+          if (coordinates.length >= 2) {
+            data = {
+              ok: true,
+              route: {
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates },
+                properties: {
+                  id: route.id || id,
+                  name: route.name || 'Маршрут'
+                }
+              }
+            };
+            usedLocalFallback = true;
+          }
+        }
+      }
+
+      if (!data || !data.ok || !data.route) {
         if (!data) throw new Error(`Сервер вернул не JSON (content-type: ${contentType || 'unknown'})`);
-        throw new Error(data?.error || `HTTP ${res.status}`);
+        throw new Error('Маршрут не найден ни через API, ни в routes.geojson, ни в деталях маршрута');
       }
-      const localFc = await localRes.json();
-      const feature = (localFc.features || []).find((f) => f?.properties?.id === id);
-      if (!feature) {
-        throw new Error('Маршрут не найден ни через API, ни в routes.geojson');
-      }
-      data = { ok: true, route: feature };
-      usedLocalFallback = true;
     }
 
 
