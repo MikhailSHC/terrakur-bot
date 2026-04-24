@@ -75,7 +75,7 @@ let routeProgress = {
 
 };
 
-const PROGRESS_UPDATE_INTERVAL_MS = 350;
+const PROGRESS_UPDATE_INTERVAL_MS = 180;
 const AXIS_FILL_MIN_DURATION_MS = 260;
 const AXIS_FILL_MAX_DURATION_MS = 1400;
 const AXIS_FILL_MS_PER_VERTEX = 34;
@@ -352,6 +352,14 @@ function estimateCaloriesForUser(distanceM, durationSec) {
   const kcal = (bmr / 24) * hours * met;
   if (Number.isFinite(kcal) && kcal > 0) return kcal;
   return estimateWorkoutCaloriesKcal(distanceM, durationSec, weight);
+}
+
+function getActiveMotionDurationSec() {
+  if (!Array.isArray(trackPoints) || trackPoints.length < 2) return 0;
+  const firstTs = Number(trackPoints[0]?.timestamp);
+  const lastTs = Number(trackPoints[trackPoints.length - 1]?.timestamp);
+  if (!Number.isFinite(firstTs) || !Number.isFinite(lastTs) || lastTs <= firstTs) return 0;
+  return (lastTs - firstTs) / 1000;
 }
 
 async function loadUserProfileForCalories() {
@@ -2702,9 +2710,11 @@ function updateStatsUI() {
 
   distanceEl.textContent = distanceKm.toFixed(2);
 
+  const activeDurationSec = getActiveMotionDurationSec();
+  const caloriesDurationSec = Math.min(elapsedSec, activeDurationSec > 0 ? activeDurationSec : elapsedSec);
   if (estCaloriesEl) {
     estCaloriesEl.textContent = formatCaloriesKcalShort(
-      estimateCaloriesForUser(totalDistanceM, elapsedSec)
+      estimateCaloriesForUser(totalDistanceM, caloriesDurationSec)
     );
   }
 
@@ -2718,12 +2728,19 @@ function redrawTrack() {
 
   if (!map || !map.getSource('run-track')) return;
 
-  // Для готового маршрута трек прогресса рисуется зелёной/синей линиями.
-  // Красную линию скрываем, чтобы не дублировать и не путать.
+  // For planned route, keep a short cyan live tail so movement feels responsive.
   if (sessionMode === 'planned_route') {
+    const plannedCoords = trackPoints.map(p => [p.lng, p.lat]);
+    const tail = plannedCoords.length > 90 ? plannedCoords.slice(-90) : plannedCoords;
     map.getSource('run-track').setData({
       type: 'FeatureCollection',
-      features: []
+      features: tail.length >= 2
+        ? [{
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: tail },
+            properties: {}
+          }]
+        : []
     });
     return;
   }
@@ -2984,9 +3001,15 @@ function estimateZoomForBounds(bounds, viewportW, viewportH, padding = 24, maxZo
 }
 
 async function loadStaticMapImage({ centerLon, centerLat, zoom, width, height }) {
-  if (!dgisApiKey) return null;
+  const safeWidth = Math.min(1000, Math.max(300, Math.round(Number(width) || 0)));
+  const safeHeight = Math.min(1000, Math.max(200, Math.round(Number(height) || 0)));
   try {
-    const staticUrl = `https://static.maps.2gis.com/1.0?center=${encodeURIComponent(`${centerLon},${centerLat}`)}&zoom=${encodeURIComponent(String(zoom))}&size=${encodeURIComponent(`${width},${height}`)}&key=${encodeURIComponent(dgisApiKey)}`;
+    let staticUrl = '';
+    if (dgisApiKey) {
+      staticUrl = `https://static.maps.2gis.com/1.0?center=${encodeURIComponent(`${centerLon},${centerLat}`)}&zoom=${encodeURIComponent(String(zoom))}&size=${encodeURIComponent(`${safeWidth},${safeHeight}`)}&key=${encodeURIComponent(dgisApiKey)}`;
+    } else {
+      staticUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${encodeURIComponent(`${centerLat},${centerLon}`)}&zoom=${encodeURIComponent(String(zoom))}&size=${encodeURIComponent(`${safeWidth}x${safeHeight}`)}&maptype=mapnik`;
+    }
     const img = await new Promise((resolve, reject) => {
       const image = new Image();
       image.crossOrigin = 'anonymous';
@@ -3198,8 +3221,12 @@ function showWorkoutSummaryAndReplay({ distanceM, elapsedSec, trackCoords, showR
   const secs = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
   const speedKmh = elapsedSec > 0 ? (distanceM / 1000) / (elapsedSec / 3600) : 0;
   const avgSpeed = Number.isFinite(speedKmh) && speedKmh > 0 ? `${speedKmh.toFixed(1).replace('.', ',')} км/ч` : '—';
-  const kcal = formatCaloriesKcalShort(estimateCaloriesForUser(distanceM, elapsedSec));
-  const kcalSub = 'при весе 70 кг';
+  const activeDurationSec = getActiveMotionDurationSec();
+  const caloriesDurationSec = Math.min(elapsedSec, activeDurationSec > 0 ? activeDurationSec : elapsedSec);
+  const kcal = formatCaloriesKcalShort(estimateCaloriesForUser(distanceM, caloriesDurationSec));
+  const kcalSub = Number.isFinite(Number(userWeightKg)) && Number(userWeightKg) > 0
+    ? `по профилю (${Number(userWeightKg)} кг)`
+    : 'оценка';
   const saveBadge = isSaved
     ? `<div style="background:rgba(34,197,94,0.16);border:1px solid rgba(34,197,94,0.45);color:#d9ffe8;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:600;margin-bottom:8px;">✅ Тренировка сохранена</div>`
     : '';
@@ -3352,7 +3379,7 @@ function onGPSPosition(pos) {
   let headingDeg = null;
   if (lastRawPoint) {
     const headingDistanceM = haversineDistance(lastRawPoint.lat, lastRawPoint.lng, latitude, longitude);
-    if (headingDistanceM >= 2) {
+    if (headingDistanceM >= 0.9) {
       headingDeg = calculateBearingDeg(lastRawPoint.lat, lastRawPoint.lng, latitude, longitude);
     }
   }
@@ -3413,7 +3440,7 @@ function onGPSPosition(pos) {
 
 
 
-  updateUserMarker(center, headingDeg);
+  updateUserMarker([longitude, latitude], headingDeg);
 
 
 
@@ -3828,6 +3855,8 @@ async function stopAndSave() {
 
 
 
+  const activeDurationSec = getActiveMotionDurationSec();
+  const caloriesDurationSec = Math.min(elapsedSec, activeDurationSec > 0 ? activeDurationSec : elapsedSec);
   const generatedSessionId = `sess_${Date.now()}`;
   const session = {
     sessionId: generatedSessionId,
@@ -3842,7 +3871,7 @@ async function stopAndSave() {
 
     avgPaceSecPerKm,
 
-    estCaloriesKcal: Math.round(estimateCaloriesForUser(distanceM, elapsedSec)),
+    estCaloriesKcal: Math.round(estimateCaloriesForUser(distanceM, caloriesDurationSec)),
 
     geojson: geojsonTrack,
 
