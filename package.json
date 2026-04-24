@@ -9,7 +9,9 @@
     "lint": "eslint index.js config.js app bot handlers keyboards middleware routes services utils tests public/mini-app/app.js public/mini-app/estimateCalories.js",
     "format": "prettier --write .",
     "test": "jest --runInBand",
-    "build-data": "node scripts/convertRoutesToGeoJSON.js"
+    "build-data": "node scripts/convertRoutesToGeoJSON.js",
+    "convert-2gis": "node scripts/convert2gisRouteToTrack.js",
+    "import-2gis-tracks": "node scripts/import2gisTracksFromExports.js"
   },
   "dependencies": {
     "@maxhub/max-bot-api": "^0.2.0",
