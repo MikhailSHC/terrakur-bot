@@ -258,20 +258,16 @@ function registerBotHandlers(bot, deps) {
       return commandHandler.handleProfileForActivity(chatId, activityFilter);
     }
 
-    // Точки входа в свободную тренировку (с выбором активности и без).
+    // Точка входа в свободную тренировку: сначала выбор активности.
     if (callbackData === 'start_free_track') {
-      const navUrl = buildMiniAppUrl(config, chatId);
       await bot.api.sendMessageToChat(
         chatId,
-        '🧭 Откройте карту по кнопке ниже, чтобы начать собственный маршрут.',
+        '🧭 Перед стартом выберите активность — так статистика сохранится в нужную категорию.',
         {
           parse_mode: 'Markdown',
-          attachments: getOpenRouteKeyboard(navUrl)
+          attachments: [keyboards.freeTrackActivityPickKeyboard]
         }
       );
-      userService.setUserState(chatId, 'free_run_started', {
-        lastFreeRun: { startedAt: new Date().toISOString(), activityId: null }
-      });
       return;
     }
 
