@@ -1,153 +1,80 @@
 # LiveTrack - Живая Тропа
 
-Бот для MAX Messenger с мини-приложением для трекинга маршрутов, истории тренировок и статистики.
+Простой бот для MAX Messenger с мини-приложением: выбор готовых маршрутов, запись тренировок и история активности.
 
-Проект состоит из:
-- бота (диалоговые сценарии и кнопки),
-- API на Express (сессии, профиль, маршруты, геокодер),
-- mini-app фронтенда (карта, трекер, история, демо).
+## Что внутри
 
-## 1) Что умеет проект
+- Бот (кнопки, сценарии, ответы пользователю)
+- API на Express
+- Mini-app с картой и трекером
 
-- Свободная тренировка на карте.
-- Выбор готовых маршрутов по городам.
-- Подбор маршрутов "Рядом со мной" по геолокации и расстоянию.
-- Сохранение тренировок, история и базовая аналитика.
-- Генерация и импорт геометрии маршрутов из 2GIS.
+## Быстрый старт
 
-## 2) Требования
-
+Требования:
 - Node.js 20+
 - npm 10+
 
-## 3) Быстрый старт
-
-1. Установите зависимости:
-   - `npm install`
-2. Создайте `.env`:
-   - Windows: `copy .env.example .env`
-3. Заполните минимум:
+Шаги:
+1. Установить зависимости: `npm install`
+2. Создать `.env` из примера:  
+   Windows: `copy .env.example .env`
+3. Заполнить минимум в `.env`:
    - `BOT_TOKEN`
    - `MINI_APP_AUTH_SECRET`
-4. Запустите проект:
-   - `npm start`
-5. Проверьте API:
-   - `GET /api/health`
+4. Запустить: `npm start`
+5. Проверить, что API жив: `GET /api/health`
 
-## 4) Переменные окружения
+## Основные переменные `.env`
 
-Основные:
-- `BOT_TOKEN` — токен бота MAX.
-- `PORT` — порт API (по умолчанию `3000`).
-- `MINI_APP_AUTH_SECRET` — секрет подписи auth-токена для mini-app.
-- `MAX_INIT_DATA_SECRET` — секрет проверки `initData` MAX.
+- `BOT_TOKEN` — токен бота MAX
+- `PORT` — порт сервера (по умолчанию `3000`)
+- `MINI_APP_URL` — ссылка на mini-app (обычно `.../mini-app/index.html`)
+- `MINI_APP_AUTH_SECRET` — секрет для авторизации mini-app
+- `MAX_INIT_DATA_SECRET` — секрет для проверки initData MAX
+- `DGIS_API_KEY` — ключ 2GIS
 
-Маршруты и карты:
-- `MINI_APP_URL` — URL mini-app (обычно `.../mini-app/index.html`).
-- `DGIS_API_KEY` — ключ 2GIS (карта/геокодер/маршруты).
+Полный список есть в [`.env.example`](.env.example).
 
-Режимы:
-- `NODE_ENV` — `production` или `development`.
-- `USE_MAX_INITDATA_LINKS` — режим генерации ссылок mini-app.
+## Полезные команды
 
-Смотрите пример в [`.env.example`](.env.example).
+- `npm start` — запуск бота и API
+- `npm run dev` — запуск в dev-режиме
+- `npm test` — тесты
+- `npm run lint` — проверка кода
+- `npm run format` — форматирование
+- `npm run build-data` — пересборка `public/mini-app/routes.geojson` из `data/routesData.js`
 
-## 5) Команды npm
+## Как обновлять маршруты
 
-- `npm start` — запуск бота и API.
-- `npm run dev` — запуск в dev-режиме.
-- `npm test` — запуск тестов.
-- `npm run lint` — проверка ESLint.
-- `npm run format` — форматирование Prettier.
-- `npm run build-data` — пересборка `public/mini-app/routes.geojson` из `data/routesData.js`.
-- `npm run convert-2gis -- "<путь_к_файлу>" [--output "<файл>"]` — конвертация выгрузки 2GIS в плотный `track`.
-- `npm run import-2gis-tracks` — пакетный импорт треков из экспортов маршрутов (локальные файлы на Desktop).
+1. Изменить данные в `data/routesData.js`
+2. Выполнить `npm run build-data`
+3. Перезапустить сервис
 
-## 6) Архитектура и поток данных
+## Деплой (рекомендуемый)
 
-Ключевые узлы:
-- [index.js](index.js) — точка входа.
-- [app/createApp.js](app/createApp.js) — настройка Express.
-- [routes/apiRoutes.js](routes/apiRoutes.js) — REST API.
-- [bot/registerBotHandlers.js](bot/registerBotHandlers.js) — callback/message обработчики бота.
-- [services/userService.js](services/userService.js) — данные пользователя/сессий.
-- [services/routeService.js](services/routeService.js) — поиск, фильтрация и сортировка маршрутов.
-- [public/mini-app](public/mini-app) — фронтенд мини-приложения.
+```bash
+cd ~/terrakur-bot
+git fetch origin
+git checkout main
+git reset --hard origin/main
+npm ci
+pm2 restart livetrack-bot
+pm2 logs livetrack-bot --lines 30
+```
 
-Поток:
-1. Пользователь нажимает кнопку в боте.
-2. Бот формирует ссылку/сценарий и передает пользователя в mini-app.
-3. Mini-app обращается к API (`/api/...`) с авторизацией.
-4. API сохраняет сессию/профиль и возвращает данные для UI.
+Если нужно убедиться, что стоит последняя версия:
 
-## 7) Работа с маршрутами
+```bash
+git rev-parse --short HEAD
+git log --oneline -n 3
+```
 
-Основной источник:
-- [data/routesData.js](data/routesData.js)
+## Структура проекта
 
-Публикуемая геометрия для mini-app:
-- [public/mini-app/routes.geojson](public/mini-app/routes.geojson)
-
-Как обновить:
-1. Измените/добавьте маршруты в `data/routesData.js`.
-2. Выполните `npm run build-data`.
-
-Импорт из 2GIS:
-- Для одного файла: `npm run convert-2gis -- "<файл>"`
-- Для пакетного обновления: `npm run import-2gis-tracks`
-
-## 8) Безопасность mini-app
-
-Защищенные эндпоинты требуют:
-- валидный `chatId`,
-- auth-токен mini-app (подписан `MINI_APP_AUTH_SECRET`),
--/или проверенный `initData` MAX (в зависимости от режима).
-
-Токен передается в заголовке `x-miniapp-auth`.
-
-## 9) Структура проекта
-
-- `app/` — сборка и конфигурация Express-приложения.
-- `bot/` — регистрация обработчиков событий бота.
-- `handlers/` — командные и текстовые обработчики.
-- `keyboards/` — описание inline-клавиатур.
-- `middleware/` — middleware (например auth mini-app).
-- `routes/` — маршруты API.
-- `services/` — бизнес-логика (пользователь, маршруты).
-- `utils/` — утилиты (логгер, auth, форматтеры, расчеты).
-- `data/` — данные маршрутов, активностей, локаций.
-- `public/mini-app/` — интерфейс mini-app и статические данные карты.
-- `scripts/` — служебные скрипты конвертации/импорта.
-- `tests/` — автотесты.
-- `docs/` — внутренняя документация и гайды по текстам/UI.
-
-## 10) Диагностика частых проблем
-
-### Бот не реагирует на кнопки
-- Проверьте, что запущен актуальный процесс (`npm run dev`/`npm start`).
-- Проверьте `BOT_TOKEN`.
-- Посмотрите логи callback-обработчика в консоли.
-
-### "Рядом со мной" не показывает маршруты
-- Убедитесь, что геолокация сохранена в mini-app (`Моя история` -> `Настройки`).
-- Убедитесь, что маршруты имеют статус `active`.
-
-### Mini-app не открывается/ошибка авторизации
-- Проверьте `MINI_APP_URL`, `MINI_APP_AUTH_SECRET`, `MAX_INIT_DATA_SECRET`.
-- Проверьте, что ссылка на mini-app соответствует окружению.
-
-### Нет карты 2GIS
-- Проверьте `DGIS_API_KEY`.
-- Убедитесь, что ключ доступен в runtime-конфиге.
-
-### Добавили маршруты, но их нет на карте
-- Выполните `npm run build-data`.
-- Убедитесь, что обновился `public/mini-app/routes.geojson`.
-
-## 11) Качество и CI
-
-- Тесты: `npm test`
-- Линт: `npm run lint`
-- Форматирование: `npm run format`
-
-CI в GitHub Actions (`.github/workflows/ci.yml`) запускает линт и тесты на push/PR.
+- `bot/`, `handlers/`, `keyboards/` — логика бота
+- `routes/`, `app/`, `middleware/` — API и middleware
+- `services/` — бизнес-логика
+- `data/` — маршруты, активности, локации
+- `public/mini-app/` — фронтенд mini-app
+- `scripts/` — служебные скрипты
+- `tests/` — автотесты
