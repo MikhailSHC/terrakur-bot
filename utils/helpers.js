@@ -7,6 +7,26 @@ function difficultyLabel(level) {
   return String(level);
 }
 
+const TARGET_AUDIENCE_LABELS_RU = {
+  beginners: 'Новички',
+  families: 'Семьи',
+  elderly: 'Пожилые',
+  intermediate: 'С опытом',
+  advanced: 'Продвинутые',
+  history_lovers: 'Любители истории',
+  cycling_lovers: 'Любители велопрогулок',
+  experienced_hikers: 'Опытные туристы',
+  nature_lovers: 'Любители природы',
+  health_focused: 'Для заботящихся о здоровье',
+  running_lovers: 'Любители бега',
+  photography_lovers: 'Любители фотографии',
+  urban_walkers: 'Любители городских прогулок'
+};
+
+function formatTargetAudienceLabel(value) {
+  return TARGET_AUDIENCE_LABELS_RU[value] || value;
+}
+
 // Краткий список маршрутов
 function formatRouteList(routes) {
   if (!Array.isArray(routes) || routes.length === 0) {
@@ -76,7 +96,8 @@ function formatRouteDetails(route, options = {}) {
 
   const targetAudience = Array.isArray(route.targetAudience) ? route.targetAudience : route.target_audience;
   if (Array.isArray(targetAudience) && targetAudience.length > 0) {
-    lines.push(`Для кого: ${targetAudience.join(', ')}`);
+    const targetAudienceLabels = targetAudience.map(formatTargetAudienceLabel);
+    lines.push(`Для кого: ${targetAudienceLabels.join(', ')}`);
   }
 
   const poi = Array.isArray(route.poi) ? route.poi : route.points;
