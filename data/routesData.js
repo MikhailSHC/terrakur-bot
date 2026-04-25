@@ -48,7 +48,7 @@ const routes = [
 
 
 
-    targetAudience: ['beginners', 'families', 'elderly'],
+    targetAudience: ['Новички', 'Семьи', 'Пожилые'],
 
 
 
@@ -116,7 +116,7 @@ const routes = [
 
 
 
-    targetAudience: ['intermediate', 'history_lovers'],
+    targetAudience: ['С опытом', 'Любители истории'],
 
 
 
@@ -180,7 +180,7 @@ const routes = [
 
 
 
-    targetAudience: ['beginners', 'families', 'elderly'],
+    targetAudience: ['Новички', 'Семьи', 'Пожилые'],
 
 
 
@@ -343,7 +343,7 @@ const routes = [
 
 
 
-    targetAudience: ['intermediate', 'cycling_lovers'],
+    targetAudience: ['С опытом', 'Любители велопрогулок'],
 
 
 
@@ -443,7 +443,7 @@ const routes = [
 
 
 
-    targetAudience: ['advanced', 'cycling_lovers'],
+    targetAudience: ['Продвинутые', 'Любители велопрогулок'],
 
 
 
@@ -707,7 +707,7 @@ const routes = [
 
 
 
-    targetAudience: ['beginners', 'families', 'elderly'],
+    targetAudience: ['Новички', 'Семьи', 'Пожилые'],
 
 
 
@@ -854,7 +854,7 @@ const routes = [
 
 
 
-    targetAudience: ['advanced', 'experienced_hikers'],
+    targetAudience: ['Продвинутые', 'Опытные туристы'],
 
 
 
@@ -924,7 +924,7 @@ const routes = [
 
 
 
-    targetAudience: ['intermediate', 'nature_lovers'],
+    targetAudience: ['С опытом', 'Любители природы'],
 
 
 
@@ -961,7 +961,7 @@ const routes = [
     distanceKm: 1.9,
     distanceText: '1.9 км',
     poi: ['Парковые тропы', 'Терренкурные участки', 'Лестничные фрагменты'],
-    targetAudience: ['beginners', 'health_focused', 'elderly'],
+    targetAudience: ['Новички', 'Для заботящихся о здоровье', 'Пожилые'],
     center: {
       lat: 43.8959,
       lon: 42.7194
@@ -1095,7 +1095,7 @@ const routes = [
     distanceKm: 1.0,
     distanceText: '1.0 км',
     poi: ['Терренкур 2А', 'Парковые тропы', 'Плавный рельеф'],
-    targetAudience: ['beginners', 'health_focused', 'elderly'],
+    targetAudience: ['Новички', 'Для заботящихся о здоровье', 'Пожилые'],
     center: {
       lat: 43.8980,
       lon: 42.7352
@@ -1173,7 +1173,7 @@ const routes = [
     distanceKm: 4.2,
     distanceText: '4.2 км',
     poi: ['Озерная зона', 'Протяжённые участки', 'Панорамные точки'],
-    targetAudience: ['intermediate', 'running_lovers'],
+    targetAudience: ['С опытом', 'Любители бега'],
     center: {
       lat: 43.9370,
       lon: 42.7177
@@ -1343,7 +1343,7 @@ const routes = [
 
 
 
-    targetAudience: ['beginners', 'health_focused', 'elderly'],
+    targetAudience: ['Новички', 'Для заботящихся о здоровье', 'Пожилые'],
 
 
 
@@ -1427,7 +1427,7 @@ const routes = [
 
 
 
-    targetAudience: ['intermediate', 'photography_lovers'],
+    targetAudience: ['С опытом', 'Любители фотографии'],
 
 
 
@@ -1464,7 +1464,7 @@ const routes = [
     distanceKm: 1.7,
     distanceText: '1.7 км',
     poi: ['Источник', 'Парковые аллеи', 'Лестничные участки'],
-    targetAudience: ['beginners', 'families', 'elderly'],
+    targetAudience: ['Новички', 'Семьи', 'Пожилые'],
     center: {
       lat: 44.0401,
       lon: 43.0751
@@ -1600,7 +1600,7 @@ const routes = [
     distanceKm: 5.1,
     distanceText: '5.1 км',
     poi: ['Склоны Машука', 'Смотровые участки', 'Терренкурные тропы'],
-    targetAudience: ['intermediate', 'health_focused'],
+    targetAudience: ['С опытом', 'Для заботящихся о здоровье'],
     center: {
       lat: 44.0498,
       lon: 43.0871
@@ -1968,7 +1968,7 @@ const routes = [
     distanceKm: 1.4,
     distanceText: '1.4 км',
     poi: ['Аллеи Комсомольского парка', 'Зоны отдыха', 'Короткие петли'],
-    targetAudience: ['beginners', 'families', 'elderly'],
+    targetAudience: ['Новички', 'Семьи', 'Пожилые'],
     center: {
       lat: 44.0579,
       lon: 43.0629
@@ -2043,7 +2043,7 @@ const routes = [
     distanceKm: 1.7,
     distanceText: '1.7 км',
     poi: ['Парк Цветник', 'Лестничные фрагменты', 'Пешеходные петли'],
-    targetAudience: ['beginners', 'families'],
+    targetAudience: ['Новички', 'Семьи'],
     center: {
       lat: 44.0373,
       lon: 43.0832
@@ -2202,7 +2202,7 @@ const routes = [
     distanceKm: 3.1,
     distanceText: '3.1 км',
     poi: ['Озеро Новопятигорское', 'Набережные тропы', 'Панорамные точки'],
-    targetAudience: ['intermediate', 'nature_lovers'],
+    targetAudience: ['С опытом', 'Любители природы'],
     center: {
       lat: 44.0349,
       lon: 43.0068
@@ -2290,7 +2290,7 @@ const routes = [
     distanceKm: 1.5,
     distanceText: '1.5 км',
     poi: ['Парк им. Кирова', 'Центральные аллеи', 'Петли для интервальных тренировок'],
-    targetAudience: ['beginners', 'families', 'elderly'],
+    targetAudience: ['Новички', 'Семьи', 'Пожилые'],
     center: {
       lat: 44.0328,
       lon: 43.0626
@@ -2428,7 +2428,7 @@ const routes = [
 
 
 
-    targetAudience: ['intermediate', 'nature_lovers'],
+    targetAudience: ['С опытом', 'Любители природы'],
 
 
 
@@ -2492,7 +2492,7 @@ const routes = [
 
 
 
-    targetAudience: ['beginners', 'families', 'urban_walkers'],
+    targetAudience: ['Новички', 'Семьи', 'Любители городских прогулок'],
 
 
 
